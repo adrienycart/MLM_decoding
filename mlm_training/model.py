@@ -4,6 +4,15 @@ import tensorflow as tf
 import numpy as np
 from datetime import datetime
 
+"""
+Note
+----
+
+All the nodes of the graph are implemented as properties.
+That way, when the attribute is called for the first time, the corresponding
+graph nodes are created. The following times, the attribute is just returned,
+without adding new nodes to the graph.
+"""
 
 class Model:
 
@@ -17,11 +26,8 @@ class Model:
         self._inputs = None
         self._seq_lens = None
         self._labels = None
-        self._key_masks = None
-        self._key_masks_w = None
-        self._key_lists = None
         self._thresh = None
-        self._thresh_key = None
+
 
         self._prediction = None
         self._pred_sigm = None
@@ -53,10 +59,12 @@ class Model:
             print("Chunks : ",self.chunks)
 
 
-
-
     @property
     def tp(self):
+        """
+        Number of true positives per sequence
+        """
+
         if self._tp is None:
             with tf.device(self.device_name):
                 pred = self.pred_thresh
@@ -69,6 +77,9 @@ class Model:
 
     @property
     def fp(self):
+        """
+        Number of false positives per sequence
+        """
         if self._fp is None:
             with tf.device(self.device_name):
                 pred = self.pred_thresh
@@ -81,6 +92,9 @@ class Model:
 
     @property
     def fn(self):
+        """
+        Number of false negatives per sequence
+        """
         if self._fn is None:
             with tf.device(self.device_name):
                 pred = self.pred_thresh
@@ -93,7 +107,11 @@ class Model:
 
     @property
     def precision(self):
-        #Returns a vector of length len(dataset), mean has to be computed afterwards
+        """
+        Precision per sequence.
+        Returns a vector of length len(dataset), mean has to be computed afterwards
+        """
+
         if self._precision is None:
             with tf.device(self.device_name):
                 TP = self.tp
@@ -104,7 +122,10 @@ class Model:
 
     @property
     def recall(self):
-        #Returns a vector of length len(dataset), mean has to be computed afterwards
+        """
+        Recall per sequence.
+        Returns a vector of length len(dataset), mean has to be computed afterwards
+        """
         if self._recall is None:
             with tf.device(self.device_name):
                 TP = self.tp
@@ -114,7 +135,10 @@ class Model:
 
     @property
     def f_measure(self):
-        #Returns a vector of length len(dataset), mean has to be computed afterwards
+        """
+        F-measure per sequence.
+        Returns a vector of length len(dataset), mean has to be computed afterwards
+        """
         if self._f_measure is None:
             with tf.device(self.device_name):
                 prec = self.precision
@@ -124,15 +148,12 @@ class Model:
 
 
 
-            # def Fmeasure(data,target):
-            #     prec = precision(data,target)
-            #     rec = recall(data,target)
-            #     return 2*prec*rec/(prec+rec)
-
-
 
     @property
     def inputs(self):
+        """
+        Placeholder for input sequences
+        """
         if self._inputs is None:
             n_notes = self.n_notes
             n_steps = self.n_steps
@@ -145,6 +166,9 @@ class Model:
 
     @property
     def seq_lens(self):
+        """
+        Placeholder for sequence lengths (not used at the moment)
+        """
         if self._seq_lens is None:
             suffix = self.suffix
             seq_len = tf.placeholder("int32",[None], name="seq_len"+suffix)
@@ -152,41 +176,13 @@ class Model:
             self._seq_lens = seq_len
         return self._seq_lens
 
-    @property
-    def key_lists(self):
-        if self._key_lists is None:
-            suffix = self.suffix
-            #1st dim: batch size, 2nd dim: max list length
-            key_lists = tf.placeholder("int32",[None,None], name="key_lists"+suffix)
-
-            self._key_lists = key_lists
-        return self._key_lists
-
-    @property
-    def key_masks(self):
-        if self._key_masks is None:
-            suffix = self.suffix
-            n_steps = self.n_steps
-            key_masks = tf.placeholder('float',[None,n_steps-1,88],name="key_masks"+suffix)
-
-            self._key_masks = key_masks
-        return self._key_masks
-
-    @property
-    def key_masks_w(self):
-        if self._key_masks is None:
-            suffix = self.suffix
-            y = self.labels
-            n_steps = self.n_steps
-            key_masks = tf.placeholder('float',[None,n_steps-1,12],name="key_masks_w"+suffix)
-
-            self._key_masks_w = key_masks
-        return self._key_masks_w
-
 
 
     @property
     def prediction(self):
+        """
+        Logit predictions: x[t] given x[0:t]
+        """
         if self._prediction is None:
             with tf.device(self.device_name):
                 chunks = self.chunks
@@ -226,6 +222,9 @@ class Model:
 
     @property
     def pred_sigm(self):
+        """
+        Sigmoid predictions: x[t] given x[0:t]
+        """
         if self._pred_sigm is None:
             with tf.device(self.device_name):
                 pred = self.prediction
@@ -235,6 +234,9 @@ class Model:
 
     @property
     def thresh(self):
+        """
+        Placeholder for threshold (to apply to the sigmoid predictions)
+        """
         if self._thresh is None:
             suffix = self.suffix
             thresh = tf.placeholder_with_default(0.5,shape=[],name="thresh"+suffix)
@@ -243,6 +245,9 @@ class Model:
 
     @property
     def pred_thresh(self):
+        """
+        Thresholded predictions, using self.thresh placeholder
+        """
         if self._pred_thresh is None:
             with tf.device(self.device_name):
                 thresh = self.thresh
@@ -257,6 +262,9 @@ class Model:
 
     @property
     def labels(self):
+        """
+        Placeholder for targets (shifted version of inputs in the case of prediction)
+        """
         if self._labels is None:
             n_notes = self.n_notes
             n_steps = self.n_steps
@@ -273,7 +281,9 @@ class Model:
 
     @property
     def cross_entropy(self):
-        #Mean cross entropy
+        """
+        Mean cross entropy
+        """
         if self._cross_entropy is None:
             with tf.device(self.device_name):
                 y = self.labels
@@ -285,7 +295,9 @@ class Model:
 
     @property
     def cross_entropy2(self):
-        #Cross entropy as a vector of length batch_size
+        """
+        Cross entropy as a vector of length batch_size
+        """
         if self._cross_entropy2 is None:
             with tf.device(self.device_name):
                 n_notes = self.n_notes
@@ -299,6 +311,9 @@ class Model:
 
     @property
     def optimize(self):
+        """
+        Optimiser. Evaluate that node to train the network.
+        """
         if self._optimize is None:
             with tf.device(self.device_name):
                 cross_entropy = self.cross_entropy
@@ -308,6 +323,10 @@ class Model:
         return self._optimize
 
     def _run_by_batch(self,sess,op,feed_dict,batch_size,mean=True):
+        """
+        Evaluate a node by batch, splitting the dataset.
+        Currently, only works with cross_entropy2, so not a generic operator.
+        """
         suffix = self.suffix
         x = self.inputs
 
@@ -345,6 +364,11 @@ class Model:
 
 
     def extract_data(self,dataset,subset):
+        """
+        Get NumPy tensors for input, target and sequence lengths from Dataset object
+        in the right format to be given as values to placeholders.
+        """
+
         chunks = self.chunks
 
         if chunks:
@@ -358,9 +382,12 @@ class Model:
         return data, target, lengths
 
     def initialize_training(self,save_path,train_param,sess=None):
-
-
-        optimizer = self.optimize #Create the optimizer variable so they can be initialised
+        """
+        Prepare everything for training.
+        Creates summaries, session if not already given, initialises variables,
+        creates savers.
+        """
+        optimizer = self.optimize
         cross_entropy = self.cross_entropy
         precision = self.precision
         recall = self.recall
@@ -413,6 +440,9 @@ class Model:
 
 
     def perform_training(self,data,save_path,train_param,sess,saver,train_writer,ckpt_save_path,summary_batch, summary_epoch,n_batch=0,n_epoch=0):
+        """
+        Actually performs training steps.
+        """
 
         chunks = self.chunks
 
@@ -514,7 +544,13 @@ class Model:
 
 
     def train(self, data, save_path, train_param,sess=None,n_batch=0,n_epoch=0):
-
+        """
+        Train a network.
+        This function was split into 2 functions to allow modification of training
+        parameters or dataset.
+        For example: call initialize_training once, then call several times
+        perform_training, with different datasets each time.
+        """
 
 
         sess, saver, train_writer, ckpt_save_path, summary_batch, summary_epoch = self.initialize_training(save_path,train_param,sess=sess)
@@ -526,6 +562,13 @@ class Model:
         return n_batch, n_epoch
 
     def load(self,save_path,model_path):
+        """
+        Load the parameters from a checkpoint file.
+        'save_path' is a folder in which to look for a best_model (or the latest
+        saved)
+        'model_path' allows to specify which model exactly should be loaded
+        (only used if not None)
+        """
 
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
         saver = tf.train.Saver()
@@ -547,6 +590,10 @@ class Model:
         return sess, saver
 
     def resume_training(self,load_path,data,save_path,train_param,model_path=None,n_batch=0,n_epoch=0):
+        """
+        Resume training by loading a model from data and continuing training
+        """
+
         sess, saver = self.load(load_path,model_path)
 
         n_batch,n_epoch = self.train(data,save_path,train_param,sess=sess,n_batch=n_batch,n_epoch=n_epoch)
@@ -554,8 +601,13 @@ class Model:
 
 
     def run_prediction(self,dataset,len_list, save_path,model_path=None,sigmoid=False,sess=None,saver=None):
+        """
+        Get predictions as Numpy matrix.
+        If sess or saver are not provided (None), a model will be loaded from
+        checkpoint. Otherwise, the provided session and saver will be used.
+        """
 
-        if sess==None and saver==None:
+        if sess==None or saver==None:
             sess, saver = self.load(save_path,model_path)
 
         suffix = self.suffix
@@ -575,6 +627,14 @@ class Model:
         return output
 
     def run_cross_entropy(self,dataset,len_list, save_path,n_model=None,batch_size=50,mean=True):
+        """
+        Get cross-entropy as Numpy matrix.
+        If sess or saver are not provided (None), a model will be loaded from
+        checkpoint. Otherwise, the provided session and saver will be used.
+        If mean==True, returns an average over the dataset, otherwise,
+        one value for each sequence.
+        """
+
         sess, saver = self.load(save_path,n_model)
         cross_entropy = self.cross_entropy2
 
@@ -594,6 +654,12 @@ class Model:
 
 
     def compute_eval_metrics_pred(self,dataset,len_list,key_masks,threshold,save_path,batch_size=1,n_model=None,sess=None,saver=None):
+        """
+        Compute averaged metrics over the dataset.
+        If sess or saver are not provided (None), a model will be loaded from
+        checkpoint. Otherwise, the provided session and saver will be used.
+
+        """
 
         # preds = self.run_prediction(dataset,len_list, save_path,n_model,sigmoid=True)
         # idx = preds[:,:,:] > threshold
@@ -653,6 +719,9 @@ def getTotalNumParameters():
 
 
 def make_model_from_dataset(dataset,model_param):
+    """
+    Initialise model_param dictionary given a Dataset object
+    """
 
     n_notes = dataset.get_n_notes()
     n_steps = dataset.get_len_files()
@@ -663,6 +732,9 @@ def make_model_from_dataset(dataset,model_param):
     return Model(model_param)
 
 def make_save_path(base_path,model_param,rep=None):
+    """
+    Systematically creates a save_path given model parameters
+    """
 
     n_hidden = model_param['n_hidden']
     learning_rate = model_param['learning_rate']
@@ -687,6 +759,9 @@ def make_save_path(base_path,model_param,rep=None):
 
 
 def make_model_param():
+    """
+    Create a default 'model_param'
+    """
     model_param = {}
 
     model_param['n_hidden']=128
@@ -702,6 +777,9 @@ def make_model_param():
     return model_param
 
 def make_train_param():
+    """
+    Create a default 'train_param'
+    """
     train_param = {}
 
     train_param['epochs']=20

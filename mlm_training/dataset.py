@@ -229,37 +229,6 @@ class Dataset:
         for subset in ["train"]: #,"valid","test"]:
             self.transpose_all_one(subset)
 
-    def transpose_C_one(self,subset):
-        data = getattr(self,subset)
-        new_data = []
-        for piano_roll in data:
-            key = piano_roll.key
-            if key <= 7:
-                #Transpose down
-                tr_piano_roll = piano_roll.transpose(-key)
-            else:
-                #Transpose up
-                tr_piano_roll = piano_roll.transpose(12-key)
-            new_data += [tr_piano_roll]
-        setattr(self,subset,new_data)
-
-    def transpose_C(self):
-        print("Transposing all subsets in C...")
-        #You only have to transpose all the subsets
-        for subset in ["train","valid","test"]:
-            self.transpose_C_one(subset)
-
-    def timestretch_all(self):
-        print("Timestretching...")
-        #You only timestretch the training dataset
-        data = self.train
-        new_data = []
-        for piano_roll in data:
-            stretch_piano_roll = piano_roll.timestretch()
-            new_data += [stretch_piano_roll]
-            new_data += [piano_roll]
-        self.train = new_data
-        self.zero_pad()
 
 
 def ground_truth(data):
