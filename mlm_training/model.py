@@ -1,4 +1,5 @@
-from dataset import Dataset, ground_truth, safe_mkdir
+from mlm_training.dataset import Dataset, ground_truth
+from mlm_training.utils import safe_mkdir
 import os
 import tensorflow as tf
 import numpy as np
@@ -185,13 +186,9 @@ class Model:
         """
         if self._prediction is None:
             with tf.device(self.device_name):
-                chunks = self.chunks
                 n_notes = self.n_notes
                 n_classes = n_notes
-                if chunks:
-                    n_steps = chunks
-                else :
-                    n_steps = self.n_steps
+                n_steps = self.n_steps
                 n_hidden = self.n_hidden
                 suffix = self.suffix
 
@@ -269,12 +266,8 @@ class Model:
             n_notes = self.n_notes
             n_steps = self.n_steps
             suffix = self.suffix
-            chunks = self.chunks
 
-            if chunks:
-                y = tf.placeholder("float", [None,chunks-1,n_notes],name="y"+suffix)
-            else :
-                y = tf.placeholder("float", [None,n_steps-1,n_notes],name="y"+suffix)
+            y = tf.placeholder("float", [None,n_steps-1,n_notes],name="y"+suffix)
 
             self._labels = y
         return self._labels
@@ -443,8 +436,6 @@ class Model:
         """
         Actually performs training steps.
         """
-
-        chunks = self.chunks
 
         optimizer = self.optimize
         cross_entropy = self.cross_entropy
@@ -724,7 +715,10 @@ def make_model_from_dataset(dataset,model_param):
     """
 
     n_notes = dataset.get_n_notes()
-    n_steps = dataset.get_len_files()
+    if model_param['chunks']:
+        n_steps = model_param['chunks']
+    else:
+        n_steps = dataset.get_len_files()
 
     model_param['n_notes']=n_notes
     model_param['n_steps']=n_steps

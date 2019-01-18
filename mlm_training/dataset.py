@@ -5,7 +5,7 @@ from random import shuffle
 import pickle as pickle
 from datetime import datetime
 import copy
-from pianoroll import Pianoroll
+from mlm_training.pianoroll import Pianoroll
 from tqdm import tqdm
 
 class Dataset:
@@ -234,17 +234,6 @@ class Dataset:
 def ground_truth(data):
     return data[:,:,1:]
 
-
-def safe_mkdir(dir,clean=False):
-    if not os.path.exists(dir):
-        os.makedirs(dir)
-    if clean and not os.listdir(dir) == [] :
-        old_path = os.path.join(dir,"old")
-        safe_mkdir(old_path)
-        for fn in os.listdir(dir):
-            full_path = os.path.join(dir,fn)
-            if not os.path.isdir(full_path):
-                os.rename(full_path,os.path.join(old_path,fn))
 
 
 

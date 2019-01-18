@@ -4,6 +4,18 @@ import pretty_midi as pm
 import numpy as np
 import mir_eval.transcription
 
+
+def safe_mkdir(dir,clean=False):
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+    if clean and not os.listdir(dir) == [] :
+        old_path = os.path.join(dir,"old")
+        safe_mkdir(old_path)
+        for fn in os.listdir(dir):
+            full_path = os.path.join(dir,fn)
+            if not os.path.isdir(full_path):
+                os.rename(full_path,os.path.join(old_path,fn))
+
 def move_files(file_list,folder1,folder2):
     for midi_file in file_list:
         os.rename(os.path.join(folder1,midi_file), os.path.join(folder2,midi_file))
