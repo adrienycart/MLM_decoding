@@ -11,13 +11,14 @@ from tqdm import tqdm
 class Dataset:
     """Classe representing the dataset."""
 
-    def __init__(self):
+    def __init__(self,rand_transp=False):
         self.train = []
         self.test = []
         self.valid = []
 
         self.note_range = [0,128]
         self.max_len = 0
+        self.rand_transp=rand_transp
 
     def walkdir(self,folder):
         for fn in os.listdir(folder):
@@ -167,6 +168,9 @@ class Dataset:
         i = 0
         while i<n_files:
             piano_roll = pr_list[i]
+            if self.rand_transp:
+                transp = np.random.randint(-7,6)
+                piano_roll = piano_roll.transpose(transp)
             chunks, chunks_len = piano_roll.cut(len_chunk,keep_padding=False)
             dataset += list(chunks)
             lengths += list(chunks_len)

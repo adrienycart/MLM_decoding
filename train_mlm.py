@@ -14,6 +14,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('save_path',type=str,help="folder to save the checkpoints (inside ckpt folder)")
 parser.add_argument('data_path',type=str,help="folder containing the split dataset")
 parser.add_argument('-quant',action='store_true',help="use quantised timesteps")
+parser.add_argument('-epochs',type=int,default=1000,help="maximum number of epochs")
 
 args = parser.parse_args()
 
@@ -40,13 +41,14 @@ train_param['display_per_epoch']=5
 train_param['save_step']=1
 train_param['max_to_keep']=1
 train_param['summarize']=True
+train_param['early_stop_epochs']=100
 
 print("Computation start : "+str(datetime.now()))
 
-data = Dataset()
+data = Dataset(rand_transp=True)
 data.load_data(args.data_path,note_range=note_range,
     fs=fs,quant=args.quant)
-data.transpose_all()
+# data.transpose_all()
 
 
 model_param = make_model_param()
