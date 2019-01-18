@@ -75,7 +75,7 @@ class Dataset:
         self.note_range = note_range
         for subset in ["train","valid","test"]:
             self.load_data_one(folder,subset,fs,max_len,note_range,quant,length_of_chunks,key_method)
-        self.zero_pad()
+        # self.zero_pad()
         print("Dataset loaded ! "+str(datetime.now()))
 
     def load_data_custom(self,folder,train,valid,test,fs,max_len=None,note_range=[0,128],quant=False,length_of_chunks=None):
@@ -110,10 +110,6 @@ class Dataset:
         lengths = np.zeros([n_files],dtype=int)
         if with_names:
             names = []
-        if with_key_masks:
-            key_masks = np.zeros([n_files,n_notes,len_file-1])
-            key_lists = []
-
 
         for i, piano_roll in enumerate(pr_list):
             roll = piano_roll.roll
@@ -121,10 +117,6 @@ class Dataset:
             lengths[i] = piano_roll.length
             if with_names:
                 names += [piano_roll.name]
-            if with_key_masks:
-                key_masks[i] = piano_roll.get_key_profile_matrix()
-                key_list = [time for (key,time) in piano_roll.key_list]+[piano_roll.length]
-                key_lists += [key_list]
 
         output = [dataset, lengths]
         if with_names:

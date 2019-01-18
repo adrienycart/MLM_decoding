@@ -32,6 +32,7 @@ class Model:
 
         self._prediction = None
         self._pred_sigm = None
+        self._last_pred_sigm = None
         self._pred_thresh = None
         self._cross_entropy = None
         self._cross_entropy2 = None
@@ -228,6 +229,17 @@ class Model:
                 pred = tf.sigmoid(pred)
                 self._pred_sigm = pred
         return self._pred_sigm
+
+    @property
+    def last_pred_sigm(self):
+        """
+        Last sigmoid prediction: N=len(x); x[N-1] given x[0:N-1]
+        """
+        if self._last_pred_sigm is None:
+            with tf.device(self.device_name):
+                pred_sigm = self.pred_sigm
+                self._last_pred_sigm = pred_sigm[:,-1,:]
+        return self._last_pred_sigm
 
     @property
     def thresh(self):
