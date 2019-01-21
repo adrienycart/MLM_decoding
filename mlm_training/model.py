@@ -148,7 +148,15 @@ class Model:
                 self._f_measure = tf.truediv(tf.scalar_mul(2,tf.multiply(prec,rec)),tf.add(tf.add(prec,rec),1e-6))
         return self._f_measure
 
-
+    @property
+    def batch_size(self):
+        """
+        Placeholder for batch size
+        """
+        if self._batch_size is None:
+            batch_size = tf.placeholder("int", [],name="batch_size"+suffix)
+            self._batch_size = batch_size
+        return self._batch_size
 
 
     @property
@@ -160,8 +168,9 @@ class Model:
             n_notes = self.n_notes
             n_steps = self.n_steps
             suffix = self.suffix
+            batch_size = self.batch_size
 
-            x = tf.placeholder("float", [None,n_steps,n_notes],name="x"+suffix)
+            x = tf.placeholder("float", [batch_size,n_steps,n_notes],name="x"+suffix)
 
             self._inputs = x
         return self._inputs
@@ -173,11 +182,11 @@ class Model:
         """
         if self._seq_lens is None:
             suffix = self.suffix
-            seq_len = tf.placeholder("int32",[None], name="seq_len"+suffix)
+            batch_size = self.batch_size
+            seq_len = tf.placeholder("int32",[batch_size], name="seq_len"+suffix)
 
             self._seq_lens = seq_len
         return self._seq_lens
-
 
 
     @property
@@ -192,6 +201,7 @@ class Model:
                 n_steps = self.n_steps
                 n_hidden = self.n_hidden
                 suffix = self.suffix
+                batch_size = self.batch_size
 
 
                 x = self.inputs
@@ -201,7 +211,11 @@ class Model:
                 W = tf.Variable(tf.truncated_normal([n_hidden,n_classes]),name="W"+suffix)
                 b = tf.Variable(tf.truncated_normal([n_classes]),name="b"+suffix)
 
+                initial_state =
+
                 cell = tf.contrib.rnn.LSTMCell(n_hidden,state_is_tuple=True,forget_bias = 1.0)
+
+                initial_state = cell.zero_state(batch_size, dtype=tf.float32)
 
                 #We don't take into account sequence length because doing so
                 #causes Tensorflow to output weird results
@@ -278,8 +292,9 @@ class Model:
             n_notes = self.n_notes
             n_steps = self.n_steps
             suffix = self.suffix
+            batch_size = self.batch_size
 
-            y = tf.placeholder("float", [None,n_steps-1,n_notes],name="y"+suffix)
+            y = tf.placeholder("float", [batch_size,n_steps-1,n_notes],name="y"+suffix)
 
             self._labels = y
         return self._labels
@@ -456,6 +471,7 @@ class Model:
         recall = self.recall
         f_measure = self.f_measure
         suffix = self.suffix
+        batch_size_ph = self.batch_size
 
         x = self.inputs
         y = self.labels
@@ -497,19 +513,19 @@ class Model:
 
                 ptr += batch_size
 
-                sess.run(optimizer, feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens, drop: train_param['dropout']})
+                sess.run(optimizer, feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens, drop: train_param['dropout'],batch_size_ph:batch_size})
 
                 if j%display_step == 0 :
-                    cross_batch = sess.run(cross_entropy, feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens})
+                    cross_batch = sess.run(cross_entropy, feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens,batch_size_ph:batch_size})
                     print("Batch "+str(j)+ ", Cross entropy = "+"{:.5f}".format(cross_batch))
                     if train_param['summarize']:
-                        summary_b = sess.run(summary_batch,feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens})
+                        summary_b = sess.run(summary_batch,feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens,batch_size_ph:batch_size})
                         train_writer.add_summary(summary_b,global_step=n_batch)
                 n_batch += 1
 
-            cross = self._run_by_batch(sess,cross_entropy2,{x: valid_data, y: valid_target, seq_len: valid_lengths},batch_size)
+            cross = self._run_by_batch(sess,cross_entropy2,{x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size},batch_size)
             if train_param['summarize']:
-                summary_e = sess.run(summary_epoch,feed_dict={x: valid_data, y: valid_target, seq_len: valid_lengths})
+                summary_e = sess.run(summary_epoch,feed_dict={x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size})
                 train_writer.add_summary(summary_e, global_step=i)
             print("_________________")
             print("Epoch: " + str(i) + ", Cross Entropy = " + \
@@ -617,10 +633,11 @@ class Model:
         pred = self.prediction
         x = self.inputs
         seq_len = self.seq_lens
+        batch_size_ph = self.batch_size
 
         dataset = self._transpose_data(dataset)
 
-        notes_pred = sess.run(pred, feed_dict = {x: dataset, seq_len: len_list} )
+        notes_pred = sess.run(pred, feed_dict = {x: dataset, seq_len: len_list,batch_size_ph:dataset.shape[0]} )
         notes_pred = tf.transpose(notes_pred,[0,2,1])
 
         if sigmoid:
@@ -651,12 +668,12 @@ class Model:
         target = self._transpose_data(target)
 #        print type(target)
 
-        cross = self._run_by_batch(sess,cross_entropy,{x: dataset,y: target,seq_len: len_list},batch_size,mean=mean)
+        cross = self._run_by_batch(sess,cross_entropy,{x: dataset,y: target,seq_len: len_list,batch_size_ph:batch_size},batch_size,mean=mean)
         return cross
 
 
 
-    def compute_eval_metrics_pred(self,dataset,len_list,key_masks,threshold,save_path,batch_size=1,n_model=None,sess=None,saver=None):
+    def compute_eval_metrics_pred(self,dataset,len_list,threshold,save_path,n_model=None,sess=None,saver=None):
         """
         Compute averaged metrics over the dataset.
         If sess or saver are not provided (None), a model will be loaded from
@@ -676,7 +693,8 @@ class Model:
 
         data = self._transpose_data(dataset)
         targets = self._transpose_data(ground_truth(dataset))
-        k_masks = self._transpose_data(key_masks)
+
+
 
         prec = tf.reduce_mean(self.precision)
         rec = tf.reduce_mean(self.recall)
@@ -687,9 +705,9 @@ class Model:
         seq_len = self.seq_lens
         y = self.labels
         thresh = self.thresh
+        batch_size_ph = self.batch_size
 
-
-        cross, precision, recall, F_measure = sess.run([cross, prec, rec, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold} )
+        cross, precision, recall, F_measure = sess.run([cross, prec, rec, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0]} )
 
         return F_measure, precision, recall, cross
 
