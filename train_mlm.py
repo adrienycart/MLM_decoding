@@ -35,7 +35,7 @@ learning_rate = 0.01
 
 
 train_param = make_train_param()
-train_param['epochs']=100
+train_param['epochs']=2000
 train_param['batch_size']=50
 train_param['display_per_epoch']=5
 train_param['save_step']=1

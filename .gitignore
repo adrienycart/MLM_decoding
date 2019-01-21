@@ -6,3 +6,12 @@ ckpt/
 venv/
 framewise_2016/
 tests.py
+
+
+# Latex
+
+*.aux
+*.log
+*.out
+*.synctex.gz
+roadmap.pdf

@@ -1,0 +1,56 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+
+\title{Music Language Model Decoding for AMT}
+\author{Adrien Ycart, Andrew McLeod}
+\date{January 2018}
+
+\usepackage{natbib}
+\usepackage{graphicx}
+\usepackage{a4wide}
+\usepackage{hyperref}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+The goal of this project is to investigate language-model decoding in the context of AMT.
+The general idea is to use a symbolic model of music to assess the likelihood of candidate solutions, obtained via an acoustic model.
+
+This process is different from \cite{ycart2018polyphonic}.
+In that paper, an LSTM was trained to convert acoustic model output to binary piano-rolls.
+The model was trained on pairs of outputs of a specific acoustic model (obtained from audio files) and MIDI transcriptions of the audio file.
+It required aligned pairs of audio recordings and MIDI transcriptions.
+It was also trained for one specific acoustic model.
+
+In the current study, the language model is trained on symbolic data only.
+It can also be used with any acoustic model (unless some specific fine-tuning is done on the language model, see further down)
+It is similar to what it done in \cite{sigtia2016end}.
+The main difference is that we will investigate the effect of various time-steps on performance. 
+The language model will also have a different architecture: 
+\cite{sigtia2016end} used the RNN-RBM \cite{Boulanger-Lewandowski2012}, while we will use a simple LSTM, similar to \cite{Ycart2017}.
+
+
+\section{Models}
+
+\subsection{Acoustic model}
+
+As acoustic model, we will use \cite{Kelz2016}.
+It is a state-of-the-art model, only recently surpassed by \cite{Hawthorne2018}.
+It also uses the same architecture as in \cite{sigtia2016end}, with only slight modifications.
+It outputs pitch likelihoods as independent Bernouilli variables.
+
+\subsection{Language model}
+
+As language model, we will use a simple LSTM, as described in \cite{Ycart2017}.
+The main argument for using it is to determine whether the interesting qualitative properties displayed by the 16th note model on symbolic prediction can bring some kind of improvement in the context of AMT.
+
+\section{Datasets}
+
+
+
+\bibliographystyle{plain}
+\bibliography{references}
+\end{document}
