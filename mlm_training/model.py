@@ -24,10 +24,12 @@ class Model:
         for key,value in model_param.items():
             setattr(self,key,value)
 
+        self._batch_size = None
         self._inputs = None
         self._seq_lens = None
         self._labels = None
         self._thresh = None
+
 
         self.initial_state = None
         self.output_state = None
@@ -156,7 +158,8 @@ class Model:
         Placeholder for batch size
         """
         if self._batch_size is None:
-            batch_size = tf.placeholder("int", [],name="batch_size"+suffix)
+            suffix = self.suffix
+            batch_size = tf.placeholder("int32",(),name="batch_size"+suffix)
             self._batch_size = batch_size
         return self._batch_size
 
@@ -170,9 +173,8 @@ class Model:
             n_notes = self.n_notes
             n_steps = self.n_steps
             suffix = self.suffix
-            batch_size = self.batch_size
 
-            x = tf.placeholder("float", [batch_size,n_steps,n_notes],name="x"+suffix)
+            x = tf.placeholder("float", [None,n_steps,n_notes],name="x"+suffix)
 
             self._inputs = x
         return self._inputs
@@ -184,8 +186,7 @@ class Model:
         """
         if self._seq_lens is None:
             suffix = self.suffix
-            batch_size = self.batch_size
-            seq_len = tf.placeholder("int32",[batch_size], name="seq_len"+suffix)
+            seq_len = tf.placeholder("int32",[None], name="seq_len"+suffix)
 
             self._seq_lens = seq_len
         return self._seq_lens
@@ -294,9 +295,8 @@ class Model:
             n_notes = self.n_notes
             n_steps = self.n_steps
             suffix = self.suffix
-            batch_size = self.batch_size
 
-            y = tf.placeholder("float", [batch_size,n_steps,n_notes],name="y"+suffix)
+            y = tf.placeholder("float", [None,n_steps,n_notes],name="y"+suffix)
 
             self._labels = y
         return self._labels
@@ -582,7 +582,7 @@ class Model:
 
         return n_batch, n_epoch
 
-    def load(self,save_path,model_path):
+    def load(self,save_path,model_path=None):
         """
         Load the parameters from a checkpoint file.
         'save_path' is a folder in which to look for a best_model (or the latest
@@ -621,15 +621,15 @@ class Model:
         return n_batch,n_epoch
 
 
-    def run_prediction(self,dataset,len_list, save_path,model_path=None,sigmoid=False,sess=None,saver=None):
+    def run_prediction(self,dataset,len_list, save_path,model_path=None,sigmoid=False,sess=None):
         """
         Get predictions as Numpy matrix.
         If sess or saver are not provided (None), a model will be loaded from
         checkpoint. Otherwise, the provided session and saver will be used.
         """
 
-        if sess==None or saver==None:
-            sess, saver = self.load(save_path,model_path)
+        if sess==None:
+            sess, _ = self.load(save_path,model_path)
 
         suffix = self.suffix
         pred = self.prediction
@@ -648,28 +648,57 @@ class Model:
         output = notes_pred.eval(session = sess)
         return output
 
-    def run_one_step(self,hidden_state_in,sample,sess,saver):
+    def get_initial_state(sess,batch_size):
+        """
+        Returns a zero-filled initial state
+
+        Parameters
+        ----------
+        sess
+            A Tensorflow session, obtained with 'Model.load'
+        batch_size
+            number of initial states to get (mostl likely equal to branching factor)
+        """
+        return sess.run(self.initial_state,{self.batch_size:batch_size})
+
+    def run_one_step(self,hidden_states_in,samples,sess):
         """
         Perform one step of prediction: get new hidden state and output distribution
+
+        Parameters
+        ----------
+        hidden_states_in
+            LSTM cell state, obtained either with Model.get_initial_state or as output
+            of this function
+        samples
+            a Numpy array holding the samples to evaluate for current timestep.
+            Should be of dimension: [batch_size,1,n_notes]
+        sess
+            A Tensorflow session, obtained with 'Model.load'
+
+        Returns
+        -------
+        hidden_states_out
+            Updated hidden states
+        predictions
+            likelihoods for next timestep
         """
 
 
         suffix = self.suffix
-        pred = self.prediction
+        pred = self.pred_sigm
         x = self.inputs
         seq_len = self.seq_lens
         batch_size_ph = self.batch_size
+        initial_state = self.initial_state
+        output_state = self.output_state
 
-        dataset = self._transpose_data(dataset)
+        len_list = np.full([len(samples)],samples.shape[1])
 
-        notes_pred = sess.run(pred, feed_dict = {x: dataset, seq_len: len_list,batch_size_ph:dataset.shape[0]} )
-        notes_pred = tf.transpose(notes_pred,[0,2,1])
+        predictions,hidden_states_out = sess.run([pred,output_state], feed_dict = {x: samples,
+                seq_len: len_list,batch_size_ph:len(samples),initial_state:hidden_states_in} )
 
-        if sigmoid:
-            notes_pred=tf.sigmoid(notes_pred)
-
-        output = notes_pred.eval(session = sess)
-        return output
+        return hidden_states_out,predictions
 
     def run_cross_entropy(self,dataset,len_list, save_path,n_model=None,batch_size=50,mean=True):
         """
@@ -688,8 +717,8 @@ class Model:
         seq_len = self.seq_lens
         y = self.labels
 
-        target = ground_truth(dataset)
-        dataset = self._transpose_data(dataset)
+        target = dataset[:,:,1:]
+        dataset = self._transpose_data(dataset[:,:,:-1])
         target = self._transpose_data(target)
 #        print type(target)
 
@@ -698,7 +727,7 @@ class Model:
 
 
 
-    def compute_eval_metrics_pred(self,dataset,len_list,threshold,save_path,n_model=None,sess=None,saver=None):
+    def compute_eval_metrics_pred(self,dataset,len_list,threshold,save_path,n_model=None,sess=None):
         """
         Compute averaged metrics over the dataset.
         If sess or saver are not provided (None), a model will be loaded from
@@ -706,18 +735,13 @@ class Model:
 
         """
 
-        # preds = self.run_prediction(dataset,len_list, save_path,n_model,sigmoid=True)
-        # idx = preds[:,:,:] > threshold
-        # preds_thresh = idx.astype(int)
-
-
-        if sess==None and saver==None:
-            sess, saver = self.load(save_path,n_model)
+        if sess==None:
+            sess, _ = self.load(save_path,n_model)
 
         cross = self.cross_entropy
 
-        data = self._transpose_data(dataset)
-        targets = self._transpose_data(ground_truth(dataset))
+        data = self._transpose_data(dataset[:,:,:-1])
+        targets = self._transpose_data(dataset[:,:,1:])
 
 
 
@@ -817,7 +841,6 @@ def make_model_param():
     model_param['learning_rate']=0.01
     model_param['n_notes']=88
     model_param['n_steps']=300
-    model_param['batch_size']=50
 
     model_param['chunks']=None
     model_param['device_name']="/gpu:0"
