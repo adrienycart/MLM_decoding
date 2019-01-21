@@ -29,7 +29,7 @@ In the current study, the language model is trained on symbolic data only.
 It can also be used with any acoustic model (unless some specific fine-tuning is done on the language model, see further down)
 It is similar to what it done in \cite{sigtia2016end}.
 The main difference is that we will investigate the effect of various time-steps on performance:
- \cite{sigtia2016end} used a 10ms timestep, which we argue is not suited for music language modelling (see \cite{Ycart2017} and \cite{Korzeniowski2017}).
+ \cite{sigtia2016end} used a 32ms timestep (see Section IV.C from their paper), which we argue is not suited for music language modelling (see \cite{Ycart2017} and \cite{Korzeniowski2017}).
 The language model will also have a different architecture: 
 \cite{sigtia2016end} used the RNN-RBM \cite{Boulanger-Lewandowski2012}, while we will use a simple LSTM, similar to \cite{Ycart2017}.
 
@@ -62,7 +62,7 @@ It will output a matrix of same size, with binary values.
 
 The system will find the best global solution by keeping a heap of candidate binary pianorolls
 for timesteps $0,..,t$.
-At each iteration, it will update this heap of candidates with possible continuations at timestep $t+1$.
+At each iteration, it will update this heap of candidates with possible continuations at timestep $t+1$. We will use beam search to make finding the solution tractable, with a beam of size $B$, saving only the $B$ most likely candidates at each timestep.
 At timestep $T-1$, it will select the candidate with highest likelihood as the global solution.
 
 More specifically, at each timestep $t$, the general algorithm is the following:
@@ -70,7 +70,7 @@ More specifically, at each timestep $t$, the general algorithm is the following:
 \begin{enumerate}
 \item Get $K$ binary continuation for timestep $t$ ($K$ is the branching factor)
 \item For each candidate in the heap, compute the likelihood of the candidate concatenated with the continuation
-\item Update the heap based with these continued candidates
+\item Update the heap based with these continued candidates, and discard those outside of the beam
 \end{enumerate}
 
 \section{Datasets}
@@ -113,7 +113,7 @@ The output of the acoustic model will be downsampled to the correct timestep usi
 strategy described in \cite{ycart2018polyphonic}.
 
 To compare all 3 timesteps, results will have to be converted back to 10ms timesteps.
-For fare comparison, we will also evaluate the performance of 10ms timesteps and event timesteps using 16th-note quantisation as a post processing step.
+For fair comparison, we will also evaluate the performance of 10ms timesteps and event timesteps using 16th-note quantisation as a post processing step.
 
 \subsection{Real-life setting experiment}
 
@@ -124,6 +124,8 @@ For event timesteps, onset annotations will be obtained with an onset detection 
 Discussion of the results will include an investigation on the correlation between success of the pre-processing method (beat tracking and onset detection) and the performance of the system, fo each test file.
 One problem is that when using ground-truth annotations, we will use real 16th note timesteps, as written on the score, while in the real-life setting, we will use a fourth of a beat (which is not the same thing in the case of ternary meter).
 We will also investigate how the performance of the system varies depending of the time signature of the test pieces (the time signatures are available in A-MAPS).
+
+We would likely leave the use of probabilistic onset or pitch detections for future work.
 
 
 \section{Challenges}
@@ -158,13 +160,14 @@ Experiments will include a comparison of these strategies.
 The likelihood will be obtained as the product of acoustic model and language model likelihoods (potentially with a weighting factor between the two).
 
 Problem: MLM trained on perfect sequences, tested on imperfect sequences
-Solution: "teacher forcing"/"Scheduled Sampling" \cite{Bengio2015}
+Naive solution: Randomly sample false negatives (at some rate) and false positives (from a flat distribution).
+Smarter(?) solution: "teacher forcing"/"Scheduled Sampling" \cite{Bengio2015}
 Replace some timesteps with solutions sampled from some probability distribution: either language model (but doesn't exactly correspond to test case), or from acoustic model (but then, MLM training is not independent from acoustic model)
 
 \subsection{Update the heap}
 
 Problem: potentially many near-duplicates
-Solutions: ???
+Solutions: Hashed beam search, saving only those states which differ in the previous $M$ frames (used by \cite{Korzeniowski2018}).
 
 
 
