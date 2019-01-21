@@ -648,7 +648,7 @@ class Model:
         output = notes_pred.eval(session = sess)
         return output
 
-    def get_initial_state(sess,batch_size):
+    def get_initial_state(self,sess,batch_size):
         """
         Returns a zero-filled initial state
 
@@ -659,7 +659,11 @@ class Model:
         batch_size
             number of initial states to get (mostl likely equal to branching factor)
         """
-        return sess.run(self.initial_state,{self.batch_size:batch_size})
+        init_states = sess.run(self.initial_state,{self.batch_size:batch_size})
+        init_c = init_states.c
+        init_h = init_states.h
+
+        return list(zip(np.split(init_c,init_c.shape[0]),np.split(init_h,init_h.shape[0])))
 
     def run_one_step(self,hidden_states_in,samples,sess):
         """
@@ -668,8 +672,7 @@ class Model:
         Parameters
         ----------
         hidden_states_in
-            LSTM cell state, obtained either with Model.get_initial_state or as output
-            of this function
+            list of couples (cell_state,hidden_neurons), of length batch_size.
         samples
             a Numpy array holding the samples to evaluate for current timestep.
             Should be of dimension: [batch_size,1,n_notes]
@@ -693,10 +696,20 @@ class Model:
         initial_state = self.initial_state
         output_state = self.output_state
 
+        c,h= list(zip(*hidden_states_in))
+        c = np.squeeze(np.array(c))
+        h = np.squeeze(np.array(h))
+
+        hidden_states_in =  tf.nn.rnn_cell.LSTMStateTuple(c=c,h=h)
+
         len_list = np.full([len(samples)],samples.shape[1])
 
         predictions,hidden_states_out = sess.run([pred,output_state], feed_dict = {x: samples,
                 seq_len: len_list,batch_size_ph:len(samples),initial_state:hidden_states_in} )
+
+        c_out, h_out = hidden_states_out
+
+        hidden_states_out = list(zip(np.split(c_out,c_out.shape[0]),np.split(h_out,h_out.shape[0])))
 
         return hidden_states_out,predictions
 
