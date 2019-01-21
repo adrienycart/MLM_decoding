@@ -37,15 +37,15 @@ def decode(acoustic, LSTM, branch_factor=50, beam_size=50):
         new_beam = beam.Beam()
         
         for state in beam:
-            language_prior = get_language_prior(LSTM, state)
-            for sample in itertools.islice(enumerate_samples(frame, language_prior), branch_factor):
-                log_prob = get_log_prob(sample, language, acoustic)
+            for sample in itertools.islice(enumerate_samples(frame, state.prior), branch_factor):
+                log_prob = get_log_prob(sample, state.prior, acoustic)
                 new_beam.add(state.get_next_state(sample, log_prob))
                 
         new_beam.cut_to_size(beam_size)
         beam = new_beam
         
     return beam.get_top_state().get_piano_roll()
+
 
 
 
@@ -72,32 +72,6 @@ def get_log_prob(sample, acoustic, language):
         The log probability of the given sample.
     """
     return np.sum(np.where(sample == 1, np.log(language) + np.log(acoustic), np.log(1 - language) + np.log(1 - acoustic)))
-
-
-
-
-def get_language_prior(LSTM, state):
-    """
-    Get the prior distribution given an LSTM and its current state.
-    
-    Parameters
-    ==========
-    LSTM : model
-        The LSTM we will use to get the prior distribution.
-        
-    state : model state
-        The state of the LSTM model to use to generate the priors.
-        
-        
-    Returns
-    =======
-    prior : vector
-        An 88-length vector, containing the prior probability for each pitch to be present,
-        given the language model and state.
-    """
-    model = LSTM.load_state(state)
-    output = LSTM.evaluate(model)
-    return output
 
 
 
