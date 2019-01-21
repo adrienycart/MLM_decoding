@@ -29,6 +29,8 @@ class Model:
         self._labels = None
         self._thresh = None
 
+        self.initial_state = None
+        self.output_state = None
 
         self._prediction = None
         self._pred_sigm = None
@@ -211,23 +213,23 @@ class Model:
                 W = tf.Variable(tf.truncated_normal([n_hidden,n_classes]),name="W"+suffix)
                 b = tf.Variable(tf.truncated_normal([n_classes]),name="b"+suffix)
 
-                initial_state =
-
                 cell = tf.contrib.rnn.LSTMCell(n_hidden,state_is_tuple=True,forget_bias = 1.0)
 
-                initial_state = cell.zero_state(batch_size, dtype=tf.float32)
+                hidden_state_in = cell.zero_state(batch_size, dtype=tf.float32)
+                self.initial_state = hidden_state_in
+
 
                 #We don't take into account sequence length because doing so
                 #causes Tensorflow to output weird results
-                outputs, _ = tf.nn.dynamic_rnn(cell,x,dtype=tf.float32,time_major=False)#,sequence_length=seq_len)
-
+                outputs, hidden_state_out = tf.nn.dynamic_rnn(cell,x,initial_state=hidden_state_in,
+                    dtype=tf.float32,time_major=False)#,sequence_length=seq_len)
+                self.output_state = hidden_state_out
 
                 outputs = tf.reshape(outputs,[-1,n_hidden])
                 pred = tf.matmul(outputs,W) + b
 
                 pred = tf.reshape(pred,[-1,n_steps,n_notes])
-                #drop last prediction of each sequence (you don't have ground truth for this one)
-                pred = pred[:,:n_steps-1,:]
+
                 self._prediction = pred
         return self._prediction
 
@@ -294,7 +296,7 @@ class Model:
             suffix = self.suffix
             batch_size = self.batch_size
 
-            y = tf.placeholder("float", [batch_size,n_steps-1,n_notes],name="y"+suffix)
+            y = tf.placeholder("float", [batch_size,n_steps,n_notes],name="y"+suffix)
 
             self._labels = y
         return self._labels
@@ -396,8 +398,8 @@ class Model:
         else :
             data_raw, lengths = dataset.get_dataset(subset)
 
-        data = self._transpose_data(data_raw)
-        target = self._transpose_data(ground_truth(data_raw))
+        data = self._transpose_data(data_raw[:,:,:-1]) #Drop last sample
+        target = self._transpose_data(data_raw[:,:,1:]) #Drop first sample
 
         return data, target, lengths
 
@@ -646,6 +648,29 @@ class Model:
         output = notes_pred.eval(session = sess)
         return output
 
+    def run_one_step(self,hidden_state_in,sample,sess,saver):
+        """
+        Perform one step of prediction: get new hidden state and output distribution
+        """
+
+
+        suffix = self.suffix
+        pred = self.prediction
+        x = self.inputs
+        seq_len = self.seq_lens
+        batch_size_ph = self.batch_size
+
+        dataset = self._transpose_data(dataset)
+
+        notes_pred = sess.run(pred, feed_dict = {x: dataset, seq_len: len_list,batch_size_ph:dataset.shape[0]} )
+        notes_pred = tf.transpose(notes_pred,[0,2,1])
+
+        if sigmoid:
+            notes_pred=tf.sigmoid(notes_pred)
+
+        output = notes_pred.eval(session = sess)
+        return output
+
     def run_cross_entropy(self,dataset,len_list, save_path,n_model=None,batch_size=50,mean=True):
         """
         Get cross-entropy as Numpy matrix.
@@ -746,9 +771,9 @@ def make_model_from_dataset(dataset,model_param):
 
     n_notes = dataset.get_n_notes()
     if model_param['chunks']:
-        n_steps = model_param['chunks']
+        n_steps = model_param['chunks']-1
     else:
-        n_steps = dataset.get_len_files()
+        n_steps = dataset.get_len_files()-1
 
     model_param['n_notes']=n_notes
     model_param['n_steps']=n_steps
