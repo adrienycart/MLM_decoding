@@ -15,3 +15,5 @@ tests.py
 *.out
 *.synctex.gz
 roadmap.pdf
+*.bbl
+*.blg
