@@ -354,7 +354,7 @@ class Model:
                 y_inv = 1-y
                 p_t = tf.abs(y_inv - pred_sigm)
                 logits = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.prediction, labels=y)
-                focal_loss = tf.pow(p_t,self.gamma)*logits
+                focal_loss = tf.reduce_mean(tf.pow(p_t,self.gamma)*logits)
 
                 self._focal_loss = focal_loss
         return self._focal_loss
