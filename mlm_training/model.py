@@ -29,7 +29,7 @@ class Model:
         self._seq_lens = None
         self._labels = None
         self._thresh = None
-
+        self._gamma = None
 
         self.initial_state = None
         self.output_state = None
@@ -40,6 +40,7 @@ class Model:
         self._pred_thresh = None
         self._cross_entropy = None
         self._cross_entropy2 = None
+        self._focal_loss = None
         self._optimize = None
         self._tp = None
         self._fp = None
@@ -219,7 +220,6 @@ class Model:
                 hidden_state_in = cell.zero_state(batch_size, dtype=tf.float32)
                 self.initial_state = hidden_state_in
 
-
                 #We don't take into account sequence length because doing so
                 #causes Tensorflow to output weird results
                 outputs, hidden_state_out = tf.nn.dynamic_rnn(cell,x,initial_state=hidden_state_in,
@@ -330,6 +330,35 @@ class Model:
                 self._cross_entropy2 = cross_entropy2
         return self._cross_entropy2
 
+    @property
+    def gamma(self):
+        """
+        Focal loss gamma parameter
+        """
+        if self._gamma is None:
+            with tf.device(self.device_name):
+                suffix = self.suffix
+                self._gamma = tf.placeholder_with_default(2.0,shape=[],name="gamma"+suffix)
+        return self._gamma
+
+    @property
+    def focal_loss(self):
+        """
+        Focal loss: decreases the importance of correctly detected bins, focuses on mistakes
+        """
+        if self._focal_loss is None:
+            with tf.device(self.device_name):
+
+                y = self.labels
+                pred_sigm = self.pred_sigm
+                y_inv = 1-y
+                p_t = tf.abs(y_inv - pred_sigm)
+                logits = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.prediction, labels=y)
+                focal_loss = tf.pow(p_t,self.gamma)*logits
+
+                self._focal_loss = focal_loss
+        return self._focal_loss
+
 
     @property
     def optimize(self):
@@ -339,7 +368,12 @@ class Model:
         if self._optimize is None:
             with tf.device(self.device_name):
                 cross_entropy = self.cross_entropy
-                loss = cross_entropy
+                if self.use_focal_loss:
+                    print('Use Focal Loss')
+                    loss = self.focal_loss
+                else:
+                    print('Use Cross-Entropy Loss')
+                    loss = cross_entropy
                 optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(loss)
                 self._optimize = optimizer
         return self._optimize
@@ -354,6 +388,7 @@ class Model:
 
         y = self.labels
         seq_len = self.seq_lens
+        batch_size_ph = self.batch_size
 
         if y in feed_dict:
             dataset = feed_dict[x]
@@ -372,7 +407,7 @@ class Model:
                 batch_x = dataset[ptr:ptr+batch_size]
                 batch_y = target[ptr:ptr+batch_size]
                 batch_len_list = len_list[ptr:ptr+batch_size]
-                feed_dict={x: batch_x, y: batch_y,seq_len: batch_len_list}
+                feed_dict={x: batch_x, y: batch_y,seq_len: batch_len_list,batch_size_ph:batch_x.shape[0]}
             else :
                 batch_x = dataset[ptr:ptr+batch_size]
                 feed_dict={x: batch_x}
@@ -491,6 +526,7 @@ class Model:
             saver = saver[0]
 
         epochs = train_param['epochs']
+        print("Training for "+str(epochs)+" epochs")
         batch_size = train_param['batch_size']
         i = n_epoch
         while i < n_epoch+epochs and epoch_since_best<train_param['early_stop_epochs']:
@@ -500,11 +536,13 @@ class Model:
             training_data, training_target, training_lengths = self.extract_data(data,'train')
             valid_data, valid_target, valid_lengths = self.extract_data(data,'valid')
 
-
             n_files = training_data.shape[0]
             no_of_batches = int(np.ceil(float(n_files)/batch_size))
 
-            display_step = max(int(round(float(no_of_batches)/train_param['display_per_epoch'])),1)
+            if train_param['display_per_epoch'] is None:
+                display_step = None
+            else:
+                display_step = max(int(round(float(no_of_batches)/train_param['display_per_epoch'])),1)
 
 
 
@@ -514,20 +552,18 @@ class Model:
                 batch_lens = training_lengths[ptr:ptr+batch_size]
 
                 ptr += batch_size
-
-                sess.run(optimizer, feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens, drop: train_param['dropout'],batch_size_ph:batch_size})
-
-                if j%display_step == 0 :
-                    cross_batch = sess.run(cross_entropy, feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens,batch_size_ph:batch_size})
+                sess.run(optimizer, feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens, drop: train_param['dropout'],batch_size_ph:batch_x.shape[0]})
+                if not display_step is None and j%display_step == 0 :
+                    cross_batch = sess.run(cross_entropy, feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens,batch_size_ph:batch_x.shape[0]})
                     print("Batch "+str(j)+ ", Cross entropy = "+"{:.5f}".format(cross_batch))
                     if train_param['summarize']:
-                        summary_b = sess.run(summary_batch,feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens,batch_size_ph:batch_size})
+                        summary_b = sess.run(summary_batch,feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens,batch_size_ph:batch_x.shape[0]})
                         train_writer.add_summary(summary_b,global_step=n_batch)
                 n_batch += 1
 
             cross = self._run_by_batch(sess,cross_entropy2,{x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size},batch_size)
             if train_param['summarize']:
-                summary_e = sess.run(summary_epoch,feed_dict={x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size})
+                summary_e = sess.run(summary_epoch,feed_dict={x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:valid_data.shape[0]})
                 train_writer.add_summary(summary_e, global_step=i)
             print("_________________")
             print("Epoch: " + str(i) + ", Cross Entropy = " + \
@@ -559,7 +595,8 @@ class Model:
             i += 1
             # Shuffle the dataset before next epoch
             data.shuffle_one('train')
-            print("_________________")
+            if not display_step is None:
+                print("_________________")
 
         return n_batch, n_epoch+epochs
 
@@ -854,6 +891,7 @@ def make_model_param():
     model_param['learning_rate']=0.01
     model_param['n_notes']=88
     model_param['n_steps']=300
+    model_param['use_focal_loss']=False
 
     model_param['chunks']=None
     model_param['device_name']="/gpu:0"

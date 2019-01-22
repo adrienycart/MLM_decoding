@@ -15,6 +15,7 @@ parser.add_argument('save_path',type=str,help="folder to save the checkpoints (i
 parser.add_argument('data_path',type=str,help="folder containing the split dataset")
 parser.add_argument('-quant',action='store_true',help="use quantised timesteps")
 parser.add_argument('-epochs',type=int,default=1000,help="maximum number of epochs")
+parser.add_argument('-use_focal_loss',action='store_true',help="use focal loss instead of usual cross-entropy loss")
 
 args = parser.parse_args()
 
@@ -35,9 +36,9 @@ learning_rate = 0.01
 
 
 train_param = make_train_param()
-train_param['epochs']=2000
-train_param['batch_size']=50
-train_param['display_per_epoch']=5
+train_param['epochs']=args.epochs
+train_param['batch_size']=5
+train_param['display_per_epoch']=None
 train_param['save_step']=1
 train_param['max_to_keep']=1
 train_param['summarize']=True
@@ -55,6 +56,7 @@ model_param = make_model_param()
 model_param['n_hidden']=n_hidden
 model_param['learning_rate']=learning_rate
 model_param['chunks']=max_len
+model_param['use_focal_loss']=args.use_focal_loss
 
 
 save_path = args.save_path
