@@ -15,6 +15,7 @@ parser.add_argument('save_path',type=str,help="folder to save the checkpoints (i
 parser.add_argument('data_path',type=str,help="folder containing the split dataset")
 parser.add_argument('-quant',action='store_true',help="use quantised timesteps")
 parser.add_argument('-epochs',type=int,default=1000,help="maximum number of epochs")
+parser.add_argument('-lr',type=float,default=0.01,help="learning rate")
 parser.add_argument('-use_focal_loss',action='store_true',help="use focal loss instead of usual cross-entropy loss")
 
 args = parser.parse_args()
@@ -32,7 +33,7 @@ note_max = note_range[1]
 
 
 n_hidden = 256 #number of features in hidden layer
-learning_rate = 0.01
+learning_rate = args.lr
 
 
 train_param = make_train_param()
