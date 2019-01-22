@@ -5,7 +5,7 @@
 \author{Adrien Ycart, Andrew McLeod}
 \date{January 2018}
 
-\usepackage{natbib}
+\usepackage[round]{natbib}
 \usepackage{graphicx}
 \usepackage{a4wide}
 \usepackage{hyperref}
@@ -19,7 +19,7 @@
 The goal of this project is to investigate language-model decoding in the context of AMT.
 The general idea is to use a symbolic model of music to assess the likelihood of candidate solutions, obtained via an acoustic model.
 
-This process is different from \cite{ycart2018polyphonic}.
+This process is different from \citep{ycart2018polyphonic}.
 In that paper, an LSTM was trained to convert acoustic model output to binary piano-rolls.
 The model was trained on pairs of outputs of a specific acoustic model (obtained from audio files) and MIDI transcriptions of the audio file.
 It required aligned pairs of audio recordings and MIDI transcriptions.
@@ -27,29 +27,29 @@ It was also trained for one specific acoustic model.
 
 In the current study, the language model is trained on symbolic data only.
 It can also be used with any acoustic model (unless some specific fine-tuning is done on the language model, see further down)
-It is similar to what it done in \cite{sigtia2016end}.
+It is similar to what it done in \citep{sigtia2016end}.
 The main difference is that we will investigate the effect of various time-steps on performance:
- \cite{sigtia2016end} used a 32ms timestep (see Section IV.C from their paper), which we argue is not suited for music language modelling (see \cite{Ycart2017} and \cite{Korzeniowski2017}).
+ \cite{sigtia2016end} used a 32ms timestep (see Section IV.C from their paper), which we argue is not suited for music language modelling (see \citep{Ycart2017} and \citep{Korzeniowski2017}).
 The language model will also have a different architecture: 
-\cite{sigtia2016end} used the RNN-RBM \cite{Boulanger-Lewandowski2012}, while we will use a simple LSTM, similar to \cite{Ycart2017}.
+\citep{sigtia2016end} used the RNN-RBM \citep{Boulanger-Lewandowski2012}, while we will use a simple LSTM, similar to \citep{Ycart2017}.
 
-A similar language-model decoding was also presented in \cite{app8030470} for AMT.
+A similar language-model decoding was also presented in \citep{app8030470} for AMT.
 They used the RNN-RBM as language model, but using an "event" timestep (i.e. one timestep per new onset, without considering the duration of each note).
-It also echoes \cite{Korzeniowski2018} in the context of chord recognition.
+It also echoes \citep{Korzeniowski2018} in the context of chord recognition.
 We also aim to evaluate the performance using this kind of timestep.
 
 \section{Models}
 
 \subsection{Acoustic model}
 
-As acoustic model, we will use \cite{Kelz2016}.
-It is a state-of-the-art model, only recently surpassed by \cite{Hawthorne2018}.
-It also uses the same architecture as in \cite{sigtia2016end}, with only slight modifications.
+As acoustic model, we will use \citep{Kelz2016}.
+It is a state-of-the-art model, only recently surpassed by \citep{Hawthorne2018}.
+It also uses the same architecture as in \citep{sigtia2016end}, with only slight modifications.
 It outputs pitch likelihoods as independent Bernouilli variables.
 
 \subsection{Language model}
 
-As language model, we will use a simple LSTM, as described in \cite{Ycart2017}.
+As language model, we will use a simple LSTM, as described in \citep{Ycart2017}.
 The main argument for using it is to determine whether the interesting qualitative properties displayed by the 16th note model on symbolic prediction can bring some kind of improvement in the context of AMT.
 
 
@@ -75,7 +75,7 @@ More specifically, at each timestep $t$, the general algorithm is the following:
 
 \section{Datasets}
 
-The acoustic model is trained on the MAPS dataset \cite{emiya2010multipitch}.
+The acoustic model is trained on the MAPS dataset \citep{emiya2010multipitch}.
 
 The language model will be trained using different kinds of data.
 Unquantised (i.e. performance) MIDI data will be obtained from the International Piano-e-Competition\footnote{\url{http://piano-e-competition.com/}},
@@ -86,15 +86,15 @@ as well as from MIDI data scraped from various websites.
 The scraped data will be checked to make sure it corresponds to piano solo music, and that it is indeed quantised.
 We will also make sure that it doesn't contain pieces that are in the MAPS test set.
 
-For testing and for training in the proof-of-concept experiment (see \ref{sec:POC}), the A-MAPS \cite{ycart2018maps} rhythm annotations will be used.
+For testing and for training in the proof-of-concept experiment (see \ref{sec:POC}), the A-MAPS \citep{ycart2018maps} rhythm annotations will be used.
 
 \section{Experiments}
 
 \subsection{Preliminary experiment}
 
 We will run a quick experiment to show that a transduction model is fitted to one specific acoustic model, and cannot be used on a different one.
-To do so, we will train the model from \cite{ycart2018polyphonic} using outputs from Kelz's model \cite{Kelz2016}.
-We will then test it with another acoustic model, probably just a slightly modified version of  \cite{Kelz2016} (for instance with fewer layers).
+To do so, we will train the model from \citep{ycart2018polyphonic} using outputs from Kelz's model \citep{Kelz2016}.
+We will then test it with another acoustic model, probably just a slightly modified version of  \citep{Kelz2016} (for instance with fewer layers).
 We expect to see no improvement, maybe even a decrease in performance from using LSTM transduction decoding in the mismatched configuration, despite using only slightly different acoustic model.
 
 \subsection{Proof-of-concept experiment}
@@ -103,14 +103,14 @@ We expect to see no improvement, maybe even a decrease in performance from using
 We will compare 3 kinds of timesteps for the language model decoding:
 
 \begin{enumerate}
-\item 10ms timesteps, as in \cite{sigtia2016end}
-\item 16th-note timesteps, as recommended in \cite{Ycart2017}
-\item event timesteps, as in \cite{app8030470}
+\item 10ms timesteps, as in \citep{sigtia2016end}
+\item 16th-note timesteps, as recommended in \citep{Ycart2017}
+\item event timesteps, as in \citep{app8030470}
 \end{enumerate}
 
 In this first experiment, we will use rhythm ground truth annotations from A-MAPS for 16th note timesteps, and ground-truth onset annotations for event timesteps.
 The output of the acoustic model will be downsampled to the correct timestep using the \emph{step}
-strategy described in \cite{ycart2018polyphonic}.
+strategy described in \citep{ycart2018polyphonic}.
 
 To compare all 3 timesteps, results will have to be converted back to 10ms timesteps.
 For fair comparison, we will also evaluate the performance of 10ms timesteps and event timesteps using 16th-note quantisation as a post processing step.
@@ -118,7 +118,7 @@ For fair comparison, we will also evaluate the performance of 10ms timesteps and
 \subsection{Real-life setting experiment}
 
 We will again compare the same 3 kinds of timesteps, but without using ground truth annotations.
-For 16th note timesteps, beat annotations will be obtained with a beat-tracking algorithm (probably taken from the madmom library \cite{madmom}).
+For 16th note timesteps, beat annotations will be obtained with a beat-tracking algorithm (probably taken from the madmom library \citep{madmom}).
 For event timesteps, onset annotations will be obtained with an onset detection algorithm (probably also taken from madmom).
 
 Discussion of the results will include an investigation on the correlation between success of the pre-processing method (beat tracking and onset detection) and the performance of the system, fo each test file.
@@ -135,9 +135,9 @@ For each of the steps outlined in section \ref{sec:workflow}, we outline some ch
 \subsection{Language model training}
 \label{sec:focalloss}
 
-We have advocated for the use of 16th note timesteps in \cite{Ycart2017}, as 10ms timesteps seem to only learn to repeat the previous active note.
+We have advocated for the use of 16th note timesteps in \citep{Ycart2017}, as 10ms timesteps seem to only learn to repeat the previous active note.
 However, 16th note timesteps present the disadvantage of requiring beat annotations.
-On the other hand, there exist strategies to force networks to put emphasis during training on what they don't correctly detect, namely the focal loss \cite{lin2018focal}.
+On the other hand, there exist strategies to force networks to put emphasis during training on what they don't correctly detect, namely the focal loss \citep{lin2018focal}.
 The idea is to weight the training loss for each bin by a factor that is greater when the network doesn't detect correctly the bin or is uncertain, and lower when the bin is correctly detected.
 This simple strategy might help 10ms timestep models focus on transitions, that they incorrectly predict, rather than on continued notes.
 We will investigate whether it actually does.
@@ -148,7 +148,7 @@ We will investigate whether it actually does.
 At each timestep, we will have to get a set of binary continuations.
 A naive strategy would be to sample binary vectors from the acoustic model independent pitch-wise distributions.
 
-Given a vector of independent Bernouilli variables, \cite{Boulanger-Lewandowski2013} gives an algorithm to enumerate binary vectors in decreasing order of likelihood.
+Given a vector of independent Bernouilli variables, \citep{Boulanger-Lewandowski2013} gives an algorithm to enumerate binary vectors in decreasing order of likelihood.
 We will use this method.
 We still have to define which likelihoods to take.
 
@@ -176,7 +176,7 @@ As a result, the MLM might give very bad predictions.
 One way to overcome that is to add noise to the input sequences when training the MLM, to make it robust to noise.
 
 One naive solution is to add noise by randomly sampling false negatives (at some rate) and false positives (from a flat distribution).
-For a more sophisticated solution, we could implement something similar to scheduled sampling  \cite{Bengio2015}.
+For a more sophisticated solution, we could implement something similar to scheduled sampling  \citep{Bengio2015}.
 The idea is to replace during training some timesteps with solutions sampled from some probability distribution.
 At the beginning of training, we always use perfect sequences.
 Throughout training, we gradually incorporate more and more sampled timesteps.
@@ -193,7 +193,7 @@ We start training with $p=1$, and gradually decrease $p$ during training.
 \label{sec:update}
 
 The heap of candidates is likely to get saturated with lots of near-duplicates: sequences that vary only by a few timesteps.
-One solution to favour variety in the candidates is to use hashed beam search (used by \cite{Korzeniowski2018}):
+One solution to favour variety in the candidates is to use hashed beam search (used by \citep{Korzeniowski2018}):
 from all candidates that are identical in the previous $M$ frames, we only keep the one that has the highest likelihood, and discard the others.
 
 
@@ -216,6 +216,6 @@ from all candidates that are identical in the previous $M$ frames, we only keep 
 	\end{enumerate}
 \end{enumerate}
 
-\bibliographystyle{plain}
+\bibliographystyle{plainnat}
 \bibliography{references}
 \end{document}
