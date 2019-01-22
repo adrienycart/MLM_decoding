@@ -104,7 +104,7 @@ We will compare 3 kinds of timesteps for the language model decoding:
 
 \begin{enumerate}
 \item 10ms timesteps, as in \cite{sigtia2016end}
-\item 16th-note timesteps, as recommanded in \cite{Ycart2017}
+\item 16th-note timesteps, as recommended in \cite{Ycart2017}
 \item event timesteps, as in \cite{app8030470}
 \end{enumerate}
 
@@ -132,7 +132,18 @@ We would likely leave the use of probabilistic onset or pitch detections for fut
 
 For each of the steps outlined in section \ref{sec:workflow}, we outline some challenges and ideas to overcome them.
 
+\subsection{Language model training}
+\label{sec:focalloss}
+
+We have advocated for the use of 16th note timesteps in \cite{Ycart2017}, as 10ms timesteps seem to only learn to repeat the previous active note.
+However, 16th note timesteps present the disadvantage of requiring beat annotations.
+On the other hand, there exist strategies to force networks to put emphasis during training on what they don't correctly detect, namely the focal loss \cite{lin2018focal}.
+The idea is to weight the training loss for each bin by a factor that is greater when the network doesn't detect correctly the bin or is uncertain, and lower when the bin is correctly detected.
+This simple strategy might help 10ms timestep models focus on transitions, that they incorrectly predict, rather than on continued notes.
+We will investigate whether it actually does.
+
 \subsection{Get continuations at timestep $t$}
+\label{sec:sampling}
 
 At each timestep, we will have to get a set of binary continuations.
 A naive strategy would be to sample binary vectors from the acoustic model independent pitch-wise distributions.
@@ -156,20 +167,54 @@ In the two last cases, the set of continuation will depend on the language model
 Experiments will include a comparison of these strategies.
 
 \subsection{Compute the likelihood of the extended sequences}
+\label{sec:schedsamp}
 
 The likelihood will be obtained as the product of acoustic model and language model likelihoods (potentially with a weighting factor between the two).
 
-Problem: MLM trained on perfect sequences, tested on imperfect sequences
-Naive solution: Randomly sample false negatives (at some rate) and false positives (from a flat distribution).
-Smarter(?) solution: "teacher forcing"/"Scheduled Sampling" \cite{Bengio2015}
-Replace some timesteps with solutions sampled from some probability distribution: either language model (but doesn't exactly correspond to test case), or from acoustic model (but then, MLM training is not independent from acoustic model)
+One problem that might arise is that the MLM is trained on perfect sequences, and tested on imperfect, sampled sequences.
+As a result, the MLM might give very bad predictions.
+One way to overcome that is to add noise to the input sequences when training the MLM, to make it robust to noise.
+
+One naive solution is to add noise by randomly sampling false negatives (at some rate) and false positives (from a flat distribution).
+For a more sophisticated solution, we could implement something similar to scheduled sampling  \cite{Bengio2015}.
+The idea is to replace during training some timesteps with solutions sampled from some probability distribution.
+At the beginning of training, we always use perfect sequences.
+Throughout training, we gradually incorporate more and more sampled timesteps.
+
+More precisely, let $X$ be the perfect sequence, and $\hat{x}$ the sequence of prediction probability distributions
+($\hat{x_t}$ is predicted from $X_{1...t-1}$).
+At each timestep $t$, to choose the input to the network $x_t$, we toss a coin,
+and choose $X_t$ with probability $p$, or $sample(\hat{x_t})$ with probability $1-p$, where $sample$ corresponds to drawing a binary sample from the distribution.
+We start training with $p=1$, and gradually decrease $p$ during training.
+
+
 
 \subsection{Update the heap}
+\label{sec:update}
 
-Problem: potentially many near-duplicates
-Solutions: Hashed beam search, saving only those states which differ in the previous $M$ frames (used by \cite{Korzeniowski2018}).
+The heap of candidates is likely to get saturated with lots of near-duplicates: sequences that vary only by a few timesteps.
+One solution to favour variety in the candidates is to use hashed beam search (used by \cite{Korzeniowski2018}):
+from all candidates that are identical in the previous $M$ frames, we only keep the one that has the highest likelihood, and discard the others.
 
 
+\section{Publication plans}
+
+\begin{enumerate}
+\item For ISMIR 2019: 
+	\begin{enumerate}
+	\item Proof-of-concept experiments
+	\item Challenges \ref{sec:sampling}, \ref{sec:update}
+	\item Evaluation over the test dataset, and for each test piece
+	\end{enumerate}
+
+\item For later journal paper:
+	\begin{enumerate}
+	\item Contents of ISMIR paper
+	\item Preliminary experiment
+	\item Real-life experiments
+	\item Challenges \ref{sec:focalloss}, \ref{sec:schedsamp},
+	\end{enumerate}
+\end{enumerate}
 
 \bibliographystyle{plain}
 \bibliography{references}
