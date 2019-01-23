@@ -15,6 +15,7 @@ parser.add_argument('save_path',type=str,help="folder to save the checkpoints (i
 parser.add_argument('data_path',type=str,help="folder containing the split dataset")
 parser.add_argument('-quant',action='store_true',help="use quantised timesteps")
 parser.add_argument('-epochs',type=int,default=1000,help="maximum number of epochs")
+parser.add_argument('-early_stop_epochs',type=int,default=100,help="stop training after this number of epochs without improvement on valid set")
 parser.add_argument('-lr',type=float,default=0.01,help="learning rate")
 parser.add_argument('-use_focal_loss',action='store_true',help="use focal loss instead of usual cross-entropy loss")
 
@@ -43,7 +44,7 @@ train_param['display_per_epoch']=None
 train_param['save_step']=1
 train_param['max_to_keep']=1
 train_param['summarize']=True
-train_param['early_stop_epochs']=100
+train_param['early_stop_epochs']=args.early_stop_epochs
 
 print("Computation start : "+str(datetime.now()))
 
