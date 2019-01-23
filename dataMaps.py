@@ -23,16 +23,14 @@ class DataMaps:
         self.note_range=[0,128]
         self.begin=0 # beginning of the considered section in seconds
         self.end=0 # end of the considered section in seconds
-        self.transp = 0 # transposition of the target in semitones (when using data augmentation)
         self.quant = False # True only when using note-based time steps
 
-    def make_from_file(self,filename,timestep_type,section=None,note_range=[21,109],method='step',transp=None):
+    def make_from_file(self,filename,timestep_type,section=None,note_range=[21,109],method='step'):
 
         self.timestep_type = timestep_type
         self.set_name_from_maps(filename)
-        self.set_transp(filename)
 
-        csv_matrix, pm_data = self.get_pm_and_csv(filename,transp)
+        csv_matrix, pm_data = self.get_pm_and_csv(filename)
 
 
 
@@ -65,8 +63,6 @@ class DataMaps:
         else:
             raise ValueError('Timestep type not understood: '+str(timestep_type))
 
-        if not self.transp==0:
-            self.transpose_target()
 
         #Target has to be binarized because the pretty_midi get_piano_roll function
         #returns a real-value piano-roll.
@@ -80,19 +76,11 @@ class DataMaps:
         # self.set_meter_grid()
         return
 
-    def get_pm_and_csv(self,filename,transp=None):
+    def get_pm_and_csv(self,filename):
         #Method to get a pretty_midi object and an input matrix from a MIDI filename.
 
-        if transp == None:
-            transp_suffix = ''
-        else:
-            if transp==0:
-                transp_suffix = '_0'
-            elif transp > 0:
-                transp_suffix = '_+'+str(transp)
-            elif transp < 0:
-                transp_suffix = '_'+str(transp)
-        csv_filename = filename.replace('.mid',transp_suffix+'.csv')
+
+        csv_filename = filename.replace('.mid','.csv')
 
         csv_filename = filename.replace('.mid','.csv')
         csv_matrix = np.transpose(np.loadtxt(csv_filename),[1,0])
@@ -100,14 +88,6 @@ class DataMaps:
 
         return csv_matrix,midi_data
 
-    def set_transp(self,filename):
-        suffix = (os.path.splitext(filename)[0]).split('_')[-1]
-        try :
-            transp = int(suffix)
-        except ValueError:
-            transp=0
-        self.transp=transp
-        return
 
 
     def get_corresp_filename_from_maps(self,filename):
@@ -366,17 +346,6 @@ class DataMaps:
         return time_roll
 
 
-    def transpose_target(self):
-        #Transpose a pianoroll (when using data augmentation)
-        roll = self.target
-        diff = self.transp
-        if diff>0:
-            roll_transp = np.append(roll[diff:,:],np.zeros([diff,roll.shape[1]]),0)
-        elif diff<0:
-            roll_transp = np.append(np.zeros([-diff,roll.shape[1]]),roll[:diff,:],0)
-        #if diff == 0 : do nothing
-        self.target=roll_transp
-        return
 
 
 def signature_to_metrical_grid(sig):
@@ -545,17 +514,18 @@ def get_name_from_maps(filename):
     name = '_'.join(name)
     return name
 
-np.seterr(all='raise')
-filename = 'data/outputs_default_config/test/MAPS_MUS-chpn-p4_ENSTDkAm.mid'
-
-data = DataMaps()
-data.make_from_file(filename,'event',[0,30])
-
-import matplotlib.pyplot as plt
-fig, [ax1,ax2] = plt.subplots(2,1)
-ax1.imshow(data.input,aspect='auto',origin='lower')
-ax2.imshow(data.target,aspect='auto',origin='lower')
-plt.show()
+# np.seterr(all='raise')
+# filename = 'data/outputs_default_config/test/MAPS_MUS-chpn-p4_ENSTDkAm.mid'
+#
+# data = DataMaps()
+# data.make_from_file(filename,'event',[0,30])
+#
+#
+# import matplotlib.pyplot as plt
+# fig, [ax1,ax2] = plt.subplots(2,1)
+# ax1.imshow(data.input,aspect='auto',origin='lower')
+# ax2.imshow(data.target,aspect='auto',origin='lower')
+# plt.show()
 
 
 # import cPickle as pickle
