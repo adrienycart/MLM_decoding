@@ -9,6 +9,7 @@
 \usepackage{graphicx}
 \usepackage{a4wide}
 \usepackage{hyperref}
+\usepackage{amsmath}
 
 \begin{document}
 
@@ -103,7 +104,7 @@ We expect to see no improvement, maybe even a decrease in performance from using
 We will compare 3 kinds of timesteps for the language model decoding:
 
 \begin{enumerate}
-\item 10ms timesteps, as in \citep{sigtia2016end}
+\item 40ms timesteps, similar to \citep{sigtia2016end} (Kelz's uses a framerate of 25 fps).
 \item 16th-note timesteps, as recommended in \citep{Ycart2017}
 \item event timesteps, as in \citep{app8030470}
 \end{enumerate}
@@ -112,8 +113,8 @@ In this first experiment, we will use rhythm ground truth annotations from A-MAP
 The output of the acoustic model will be downsampled to the correct timestep using the \emph{step}
 strategy described in \citep{ycart2018polyphonic}.
 
-To compare all 3 timesteps, results will have to be converted back to 10ms timesteps.
-For fair comparison, we will also evaluate the performance of 10ms timesteps and event timesteps using 16th-note quantisation as a post processing step.
+To compare all 3 timesteps, results will have to be converted back to 40ms timesteps.
+For fair comparison, we will also evaluate the performance of 40ms timesteps and event timesteps using 16th-note quantisation as a post processing step.
 
 \subsection{Real-life setting experiment}
 
@@ -127,7 +128,6 @@ We will also investigate how the performance of the system varies depending of t
 
 We would likely leave the use of probabilistic onset or pitch detections for future work.
 
-
 \section{Challenges}
 
 For each of the steps outlined in section \ref{sec:workflow}, we outline some challenges and ideas to overcome them.
@@ -135,11 +135,11 @@ For each of the steps outlined in section \ref{sec:workflow}, we outline some ch
 \subsection{Language model training}
 \label{sec:focalloss}
 
-We have advocated for the use of 16th note timesteps in \citep{Ycart2017}, as 10ms timesteps seem to only learn to repeat the previous active note.
+We have advocated for the use of 16th note timesteps in \citep{Ycart2017}, as shorter, constant-length timesteps seemed to only learn to repeat the previous active note.
 However, 16th note timesteps present the disadvantage of requiring beat annotations.
 On the other hand, there exist strategies to force networks to put emphasis during training on what they don't correctly detect, namely the focal loss \citep{lin2018focal}.
 The idea is to weight the training loss for each bin by a factor that is greater when the network doesn't detect correctly the bin or is uncertain, and lower when the bin is correctly detected.
-This simple strategy might help 10ms timestep models focus on transitions, that they incorrectly predict, rather than on continued notes.
+This simple strategy might help 40ms timestep models focus on transitions, that they incorrectly predict, rather than on continued notes.
 We will investigate whether it actually does.
 
 \subsection{Get continuations at timestep $t$}
@@ -196,6 +196,135 @@ The heap of candidates is likely to get saturated with lots of near-duplicates: 
 One solution to favour variety in the candidates is to use hashed beam search (used by \citep{Korzeniowski2018}):
 from all candidates that are identical in the previous $M$ frames, we only keep the one that has the highest likelihood, and discard the others.
 
+
+\section{Evaluation}
+
+\subsection{Benchmark evaluation}
+
+We will evaluate the performance of our system with frame-wise and note-wise F-measure, as usually done in AMT.
+To compare various processing timesteps, all results will be converted back to 40ms timesteps.
+
+\subsubsection{Frame-wise F-mesure}
+
+F-measure is computed by making a direct binary comparison between the output and ground-truth piano-rolls, following the MIREX Multiple-F0 Estimation task \citep{Bay2009}, 
+
+For each file, we compute:
+
+\[
+P = \frac{\sum_{t=0}^{T}TP(t)}{\sum_{t=0}^{T}TP(t) - FP(t)} ,
+R = \frac{\sum_{t=0}^{T}TP(t)}{\sum_{t=0}^{T}TP(t) - FN(t)} ,
+F = \frac{2 \cdot P \cdot R}{P + R} 
+\]
+where $TP(t)$, $FP(t)$ and $FN(t)$ are the number of true positives, false positives and false negatives at time step $t$, respectively. 
+Then these measures are averaged over the test set.
+
+\subsubsection{Note-wise F-mesure}
+
+The piano-rolls are first converted to a list of notes.
+Given a piano-roll matrix $P$, a note $(p,s,t)$ with $p$ the MIDI pitch, $s$ its start time and $e$ its end time must fulfil the following conditions:
+
+\begin{itemize}
+\item $P[p,s-1] = 0$ and $P[p,s] = 1$
+\item $P[p,e-1] = 1$ and $P[p,e] = 0$
+\end{itemize}
+
+A note is correctly detected if its pitch is correct and its onset is within 50ms of the corresponding ground truth onset. We don't take into account offset.
+We then compute the precision, recall and F-measure scores using the \texttt{mir\_eval} implementation \citep{raffel2014mireval}.
+
+\subsection{Further evaluation}
+
+We will consider using new metrics, that we define in sections \ref{sec:semitone} and \ref{sec:outkey}.
+We might also conduct some very basic listening tests, with a tentative protocol defined in section \ref{sec:listening}.
+ 
+\subsubsection{Semitone errors}
+\label{sec:semitone} 
+
+
+Particularly common mistakes in AMT are semitone errors.
+We define a frame-wise semitone error as follows: given $E$ and $T$ the estimated and target piano-rolls, $p$ a pitch and $t$ a time-step, $E[p,t]$ is a semitone error if and only if: 
+\vspace{-0.2cm}
+\begin{align*}
+&E[p,t]= 1 \wedge T[p,t]= 0 \wedge
+(T[p-1,t]= 1 \vee T[p+1,t]= 1)
+\end{align*}
+
+\vspace{-0.2cm}
+We then compute two different ratios: let $N_s$ be the number of semitone errors, $N_f$ the number of frames, and $N_e$ the total number of false positives:
+\vspace{-0.2cm}
+\[
+\mathcal{S}_{f,t} = \frac{N_s}{N_f} \textrm{ and } \mathcal{S}_{f,p} = \frac{N_s}{N_e}
+\]
+
+\vspace{-0.2cm}
+The first is correlated to $\mathcal{P}$, while the second can be biased when $\mathcal{P}$ is very high (an output with only 1 error that happens to be a semitone errors will have $\mathcal{S}_{f,p}=1$)
+%
+We do not define a note-wise semitone error due to the potential confusions with passing notes within a tolerance range.
+%This issue with passing notes has less influence with frame-wise metrics, as only part of a note can be considered as a semitone error.
+
+\subsubsection{In-key and Out-of-key Errors}
+\label{sec:outkey}
+
+We assume that out-of-key spurious notes are particularly salient, and should be avoided. On the other hand, in-key errors, although they should still be avoided, are less problematic. A note is considered out of key if it is both outside of the current key, and not in the ground truth, such that we do not penalise passing notes, or short modulations.
+
+We define the proportion of in-key and out-of-key errors both on the frame-wise and note-wise level.
+For frame-wise out-of-key errors, the implementation is straightforward: given $k(n)$ a key template with tonic note $n$, $n(t)$ the tonic at time-step $t$,
+$E[p,t]$ is an out-of-key error if and only if :
+\vspace{-0.2cm}
+\[
+E[p,t] = 1 \wedge T[p,t] = 0 \wedge p \notin k(n(t))
+\]
+
+\vspace{-0.2cm}
+For note-wise metrics, we consider that a note is in-key if its pitch is in the key at the time of its onset. We include a tolerance threshold $t_k$ around key changes: $n=(p,s,e)$ is an out-of-key error
+if and only if: 
+\vspace{-0.2cm}
+\setlength{\jot}{0pt}
+\begin{align*}
+& n \text{ is false pos.} \wedge (p \in k(n(s)) \vee p \in k(n(s + t_k)))
+\end{align*}
+
+\vspace{-0.2cm}
+We do not allow tolerance after a key change (when $p \in k(n(s - t_k))$), as in this case, the whole duration of the note is in a different key. We compute once again two different ratios both for frame-wise and note-wise metrics:  
+let $N_i$  be the number of in-key errors, $N_f$ the total number of frames (total number of notes in ground truth for note-wise metrics), $N_e$ the total number of false positives:
+
+\vspace{-0.35cm}
+\[
+\mathcal{I}_{\_,t} = \frac{N_i}{N_f} \textrm{ and } 
+\mathcal{I}_{\_,p} = \frac{N_i}{N_e}
+\]
+
+\vspace{-0.10cm}
+Out-of-key errors $\mathcal{O}_{\_,t}$ and $\mathcal{O}_{\_,p}$ are defined analogously.
+Again, the first ratios are correlated to $\mathcal{P}$, while the second can have strong variations when $\mathcal{P}$ is high. 
+We also have the relation $\mathcal{I}_{\_,p} + \mathcal{O}_{\_,p} = 1$. We thus only report $\mathcal{O}_{\_,p}$.
+
+To determine if a note is in-key or out-of-key, key annotations are needed.
+In the present experiments, we rely on key annotations of the A-MAPS database. 
+However, they do not take into account the short modulations that can appear for a few bars in a piece; only the changes in the key signature of the original score of a piece are reported.
+Moreover, all the keys are written as the major relative, even when the scale is minor (for instance, a piece in A minor will be annotated as C major).
+The key annotations thus are not perfect, but we consider that they can still bring some useful perspective on the kind of errors made.
+
+\subsubsection{Listening tests}
+\label{sec:listening}
+
+Defining a perception-based evaluation metric is a whole other, ongoing project, that hopefully will yield results quick enough.
+In the meantime, we can define the following protocol:
+
+\begin{itemize}
+\item Randomly choose a piece from the test set
+\item Randomly choose 2 model among: Kelz's model, 40ms MLM decoding, 16th-note MLM decoding, event MLM decoding.
+\item Present pairs of outputs of about 15 seconds corresponding to the piece drawn, evaluated with the 2 model drawn.
+\item Ask which one is more pleasant (e.g. first model/second model/equally pleasant)
+\item Present the corresponding ground truth 
+\item Ask which one is closer to ground truth (e.g. first model/second model/equally close)
+\end{itemize}
+
+We could also collect information about music expertise of participants (Gold-MSI).
+This test could be rather quick to do, if we ask participants to only rate 10 to 20 excerpts.
+We could also conduct this test online, as we do not consider timbre to be an important parameter
+to consider for quality of the output, making it quite easy to get a enough participants.
+
+Asking separately about pleasantness and closeness to ground-truth might help us highlight the "musicality" of our model, in the case where the output might be musical, but different from the target.
 
 \section{Publication plans}
 
