@@ -26,7 +26,7 @@ class Dataset:
                 yield fn
 
 
-    def load_data_one(self,folder,subset,fs,max_len=None,note_range=[0,128],quant=False,length_of_chunks=None,key_method='main'):
+    def load_data_one(self,folder,subset,timestep_type,max_len=None,note_range=[0,128],length_of_chunks=None,key_method='main'):
         dataset = []
         subfolder = os.path.join(folder,subset)
 
@@ -44,9 +44,9 @@ class Dataset:
             if length_of_chunks == None:
                 piano_roll = Pianoroll()
                 if max_len == None:
-                    piano_roll.make_from_pm(midi_data,fs,None,note_range,quant,key_method)
+                    piano_roll.make_from_pm(midi_data,timestep_type,None,note_range,key_method)
                 else:
-                    piano_roll.make_from_pm(midi_data,fs,[0,max_len],note_range,quant,key_method)
+                    piano_roll.make_from_pm(midi_data,timestep_type,[0,max_len],note_range,key_method)
                 piano_roll.name = os.path.splitext(os.path.basename(filename))[0]
                 dataset += [piano_roll]
             else :
@@ -72,24 +72,23 @@ class Dataset:
             setattr(self,subset,dataset)
         return dataset
 
-    def load_data(self,folder,fs,max_len=None,note_range=[0,128],quant=False,length_of_chunks=None,key_method='main'):
+    def load_data(self,folder,timestep_type,max_len=None,note_range=[0,128],length_of_chunks=None,key_method='main'):
         self.note_range = note_range
         for subset in ["train","valid","test"]:
-            self.load_data_one(folder,subset,fs,max_len,note_range,quant,length_of_chunks,key_method)
+            self.load_data_one(folder,subset,timestep_type,max_len,note_range,length_of_chunks,key_method)
         # self.zero_pad()
         print("Dataset loaded ! "+str(datetime.now()))
 
-    def load_data_custom(self,folder,train,valid,test,fs,max_len=None,note_range=[0,128],quant=False,length_of_chunks=None):
+    def load_data_custom(self,folder,train,valid,test,timestep_type,max_len=None,note_range=[0,128],length_of_chunks=None):
         self.note_range = note_range
 
         for subset in train:
-            self.train += self.load_data_one(folder,subset,fs,max_len,note_range,quant,length_of_chunks)
+            self.train += self.load_data_one(folder,subset,timestep_type,max_len,note_range,length_of_chunks)
         for subset in valid:
-            self.valid += self.load_data_one(folder,subset,fs,max_len,note_range,quant,length_of_chunks)
+            self.valid += self.load_data_one(folder,subset,timestep_type,max_len,note_range,length_of_chunks)
         for subset in test:
-            self.test += self.load_data_one(folder,subset,fs,max_len,note_range,quant,length_of_chunks)
+            self.test += self.load_data_one(folder,subset,timestep_type,max_len,note_range,length_of_chunks)
 
-        self.zero_pad()
         print("Dataset loaded ! "+str(datetime.now()))
 
     def get_n_files(self,subset):

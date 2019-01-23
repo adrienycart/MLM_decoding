@@ -13,33 +13,33 @@ class Pianoroll:
         self.name = ""
         self.length = 0
         self.note_range=[0,128]
-        self.quant = False
+        self.timestep_type = None
         self.key = 0
         self.key_list = []
 
-    def make_from_file(self,filename,fs,section=None,note_range=[0,128],quant=False,key_method='main'):
+    def make_from_file(self,filename,timestep_type,section=None,note_range=[0,128],key_method='main'):
         midi_data = pm.PrettyMIDI(filename)
-        self.make_from_pm(midi_data,fs,section,note_range,quant,key_method)
+        self.make_from_pm(midi_data,timestep_type,section,note_range,key_method)
         self.name = os.path.splitext(os.path.basename(filename))[0]
         return
 
-    def make_from_pm(self,data,fs,section=None,note_range=[0,128],quant=False,key_method='main'):
+    def make_from_pm(self,data,timestep_type,section=None,note_range=[0,128],key_method='main'):
+        self.timestep_type = timestep_type
+
         #Get the roll matrix
-        if quant:
-            if fs is None:
-                self.roll,_ = get_event_roll(data,section)
-            else:
-                self.roll = get_quant_piano_roll(data,fs,section)
-            self.quant = True
-        else:
-            piano_roll = data.get_piano_roll(fs)
+        if timestep_type=="quant":
+            self.roll = get_quant_piano_roll(data,4,section)
+        elif timestep_type=="event":
+            self.roll = get_event_roll(data,section)
+        elif timestep_type=="time":
+            piano_roll = data.get_piano_roll(25)
             if not section == None :
-                min_time_step = int(round(section[0]*fs))
-                max_time_step = int(round(section[1]*fs))
+                min_time_step = int(round(section[0]*25))
+                max_time_step = int(round(section[1]*25))
                 self.roll = piano_roll[:,min_time_step:max_time_step]
             else:
                 self.roll = piano_roll
-            self.quant = False
+
         self.length = self.roll.shape[1]
         self.crop(note_range)
         self.binarize()
@@ -186,22 +186,28 @@ def get_quant_piano_roll(midi_data,fs=4,section=None):
     return quant_piano_roll
 
 def get_event_roll(midi_data,section=None):
-    roll = get_quant_piano_roll(midi_data,fs=12,section=section)
-    data_extended = np.pad(roll,[[0,0],[1,1]],'constant')
-    diff = data_extended[:,1:] - data_extended[:,:-1]
-    trans_mask = np.logical_or(diff==1, diff==-1)
-    transitions= np.where(trans_mask)
+    steps = np.unique(midi_data.get_onsets())
+    #Round to closest 0.04 value
+    steps_round = np.around(steps.astype(np.float)*25)/25
+    #Remove duplicates
+    _,indexes = np.unique(steps_round,return_index=True)
+    steps = steps[indexes]
+
+    pr = midi_data.get_piano_roll(times=steps)
+    pr = (pr>=7).astype(int)
+
+    if not section is None:
+        #Select the relevant portion of the pianoroll
+        begin = section[0]
+        end = section[1]
+        assert begin < end
+        begin_index = np.argmax(np.abs(begin-steps))
+        end_index = np.argmax(np.abs(end-steps))
+        pr = pr[:,begin_index:end_index]
+
+    return pr
 
 
-    transitions_unique = np.unique(transitions[1])
-    #We drop the last offset if it corresponds to an added zero, and add index zero if not already in
-    if transitions_unique[-1]==roll.shape[1]:
-        transitions_unique = transitions_unique[:-1]
-    if transitions_unique[0]!=0:
-        transitions_unique = np.concatenate(([0],transitions_unique),axis=0)
-
-    event_roll = roll[:,transitions_unique]
-    return event_roll,transitions_unique
 
 
 
