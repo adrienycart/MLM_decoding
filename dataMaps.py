@@ -1,4 +1,4 @@
-25# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 import pretty_midi as pm
 import numpy as np
@@ -20,10 +20,11 @@ class DataMaps:
         self.sigs = [] #list of couples (sig, time), where sig is a list of size 2 and time is in seconds
         self.name = ""
         self.length = 0 # length of the piece (might be different from len(input) because of zero padding)
+        self.duration = 0 #duration in seconds
         self.note_range=[0,128]
         self.begin=0 # beginning of the considered section in seconds
         self.end=0 # end of the considered section in seconds
-        self.quant = False # True only when using note-based time steps
+        self.timestep_type = None
 
     def make_from_file(self,filename,timestep_type,section=None,note_range=[21,109],method='step'):
 
@@ -36,7 +37,6 @@ class DataMaps:
 
         if timestep_type == 'quant' or timestep_type == 'event':
             self.set_corresp(pm_data,timestep_type)
-            print(self.corresp)
             self.target = self.get_aligned_pianoroll(pm_data,section)
             self.input = align_matrix(csv_matrix,self.corresp,section,method)
 
@@ -160,6 +160,7 @@ class DataMaps:
         data.length = end_index-begin_index
         data.begin = section[0]
         data.end = section[1]
+        data.duration = section[1]-section[0]
         return data
 
 
@@ -266,6 +267,11 @@ class DataMaps:
         else:
             self.target = self.target[:,:len_input]
             self.length = len_input
+
+        if self.timestep_type == "time":
+            self.duration = self.length*0.04
+        else:
+            self.duration = self.corresp[-1]
         return
 
     def crop_target(self,note_range):

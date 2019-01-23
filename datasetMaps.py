@@ -2,10 +2,12 @@ import os
 import numpy as np
 import pretty_midi as pm
 import random
-import cPickle as pickle
+import pickle as pickle
 from datetime import datetime
 import copy
+from tqdm import tqdm
 from dataMaps import DataMaps
+
 
 
 class DatasetMaps:
@@ -20,99 +22,66 @@ class DatasetMaps:
         self.max_len = 0
 
 
-    def get_list_of_dataMaps(self,subfolder,fs,max_len=None,note_range=[0,128],quant=False,length_of_chunks=None,posteriogram=False,method='avg',augm=False,annot=None):
-        dataset = []
-        print "Augm",augm
-        for fn in os.listdir(subfolder):
+    def walkdir(self,folder):
+        for fn in os.listdir(folder):
             if fn.endswith('.mid') and not fn.startswith('.'):
-                filename = os.path.join(subfolder,fn)
-                annot_data = annot[os.path.basename(filename)]
-                print filename
-                if augm:
-                    if 'train' in subfolder:
-                        transps = [-2, -1,0,1,2]
-                    else:
-                        transps = [0]
+                yield fn
+
+    def get_list_of_dataMaps(self,subfolder,timestep_type,max_len=None,note_range=[21,109],length_of_chunks=None,method='step'):
+        dataset = []
+
+
+        #Set up progress bar
+        filecounter = 0
+        for filepath in self.walkdir(subfolder):
+            filecounter += 1
+        print(("Now loading: "+os.path.split(subfolder)[-1].upper()))
+        pbar = tqdm(self.walkdir(subfolder), total=filecounter, unit="files")
+
+        for fn in pbar:
+            pbar.set_postfix(file=fn[9:19], refresh=False)
+            filename = os.path.join(subfolder,fn)
+
+            if length_of_chunks == None:
+                data = DataMaps()
+                if max_len == None:
+                    data.make_from_file(filename,timestep_type,None,note_range,method)
+                else:
+                    data.make_from_file(filename,timestep_type,[0,max_len],note_range,method)
+                data.name = os.path.splitext(os.path.basename(filename))[0]
+                dataset += [data]
+            else :
+                #Cut each file in chunks of 'length_of_chunks' seconds
+                #Make a new dataMaps for each chunk.
+                data_whole = DataMaps()
+                data_whole.make_from_file(filename,timestep_type,None,note_range,method)
+                if max_len == None:
+                    end_file = data_whole.duration
                 else :
-                    transps = [None]
-                for transp in transps:
-                    print "transp",transp
-                    if length_of_chunks == None:
-                        data = DataMaps()
-                        if max_len == None:
-                            data.make_from_file(filename,fs,None,note_range,quant,posteriogram,method,transp,annot_data)
-                        else:
-                            data.make_from_file(filename,fs,[0,max_len],note_range,quant,posteriogram,method,transp,annot_data)
-                        data.name = os.path.splitext(os.path.basename(filename))[0]
-                        dataset += [data]
-                    else :
-                        #Cut each file in chunks of 'length_of_chunks' seconds
-                        #Make a new dataMaps for each chunk.
-                        data_whole = DataMaps()
-                        data_whole.make_from_file(filename,fs,None,note_range,quant,posteriogram,method,transp,annot_data)
-                        if max_len == None:
-                            end_file = data_whole.corresp[-1,0]
-                        else :
-                            end_file = max_len
-                        begin = 0
-                        end = 0
-                        i = 0
-                        data_list = []
-                        while end < end_file:
-                            end = min(end_file,end+length_of_chunks)
-                            data = data_whole.copy_section([begin,end])
-                            data.name = os.path.splitext(os.path.basename(filename))[0]+"_"+str(i)
-                            data_list += [data]
-                            begin = end
-                            i += 1
-                        dataset += data_list
+                    end_file = max_len
+                begin = 0
+                end = 0
+                i = 0
+                data_list = []
+                while end < end_file:
+                    end = min(end_file,end+length_of_chunks)
+                    data = data_whole.copy_section([begin,end])
+                    data.name = os.path.splitext(os.path.basename(filename))[0]+"_"+str(i)
+                    data_list += [data]
+                    begin = end
+                    i += 1
+                dataset += data_list
         return dataset
 
-    def load_data_train_valid(self,folder,fs,max_len=None,note_range=[0,128],quant=False,length_of_chunks=None,posteriogram=False,method='avg',augm=False,annot=None):
-        subfolder = os.path.join(folder,'train')
-        print "Augm", augm
-        dataset = self.get_list_of_dataMaps(subfolder,fs,max_len,note_range,quant,length_of_chunks,posteriogram,method,augm,annot)
-
-        n_data = len(dataset)
-        n_valid = int(0.15*n_data)
-
-        ## Take the first 15% of the dataset as validation files
-        ## Shuffle using seed for reproducibility
-        random.seed(1234)
-        random.shuffle(dataset)
-        ## Reset seed
-        random.seed()
-
-        dataset_valid = dataset[:n_valid]
-        dataset_train = dataset[n_valid:]
-
-        self.valid = dataset_valid
-        self.train = dataset_train
-
-        return
-
-    def load_data_test(self,folder,fs,note_range=[0,128],quant=False,posteriogram=False,method='avg',augm=False,annot=None):
-        subfolder = os.path.join(folder,'test')
-        dataset = self.get_list_of_dataMaps(subfolder,fs,30,note_range,quant,None,posteriogram,method,augm,annot)
-        self.test = dataset
-        return
-
-
-    def load_data(self,folder,fs,max_len=None,note_range=[0,128],quant=False,length_of_chunks=None,posteriogram=False,method='avg',norm=False,augm=False,annot_path=None):
+    def load_data(self,folder,timestep_type,max_len=None,note_range=[21,109],length_of_chunks=None,method='step',subsets=['valid','test']):
         self.note_range = note_range
-        if not annot_path is None:
-            import cPickle as pickle
-            with open(annot_path, 'r') as file:
-                annot = pickle.load(file)
-            print("Loaded annotation dataset from pickle!")
-        else:
-            annot = None
-        self.load_data_train_valid(folder,fs,max_len,note_range,quant,length_of_chunks,posteriogram,method,augm,annot)
-        self.load_data_test(folder,fs,note_range,quant,posteriogram,method,augm,annot)
-        self.zero_pad()
-        if norm:
-            self.normalize_all(folder,quant,method)
-        print "Dataset loaded ! "+str(datetime.now())
+
+        for subset in subsets:
+            subfolder = os.path.join(folder,subset)
+            data_list = self.get_list_of_dataMaps(subfolder,timestep_type,max_len,note_range,length_of_chunks,method)
+            setattr(self,subset,data_list)
+
+        print("Dataset loaded ! "+str(datetime.now()))
 
     def get_n_files(self,subset):
         return len(getattr(self,subset))
@@ -163,7 +132,7 @@ class DatasetMaps:
         if dataset == []:
             return 0
         else :
-            return max(map(lambda x: x.length, dataset))
+            return max([x.length for x in dataset])
 
     def zero_pad(self):
 
@@ -252,7 +221,7 @@ class DatasetMaps:
         norm_data['mean'] = mean
         norm_data['var'] = var
 
-        import cPickle as pickle
+        import pickle as pickle
         pickle.dump(norm_data, open(os.path.join(path,name), "wb"))
         return
 
@@ -269,6 +238,10 @@ def safe_mkdir(dir,clean=False):
             full_path = os.path.join(dir,fn)
             if not os.path.isdir(full_path):
                 os.rename(full_path,os.path.join(old_path,fn))
+
+
+data = DatasetMaps()
+data.load_data('data/outputs_default_config','event',max_len=30,note_range=[21,109])
 
 
 #######
