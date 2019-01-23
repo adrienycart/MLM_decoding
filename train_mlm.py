@@ -24,8 +24,8 @@ if args.quant:
     fs = 4
     max_len = 300
 else:
-    fs = 100
-    max_len = 3000
+    fs = 25
+    max_len = 750
 
 note_range = [21,109]
 note_min = note_range[0]
