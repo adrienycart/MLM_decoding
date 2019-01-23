@@ -26,6 +26,28 @@ class State:
     
     
     def transition(self, sample, log_prob, hidden_state, prior):
+        """
+        Get the resulting state from the given transition, without altering this state.
+        
+        Parameters
+        ==========
+        sample : np.array
+            An 88-length binary array containing the pitch detections for the following frame.
+            
+        log_prob : float
+            The log probability of the resulting transition.
+            
+        hidden_state : tf.state
+            The hidden state resulting from the transition.
+            
+        prior : np.array
+            An 88-length probabilistic array containing this state's model's prior for the next frame.
+            
+        Returns
+        =======
+        state : State
+            The state resulting from this transition.
+        """
         state = State(hidden_state, prior)
         state.log_prob = self.log_prob + log_prob
         
@@ -38,6 +60,14 @@ class State:
         
         
     def get_priors(self):
+        """
+        Get the priors of this State from each frame.
+        
+        Returns
+        =======
+        priors : np.matrix
+            An 88 x T matrix containing the priors of this State at each frame.
+        """
         priors = np.zeros((88, len(self.prior_history)))
         
         for i, prior in enumerate(self.prior_history):
@@ -47,6 +77,14 @@ class State:
     
     
     def get_piano_roll(self):
+        """
+        Get the piano roll of this State.
+        
+        Returns
+        =======
+        priors : np.matrix
+            An 88 x T binary matrix containing the pitch detections of this State.
+        """
         piano_roll = np.zeros((88, len(self.sample_history)))
         
         for i, sample in enumerate(self.sample_history):

@@ -17,6 +17,14 @@ class Beam:
         self.beam = []
         
     def __iter__(self):
+        """
+        Get an iterator for this beam.
+        
+        Returns
+        =======
+        iter : iterator
+            An iterator for this beam, iterating over the states within it.
+        """
         return self.beam.__iter__()
         
     

@@ -1,10 +1,15 @@
 import numpy as np
-from beam import Beam
 import itertools
 import queue
-from state import State
+import argparse
+import pretty_midi
 
-def decode(acoustic, model, sess, branch_factor=50, beam_size=200):
+from beam import Beam
+from state import State
+from mlm_training.model import Model, make_model_param
+
+
+def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_method="joint"):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
     
@@ -27,12 +32,20 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200):
     beam_size : int
         The beam size for the search. Defaults to 50.
         
+    sampling_method : string
+        The method to draw samples at each step. Can be either "joint" (default), "language",
+        or "acoustic".
+        
     
     Returns
     =======
-    piano_roll : matrix
+    piano_roll : np.matrix
         An 88 x T binary piano roll, where a 1 represents the presence of a pitch
         at a given frame.
+        
+    priors : np.matrix
+        An 88 x T piano roll, giving the prior assigned to each pitch detection by the
+        most probable language model state.
     """
     beam = Beam()
     beam.add_initial_state(model, sess)
@@ -44,7 +57,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200):
         
         # Gather all computations to perform them batched
         for state in beam:
-            for _, sample in itertools.islice(enumerate_samples(frame, state.prior), branch_factor):
+            for _, sample in itertools.islice(enumerate_samples(frame, state.prior, mode=sampling_method), branch_factor):
                 binary_sample = np.zeros(88)
                 binary_sample[sample] = 1
                 
@@ -55,7 +68,8 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200):
         np_samples = np.zeros((len(samples), 1, 88))
         for i, sample in enumerate(samples):
             np_samples[i, 0, :] = sample
-            
+        
+        print(len(states))
         hidden_states, priors = model.run_one_step([s.hidden_state for s in states], np_samples, sess)
         
         beam = Beam()
@@ -165,6 +179,52 @@ def enumerate_samples(acoustic, language, mode="joint"):
 
 
 
+            
+
 
 if __name__ == '__main__':
-    pass
+    parser = argparse.ArgumentParser()
+    parser.add_argument("acoustic", help="The output from the acoustic model.")
+    
+    parser.add_argument("-m", "--model", help="The location of the trained language model.", required=True)
+    parser.add_argument("--hidden", help="The number of hidden layers in the language model. Defaults to 256",
+                        type=int, default=256)
+    
+    parser.add_argument("--note", help="Use a 16th note timestep, from the given file.")
+    parser.add_argument("--event", help="Use an event-based timestep, from the given file.")
+    
+    parser.add_argument("-b", "--beam", help="The beam size. Defaults to 100.", type=int, default=100)
+    parser.add_argument("-k", "--branch", help="The branching factor. Defaults to 20.", type=int, default=20)
+    parser.add_argument("-s", "--sampling", help="The sampling method used. Either joint (default), language, or acoustic.",
+                        default="joint")
+    
+    args = parser.parse_args()
+    
+    if args.note and args.event:
+        print("Cannot use both --note and --event timesteps. Pick 1 or neither.", file=sys.stderr)
+        sys.exit(1)
+        
+    if args.sampling not in ["joint", "language", "acoustic"]:
+        print("Sampling method must be one of joint, language, or acoustic.", file=sys.stderr)
+        sys.exit(2)
+    
+    # Load acoustic data
+    acoustic = np.transpose(np.genfromtxt(args.acoustic))
+    
+    if args.note:
+        midi = pretty_midi.PrettyMIDI(args.note)
+        
+    if args.event:
+        frame_times = list(set(pretty_midi.PrettyMIDI(args.event).get_onsets()))
+    
+    # Load model
+    model_param = make_model_param()
+    model_param['n_hidden'] = args.hidden
+    model_param['n_steps'] = 1 # To generate 1 step at a time
+
+    # Build model object
+    model = Model(model_param)
+    sess,_ = model.load(args.model, model_path=args.model)
+    
+    decode(acoustic, model, sess, branch_factor=args.branch, beam_size=args.beam)
+    
