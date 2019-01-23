@@ -1,52 +1,56 @@
+import numpy as np
+
 class State:
     """
     A state in the decoding process, containing a log probability and an LSTM hidden state.
     """
     
-    def __init__(self, log_prob=0.0, model_state=None, prior=None):
+    def __init__(self, hidden_state, prior):
         """
         Create a new State, with the given log_probability and LSTM hidden state.
         
         Parameters
-        ==========
-        log_prob : float
-            The log probability of this state. Defaults to 0.0.
-            
-        model_state : model state
-            The LSTM state associated with this State. Defaults to None, which initializes
-            a new LSTM state.
+        ==========    
+        hidden_state : model state
+            The LSTM state associated with this State.
             
         prior : vector
-            An 88-length vector, representing the prior for the next frame's detections.
+            An 88-length vector, representing the state's for the next frame's detections.
         """
-        if model_state is None:
-            self.prior, self.model_state = LSTM.get_initial_state()
-        else:
-            self.model_state = model_state
-            self.prior = prior
+        self.hidden_state = hidden_state
+        self.prior = prior
+        
+        self.sample_history = []
+        self.prior_history = []
+        self.log_prob = 0.0
+    
+    
+    def transition(self, sample, log_prob, hidden_state, prior):
+        state = State(hidden_state, prior)
+        state.log_prob = self.log_prob + log_prob
+        
+        state.sample_history = [s for s in self.sample_history]
+        state.sample_history.append(sample)
+        
+        state.prior_history = [p for p in self.prior_history]
+        state.prior_history.append(prior)
+        return state
+        
+        
+    def get_priors(self):
+        priors = np.zeros((88, len(self.prior_history)))
+        
+        for i, prior in enumerate(self.prior_history):
+            priors[:, i] = prior
             
-        self.log_prob = log_prob
+        return priors
+    
+    
+    def get_piano_roll(self):
+        piano_roll = np.zeros((88, len(self.sample_history)))
         
-        
-        
-    def get_next_state(self, sample, log_prob):
-        """
-        Get the next state we will branch into given a sampled binarized frame.
-        
-        Parameters
-        ==========
-        sample : vector
-            An 88-length binarized vector, containing pitch detections.
+        for i, sample in enumerate(self.sample_history):
+            piano_roll[:, i] = sample
             
-        log_prob : float
-            The log probability of the given sample.
-            
-        Returns
-        =======
-        state : State
-            The state reached after the sampled pitch detections.
-        """
-        model = LSTM.load_state(self.model_state)
-        prior, model_state = model.evaluate(sample)
-        
-        return State(log_prob=self.log_prob + log_prob, model_state=model_state, prior=prior)
+        return piano_roll
+    

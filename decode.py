@@ -1,9 +1,10 @@
 import numpy as np
-import beam
+from beam import Beam
 import itertools
 import queue
+from state import State
 
-def decode(acoustic, LSTM, branch_factor=50, beam_size=50):
+def decode(acoustic, model, sess, branch_factor=50, beam_size=200):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
     
@@ -14,8 +15,11 @@ def decode(acoustic, LSTM, branch_factor=50, beam_size=50):
         inclusive. acoustic[p, t] represents the probability of pitch p being present
         at frame t.
         
-    LSTM : model
+    model : Model
         The language model to use for the transduction process.
+        
+    sess : tf.session
+        The session for the given model.
         
     branch_factor : int
         The number of samples to use per frame. Defaults to 50.
@@ -30,21 +34,37 @@ def decode(acoustic, LSTM, branch_factor=50, beam_size=50):
         An 88 x T binary piano roll, where a 1 represents the presence of a pitch
         at a given frame.
     """
-    beam = beam.Beam()
-    beam.add_initial_state()
+    beam = Beam()
+    beam.add_initial_state(model, sess)
     
     for frame in np.transpose(acoustic):
-        new_beam = beam.Beam()
+        states = []
+        samples = []
+        log_probs = []
         
+        # Gather all computations to perform them batched
         for state in beam:
-            for sample in itertools.islice(enumerate_samples(frame, state.prior), branch_factor):
-                log_prob = get_log_prob(sample, state.prior, acoustic)
-                new_beam.add(state.get_next_state(sample, log_prob))
+            for _, sample in itertools.islice(enumerate_samples(frame, state.prior), branch_factor):
+                binary_sample = np.zeros(88)
+                binary_sample[sample] = 1
                 
-        new_beam.cut_to_size(beam_size)
-        beam = new_beam
+                states.append(state)
+                samples.append(binary_sample)
+                log_probs.append(get_log_prob(binary_sample, state.prior, frame))
+                
+        np_samples = np.zeros((len(samples), 1, 88))
+        for i, sample in enumerate(samples):
+            np_samples[i, 0, :] = sample
+            
+        hidden_states, priors = model.run_one_step([s.hidden_state for s in states], np_samples, sess)
         
-    return beam.get_top_state().get_piano_roll()
+        beam = Beam()
+        for hidden_state, prior, log_prob, state, sample in zip(hidden_states, priors, log_probs, states, samples):
+            beam.add(state.transition(sample, log_prob, hidden_state, prior))
+        
+        beam.cut_to_size(beam_size)
+        
+    return beam.get_top_state().get_piano_roll(), beam.get_top_state().get_priors()
 
 
 
@@ -104,16 +124,16 @@ def enumerate_samples(acoustic, language, mode="joint"):
     """
     # set up p and not_p probabilities
     if mode == "joint":
-        p = acoustic * language
-        not_p = (1 - acoustic) * (1 - language)
+        p = np.squeeze(acoustic * language)
+        not_p = np.squeeze((1 - acoustic) * (1 - language))
         
     elif mode == "language":
-        p = language
-        not_p = 1 - p
+        p = np.squeeze(language)
+        not_p = np.squeeze(1 - p)
         
     elif mode == "acoustic":
-        p = acoustic
-        not_p = 1 - p
+        p = np.squeeze(acoustic)
+        not_p = np.squeeze(1 - p)
         
     else:
         raise("Unsupported mode for enumerate_samples: " + str(mode))
