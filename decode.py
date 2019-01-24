@@ -4,6 +4,7 @@ import queue
 import argparse
 import pretty_midi
 
+import dataMaps
 from beam import Beam
 from state import State
 from mlm_training.model import Model, make_model_param
@@ -199,14 +200,15 @@ def enumerate_samples(acoustic, language, mode="joint"):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("acoustic", help="The output from the acoustic model.")
+    parser.add_argument("MIDI", help="The MIDI file to load. This should be in the same location as the " +
+                        "corresponding acoustic csv, and have the same name (except the extension).")
     
     parser.add_argument("-m", "--model", help="The location of the trained language model.", required=True)
     parser.add_argument("--hidden", help="The number of hidden layers in the language model. Defaults to 256",
                         type=int, default=256)
     
-    parser.add_argument("--note", help="Use a 16th note timestep, from the given file.")
-    parser.add_argument("--event", help="Use an event-based timestep, from the given file.")
+    parser.add_argument("--step", help="Change the step type for frame timing. Either time (default), " +
+                        "quant (for 16th notes), or event (for onsets).", default="time")
     
     parser.add_argument("-b", "--beam", help="The beam size. Defaults to 100.", type=int, default=100)
     parser.add_argument("-k", "--branch", help="The branching factor. Defaults to 20.", type=int, default=20)
@@ -215,22 +217,17 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     
-    if args.note and args.event:
-        print("Cannot use both --note and --event timesteps. Pick 1 or neither.", file=sys.stderr)
+    if args.step not in ["time", "quant", "event"]:
+        print("Step type must be one of time, quant, or event.", file=sys.stderr)
         sys.exit(1)
         
     if args.sampling not in ["joint", "language", "acoustic"]:
         print("Sampling method must be one of joint, language, or acoustic.", file=sys.stderr)
         sys.exit(2)
     
-    # Load acoustic data
-    acoustic = np.transpose(np.genfromtxt(args.acoustic))
-    
-    if args.note:
-        midi = pretty_midi.PrettyMIDI(args.note)
-        
-    if args.event:
-        frame_times = list(set(pretty_midi.PrettyMIDI(args.event).get_onsets()))
+    # Load data
+    data = dataMaps.DataMaps()
+    data.make_from_file(args.MIDI, args.step, section=[0, 30])
     
     # Load model
     model_param = make_model_param()
@@ -241,5 +238,9 @@ if __name__ == '__main__':
     model = Model(model_param)
     sess,_ = model.load(args.model, model_path=args.model)
     
-    decode(acoustic, model, sess, branch_factor=args.branch, beam_size=args.beam)
+    # Decode
+    pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam)
     
+    # Evaluate
+    np.save("pr", pr)
+    np.save("priors", priors)
