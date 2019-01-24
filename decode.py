@@ -130,14 +130,10 @@ def get_log_prob(sample, acoustic, language):
     Returns
     =======
     log_prob : float
-        The log probability of the given sample.
+        The log probability of the given sample, as the average of p(. | acoustic) and p(. | language).
     """
-    p = np.squeeze(acoustic * language)
-    not_p = np.squeeze((1 - acoustic) * (1 - language))
-
-    norm_factor = p + not_p
-    p = p / (norm_factor)
-    not_p = not_p / norm_factor
+    p = np.squeeze(acoustic + language) / 2
+    not_p = np.squeeze((1 - acoustic) + (1 - language)) / 2
     
     return np.sum(np.where(sample == 1, np.log(p), np.log(not_p)))
 
