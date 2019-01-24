@@ -121,11 +121,15 @@ def compute_eval_metrics_frame(data1,data2,threshold=None):
     F = Fmeasure(data1,data2)
     return F, prec, rec
 
-def compute_eval_metrics_note(data1,data2,fs,threshold=None,min_dur=None,tolerance=None):
+def compute_eval_metrics_note(data1,data2,threshold=None,min_dur=None,tolerance=None):
     #Compute evaluation metrics note-by-note
     #filter out all notes shorter than min_dur (in seconds, default 50ms)
     #A note is correctly detected if it has the right pitch and the inset is within tolerance parameter (default 50ms)
     #Uses the mir_eval implementation
+
+    #All inputs should be with 40ms timesteps
+    fs = 25
+
     if not threshold==None:
         idx = data1[:,:,:] > threshold
         data1 = idx.astype(int)
@@ -183,122 +187,3 @@ def get_best_thresh(inputs, targets,lengths,model,save_path,verbose=False,max_th
         print "Best thresh : "+str(max_thresh2)
 
     return max_thresh2, max_value2
-
-def get_best_eval_metrics(data,model,save_path,fs,verbose=False,quant=False,note_to_time=False,data_time=None,meter=False):
-    #Computes the best threshold on the validation dataset,
-    #and uses it to return the evaluation metrics on the test dataset.
-
-    inputs, targets, lengths = data.get_dataset('valid',meter=meter)
-
-    thresh,_ = get_best_thresh(inputs, targets,lengths,model,save_path,verbose)
-
-
-    inputs, targets, lengths = data.get_dataset('test',meter=meter)
-
-    if note_to_time:
-        predictions = model.run_prediction(inputs,lengths,save_path,sigmoid=True)
-        pred_rolls = (predictions>thresh).astype(int)
-        pred_rolls_time = data.convert_note_to_time('test',pred_rolls,100,30)
-
-        _ , target_rolls_time ,_ = data_time.get_dataset('test')
-
-        F_f, prec_f, rec_f = compute_eval_metrics_frame(pred_rolls_time,target_rolls_time)
-
-        F_n, prec_n, rec_n = compute_eval_metrics_note(pred_rolls_time,target_rolls_time,100,min_dur=0)
-
-    else:
-        predictions = model.run_prediction(inputs,lengths,save_path,sigmoid=True)
-        pred_rolls = (predictions>thresh).astype(int)
-
-        F_f, prec_f, rec_f = compute_eval_metrics_frame(pred_rolls,targets)
-        if quant:
-            F_n, prec_n, rec_n = compute_eval_metrics_note(pred_rolls,targets,fs,min_dur=0,tolerance=0.001)
-        else:
-            F_n, prec_n, rec_n = compute_eval_metrics_note(pred_rolls,targets,fs)
-
-    results_f = [F_f, prec_f, rec_f ]
-    results_n = [F_n, prec_n, rec_n ]
-
-    if verbose :
-        print "Frame  : Fmeasure, precision, recall"
-        print results_f
-        print "Note  : Fmeasure, precision, recall"
-        print results_n
-
-    return [results_f, results_n]
-
-def get_best_eval_metrics_post_quantise(data,model,save_path):
-    #Computes the best threshold on the validation dataset,
-    #and uses it to return the evaluation metrics on the test dataset,
-    #in the case where the computations are made with time-based time steps,
-    #and then the onsets and offsets are quantised a posteriori.
-
-    inputs, targets, lengths = data.get_dataset('valid')
-
-    thresh,_ = get_best_thresh(inputs, targets,lengths,model,save_path,True)
-
-
-    inputs, targets, lengths = data.get_dataset('test')
-
-    predictions = model.run_prediction(inputs,lengths,save_path,sigmoid=True)
-    pred_rolls = (predictions>thresh).astype(int)
-
-    #Quantise the onsets and offsets (align them to the 16th note grid)
-    pred_rolls_note = data.convert_time_to_note('test',pred_rolls,4,30)
-    pred_rolls_time = data.convert_note_to_time('test',pred_rolls_note,100,30)
-
-
-    F_f, prec_f, rec_f = compute_eval_metrics_frame(pred_rolls_time,targets)
-    F_n, prec_n, rec_n = compute_eval_metrics_note(pred_rolls_time,targets,100,min_dur=0)
-
-    results_f = [F_f, prec_f, rec_f ]
-    results_n = [F_n, prec_n, rec_n ]
-
-
-    print "Frame  : Fmeasure, precision, recall"
-    print results_f
-    print "Note  : Fmeasure, precision, recall"
-    print results_n
-
-    return [results_f, results_n]
-
-
-# from display_utils import compare_piano_rolls
-# def get_best_eval_metrics_test(data,targets):
-#
-#     pred_rolls_note = data.convert_time_to_note(targets[0],4,40)
-#     pred_rolls_time = data.convert_note_to_time(pred_rolls_note,100,30)
-#     pred_rolls_time = np.asarray([pred_rolls_time])
-#
-#     compare_piano_rolls([targets[0],pred_rolls_note,pred_rolls_time[0]],[21,109],show=True)
-#
-#     F_f, prec_f, rec_f = compute_eval_metrics_frame(pred_rolls_time,targets)
-#     F_n, prec_n, rec_n = compute_eval_metrics_note(pred_rolls_time,targets,100,min_dur=0)
-#
-#     results_f = [F_f, prec_f, rec_f ]
-#     results_n = [F_n, prec_n, rec_n ]
-#
-#
-#     print "Frame  : Fmeasure, precision, recall"
-#     print results_f
-#     print "Note  : Fmeasure, precision, recall"
-#     print results_n
-#
-#     return [results_f, results_n]
-#
-# import pretty_midi as pm
-# from dataMaps import DataMaps
-
-# filename = 'data/Config1/fold1/train/MAPS_MUS-deb_clai_ENSTDkCl.mid'
-# piano_roll = DataMaps()
-# piano_roll.make_from_file(filename,100,quant=False,posteriogram=True)
-# # time_grid = [int(round(x*100))-2 for x in piano_roll.corresp[:,0]]
-# # print piano_roll.corresp[:,0]
-# # print time_grid
-#
-# compare_piano_rolls([piano_roll.target],[21,109],time_grid=time_grid,show=True)
-
-
-
-# piano_roll_target = np.array([(pm.PrettyMIDI(filename).get_piano_roll()>0)[21:109,:3000].astype(int)])
-# get_best_eval_metrics_test(piano_roll,piano_roll_target)
