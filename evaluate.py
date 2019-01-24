@@ -81,20 +81,23 @@ for fn in os.listdir(folder):
         pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                         union=args.union, weight=[args.weight, 1 - args.weight])
 
-        if args.step in ['quant','event']:
-            pr_time = convert_note_to_time(pr,data.corresp,max_len=max_len)
-
         # Save output
         if not args.save is None:
             np.savetxt(os.path.join(args.save,fn.replace('.mid','_pr.csv')), pr)
             np.savetxt(os.path.join(args.save,fn.replace('.mid','_priors.csv')), priors)
 
+        if args.step in ['quant','event']:
+            pr = convert_note_to_time(pr,data.corresp,max_len=max_len)
 
+        data = dataMaps.DataMaps()
+        data.make_from_file(args.MIDI, "time", section=section)
+        target = data.target
+            
         #Evaluate
-        P_f,R_f,F_f = compute_eval_metrics_frame(pr_time,data.target)
-        P_n,R_n,F_n = compute_eval_metrics_note(pr_time,data.target,min_dur=0.05)
+        P_f,R_f,F_f = compute_eval_metrics_frame(pr,target)
+        P_n,R_n,F_n = compute_eval_metrics_note(pr,target,min_dur=0.05)
 
-        print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}")
+        print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
 
         results[fn] = [[P_f,R_f,F_f],[P_n,R_n,F_n]]
 
