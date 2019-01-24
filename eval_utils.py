@@ -94,6 +94,8 @@ def Fmeasure(data,target):
 
 def compute_eval_metrics_frame(input,target):
     #Compute evaluation metrics frame-by-frame
+    input = input[:,:min(input.shape[1], target.shape[1])]
+    target = target[:,:min(input.shape[1], target.shape[1])]
 
     prec = precision(input,target)
     rec = recall(input,target)

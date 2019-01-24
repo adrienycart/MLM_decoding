@@ -91,8 +91,8 @@ for fn in os.listdir(folder):
 
 
         #Evaluate
-        P_f,R_f,F_f = compute_eval_metrics_frame(pr,data.target)
-        P_n,R_n,F_n = compute_eval_metrics_note(pr,data.target,min_dur=0.05)
+        P_f,R_f,F_f = compute_eval_metrics_frame(pr_time,data.target)
+        P_n,R_n,F_n = compute_eval_metrics_note(pr_time,data.target,min_dur=0.05)
 
         print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}")
 

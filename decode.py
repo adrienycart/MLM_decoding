@@ -268,11 +268,14 @@ if __name__ == '__main__':
     # Evaluate
     np.save("pr", pr)
     np.save("priors", priors)
-    
     if args.step in ['quant','event']:
         pr = dataMaps.convert_note_to_time(pr, data.corresp, max_len=max_len)
-        
-    P_f, R_f, F_f = eval_utils.compute_eval_metrics_frame(pr, data.target)
-    P_n, R_n, F_n = eval_utils.compute_eval_metrics_note(pr, data.target, min_dur=0.05)
+    
+    data = dataMaps.DataMaps()
+    data.make_from_file(args.MIDI, "time", section=section)
+    target = data.target
+    
+    P_f, R_f, F_f = eval_utils.compute_eval_metrics_frame(pr, target)
+    P_n, R_n, F_n = eval_utils.compute_eval_metrics_note(pr, target, min_dur=0.05)
 
-    print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}")
+    print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")

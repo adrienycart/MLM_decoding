@@ -130,6 +130,7 @@ class DataMaps:
         if timestep_type == "quant":
             PPQ = float(pm_data.resolution)
             end_note = end_tick/PPQ
+            print(end_note)
             note_steps = np.arange(0,end_note,0.25)
             tick_steps = np.round(note_steps*PPQ).astype(int)
             corresp = np.zeros_like(tick_steps,dtype=float)
@@ -486,7 +487,7 @@ def convert_note_to_time(pianoroll,corresp,max_len=None):
         length = corresp[-1]
         n_steps = corresp.shape[0]
     else:
-        length = max_len
+        length = min(max_len, corresp[-1])
         [n_steps,val], _  = get_closest(max_len,list(corresp))
     n_notes = pianoroll.shape[0]
     n_times = int(round(length*fs))
@@ -494,8 +495,8 @@ def convert_note_to_time(pianoroll,corresp,max_len=None):
     time_roll = np.zeros([n_notes,n_times])
 
     for i in range(n_steps-1):
-        time1, step1 = corresp[i]
-        time2, step2 = corresp[i+1]
+        time1 = corresp[i]
+        time2 = corresp[i+1]
 
         index1 = int(round(time1*fs))
         index2 = int(round(time2*fs))
