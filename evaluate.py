@@ -1,31 +1,46 @@
-from dataset import DatasetMaps
+from dataMaps import DataMaps,convert_note_to_time, align_matrix
+from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 from mlm_training.model import Model, make_model_param
+from mlm_training.utils import safe_mkdir
 from decode import decode
 
 import os
+import argparse
+from datetime import datetime
+import sys
+import pickle
 
 import tensorflow as tf
 import pretty_midi as pm
 import numpy as np
-from datetime import datetime
-import sys
+
+
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('save_path',type=str,help="folder to the checkpoint to load (inside ckpt folder)")
+parser.add_argument('model',type=str,help="location of the checkpoint to load (inside ckpt folder)")
 parser.add_argument('data_path',type=str,help="folder containing the split dataset")
-parser.add_argument('-quant',action='store_true',help="use quantised timesteps")
-parser.add_argument('-save',type=str,help="location to save the computed results")
+parser.add_argument("--step", type=str, choices=["time", "quant", "event"], help="Change the step type for frame timing. Either time (default), " +
+                    "quant (for 16th notes), or event (for onsets).", default="time")
+parser.add_argument("--max_len",type=str,help="test on the first max_len seconds of each text file. Anything other than a number will evaluate on whole files. Default is 30s.",
+                    default=30)
+parser.add_argument('--save',type=str,help="location to save the computed results. If not provided, results are not saved")
+parser.add_argument("-b", "--beam", type=int, help="The beam size. Defaults to 100.", default=100)
+parser.add_argument("-k", "--branch", type=int, help="The branching factor. Defaults to 20.", default=20)
+parser.add_argument("-s", "--sampling", type=str,choices= ["joint", "language", "acoustic","union"], help="The sampling method used. Either joint (default), language, or acoustic.",
+                    default="joint")
+
 
 args = parser.parse_args()
 
-if args.quant:
-    fs = 4
-else:
-    fs = 100
-
-#Only evaluateon first 30 seconds of each file (as usually done)
-max_len = 30
+try:
+    max_len = float(args.max_len)
+    section = [0,max_len]
+    print(f"Evaluate on first {args.max_len} seconds")
+except:
+    max_len = None
+    section=None
+    print(f"Evaluate on whole files")
 
 note_range = [21,109]
 note_min = note_range[0]
@@ -34,34 +49,47 @@ note_max = note_range[1]
 n_hidden = 256
 
 
-# data = Dataset()
-# data.load_data('data/Piano-midi.de/',note_range=note_range,
-#     fs=fs,max_len=max_len,quant=args.quant)
 
-data = Dataset()
-data.load_data("data/test_dataset/",note_range=note_range,
-    fs=fs,max_len=max_len,quant=args.quant)
+# Load model
+model_param = make_model_param()
+model_param['n_hidden'] = n_hidden
+model_param['n_steps'] = 1 # To generate 1 step at a time
 
+# Build model object
+model = Model(model_param)
+sess,_ = model.load(args.model, model_path=args.model)
+
+if not args.save is None:
+    safe_mkdir(args.save)
 
 results = {}
 
-model_param = make_model_param()
-model_param['n_hidden']=n_hidden
-model_param['n_steps']=1
-model_param['n_notes']=88
+for fn in os.listdir(folder):
+    if fn.endswith('.mid') and not fn.startswith('.'):
+        filename = os.path.join(folder,fn)
+        print(filename)
 
-model = Model(model_param)
+        data = DataMaps.make_from_file(filename,args.step,section)
 
-for pr in data.test:
-    "TODO"
+        # Decode
+        pr, priors = decode.decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam)
 
-# result = get_best_eval_metrics(data,model,save_path,verbose=True)
+        if args.step in ['quant','event']:
+            pr_time = convert_note_to_time(pr,data.corresp,max_len=max_len)
+
+        # Save output
+        if not args.save is None:
+            np.savetxt(os.path.join(args.save,fn.replace('.mid','_pr.csv')), pr)
+            np.savetxt(os.path.join(args.save,fn.replace('.mid','_priors.csv')), priors)
 
 
-results[n_hidden][learning_rate] = result
+        #Evaluate
+        P_f,R_f,F_f = compute_eval_metrics_frame(pr,data.target)
+        P_n,R_n,F_n = compute_eval_metrics_note(pr,data.target,min_dur=0.05)
 
+        print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}")
 
-# import cPickle as pickle
-# pickle.dump(results, open(os.path.join("ckpt",base_path,'results_4.p'), "wb"))
+        results[fn] = [[P_f,R_f,F_f],[P_n,R_n,F_n]]
 
-#print "Computation end : "+str(datetime.now())
+if not args.save is None:
+    pickle.dump(results,open(os.path.join(args.save,'results.p'), "wb"))
