@@ -69,13 +69,15 @@ if not args.save is None:
     safe_mkdir(args.save)
 
 results = {}
+folder = args.data_path
 
 for fn in os.listdir(folder):
     if fn.endswith('.mid') and not fn.startswith('.'):
         filename = os.path.join(folder,fn)
         print(filename)
 
-        data = DataMaps.make_from_file(filename,args.step,section)
+        data = DataMaps()
+        data.make_from_file(filename,args.step,section)
 
         # Decode
         pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
@@ -89,8 +91,8 @@ for fn in os.listdir(folder):
         if args.step in ['quant','event']:
             pr = convert_note_to_time(pr,data.corresp,max_len=max_len)
 
-        data = dataMaps.DataMaps()
-        data.make_from_file(args.MIDI, "time", section=section)
+        data = DataMaps()
+        data.make_from_file(filename, "time", section=section)
         target = data.target
             
         #Evaluate
