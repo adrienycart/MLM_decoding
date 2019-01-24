@@ -48,6 +48,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_meth
         An 88 x T piano roll, giving the prior assigned to each pitch detection by the
         most probable language model state.
     """
+    if sampling_method == "union":
+        branch_factor /= 2
+    
     beam = Beam()
     beam.add_initial_state(model, sess)
     
@@ -56,27 +59,39 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_meth
         samples = []
         log_probs = []
         
+        # Used for union sampling
+        unique_samples = []
+        
         # Gather all computations to perform them batched
-        if sampling_method == "acoustic":
-            # If sampling method is acoustic, we generate the same samples for every current hypothesis
-            for _, sample in itertools.islice(enumerate_samples(frame, beam.beam[0].prior, mode=sampling_method), branch_factor):
+        # Acoustic sampling is done separately because the acoustic samples will be identical for every state.
+        if sampling_method in ["acoustic", "union"]:
+            # If sampling method is acoustic (or union), we generate the same samples for every current hypothesis
+            for _, sample in itertools.islice(enumerate_samples(frame, beam.beam[0].prior, mode="acoustic"), branch_factor):
                 binary_sample = np.zeros(88)
                 binary_sample[sample] = 1
+                
+                # This is used to check for overlaps in union case
+                if sampling_method is "union":
+                    unique_samples.append(binary_sample)
                 
                 for state in beam:
                     states.append(state)
                     samples.append(binary_sample)
                     log_probs.append(get_log_prob(binary_sample, state.prior, frame))
             
-        else:
+        if sampling_method is not "acoustic":
             for state in beam:
-                for _, sample in itertools.islice(enumerate_samples(frame, state.prior, mode=sampling_method), branch_factor):
+                for _, sample in itertools.islice(enumerate_samples(frame, state.prior,
+                                                  mode="language" if sampling_method is "union" else sampling_method),
+                                                  branch_factor):
                     binary_sample = np.zeros(88)
                     binary_sample[sample] = 1
 
-                    states.append(state)
-                    samples.append(binary_sample)
-                    log_probs.append(get_log_prob(binary_sample, state.prior, frame))
+                    # Overlap with acoustic sample in union case. Skip this sample.
+                    if not (sampling_method is "union" and binary_sample in unique_samples):
+                        states.append(state)
+                        samples.append(binary_sample)
+                        log_probs.append(get_log_prob(binary_sample, state.prior, frame))
                 
         np_samples = np.zeros((len(samples), 1, 88))
         for i, sample in enumerate(samples):
@@ -117,7 +132,14 @@ def get_log_prob(sample, acoustic, language):
     log_prob : float
         The log probability of the given sample.
     """
-    return np.sum(np.where(sample == 1, np.log(language) + np.log(acoustic), np.log(1 - language) + np.log(1 - acoustic)))
+    p = np.squeeze(acoustic * language)
+    not_p = np.squeeze((1 - acoustic) * (1 - language))
+
+    norm_factor = p + not_p
+    p = p / (norm_factor)
+    not_p = not_p / norm_factor
+    
+    return np.sum(np.where(sample == 1, np.log(p), np.log(not_p)))
 
 
 
@@ -212,7 +234,8 @@ if __name__ == '__main__':
     
     parser.add_argument("-b", "--beam", help="The beam size. Defaults to 100.", type=int, default=100)
     parser.add_argument("-k", "--branch", help="The branching factor. Defaults to 20.", type=int, default=20)
-    parser.add_argument("-s", "--sampling", help="The sampling method used. Either joint (default), language, or acoustic.",
+    parser.add_argument("-s", "--sampling", help="The sampling method used. Either joint (default), language, " +
+                        "acoustic, or union.",
                         default="joint")
     
     args = parser.parse_args()
@@ -221,8 +244,8 @@ if __name__ == '__main__':
         print("Step type must be one of time, quant, or event.", file=sys.stderr)
         sys.exit(1)
         
-    if args.sampling not in ["joint", "language", "acoustic"]:
-        print("Sampling method must be one of joint, language, or acoustic.", file=sys.stderr)
+    if args.sampling not in ["joint", "language", "acoustic", "union"]:
+        print("Sampling method must be one of joint, language, acoustic, or union.", file=sys.stderr)
         sys.exit(2)
     
     # Load data
