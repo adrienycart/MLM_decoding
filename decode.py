@@ -3,6 +3,7 @@ import itertools
 import queue
 import argparse
 import pretty_midi
+import sys
 
 import dataMaps
 from beam import Beam
@@ -10,7 +11,7 @@ from state import State
 from mlm_training.model import Model, make_model_param
 
 
-def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_method="joint"):
+def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_method="joint", weight=[0.5, 0.5]):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
     
@@ -34,8 +35,12 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_meth
         The beam size for the search. Defaults to 50.
         
     sampling_method : string
-        The method to draw samples at each step. Can be either "joint" (default), "language",
-        or "acoustic".
+        The method to draw samples at each step. Can be either "joint" (default) or "union".
+        
+    weight : list
+        A length-2 list, whose first element is the weight for the acoustic model and whose 2nd
+        element is the weight for the language model. This list should be normalized to sum to 1.
+        Defaults to [0.5, 0.5].
         
     
     Returns
@@ -49,7 +54,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_meth
         most probable language model state.
     """
     if sampling_method == "union":
-        branch_factor /= 2
+        branch_factor = int(branch_factor / 2)
     
     beam = Beam()
     beam.add_initial_state(model, sess)
@@ -64,9 +69,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_meth
         
         # Gather all computations to perform them batched
         # Acoustic sampling is done separately because the acoustic samples will be identical for every state.
-        if sampling_method in ["acoustic", "union"]:
+        if sampling_method is "union" or weight[0] == 1.0:
             # If sampling method is acoustic (or union), we generate the same samples for every current hypothesis
-            for _, sample in itertools.islice(enumerate_samples(frame, beam.beam[0].prior, mode="acoustic"), branch_factor):
+            for _, sample in itertools.islice(enumerate_samples(frame, beam.beam[0].prior, weight=[1.0, 0.0]), branch_factor):
                 binary_sample = np.zeros(88)
                 binary_sample[sample] = 1
                 
@@ -77,12 +82,12 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_meth
                 for state in beam:
                     states.append(state)
                     samples.append(binary_sample)
-                    log_probs.append(get_log_prob(binary_sample, state.prior, frame))
+                    log_probs.append(get_log_prob(binary_sample, frame, state.prior, weight))
             
-        if sampling_method is not "acoustic":
+        if sampling_method is "union" or weight[0] != 1.0:
             for state in beam:
                 for _, sample in itertools.islice(enumerate_samples(frame, state.prior,
-                                                  mode="language" if sampling_method is "union" else sampling_method),
+                                                  weight=[0.0, 1.0] if sampling_method is "union" else weight),
                                                   branch_factor):
                     binary_sample = np.zeros(88)
                     binary_sample[sample] = 1
@@ -91,7 +96,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_meth
                     if not (sampling_method is "union" and binary_sample in unique_samples):
                         states.append(state)
                         samples.append(binary_sample)
-                        log_probs.append(get_log_prob(binary_sample, state.prior, frame))
+                        log_probs.append(get_log_prob(binary_sample, frame, state.prior, weight))
                 
         np_samples = np.zeros((len(samples), 1, 88))
         for i, sample in enumerate(samples):
@@ -110,7 +115,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_meth
 
 
 
-def get_log_prob(sample, acoustic, language):
+def get_log_prob(sample, acoustic, language, weight):
     """
     Get the log probability of the given sample given the priors.
     
@@ -127,20 +132,25 @@ def get_log_prob(sample, acoustic, language):
         An 88-length array, containing the probability of each pitch being present,
         according to the language model.
         
+    weight : list
+        A length-2 list, whose first element is the weight for the acoustic model and whose 2nd
+        element is the weight for the language model. This list should be normalized to sum to 1.
+        Defaults to [0.5, 0.5].
+        
     Returns
     =======
     log_prob : float
-        The log probability of the given sample, as the average of p(. | acoustic) and p(. | language).
+        The log probability of the given sample, as a weighted sum of p(. | acoustic) and p(. | language).
     """
-    p = np.squeeze(acoustic + language) / 2
-    not_p = np.squeeze((1 - acoustic) + (1 - language)) / 2
+    p = np.squeeze(weight[0] * acoustic + weight[1] * language)
+    not_p = np.squeeze(weight[0] * (1 - acoustic) + weight[1] * (1 - language))
     
     return np.sum(np.where(sample == 1, np.log(p), np.log(not_p)))
 
 
 
 
-def enumerate_samples(acoustic, language, mode="joint"):
+def enumerate_samples(acoustic, language, weight=[0.5, 0.5]):
     """
     Enumerate the binarised piano-roll samples of a frame, ordered by probability.
     
@@ -157,9 +167,10 @@ def enumerate_samples(acoustic, language, mode="joint"):
         An 88-length array, containing the probability of each pitch being present,
         according to the language model.
         
-    mode : string
-        How to return the samples. One of "joint" (joint probability), "language"
-        (language model only), or "acoustic" (acoustic model only). Defaults to "joint".
+    weight : list
+        A length-2 list, whose first element is the weight for the acoustic model and whose 2nd
+        element is the weight for the language model. This list should be normalized to sum to 1.
+        Defaults to [0.5, 0.5].
         
     Return
     ======
@@ -167,24 +178,8 @@ def enumerate_samples(acoustic, language, mode="joint"):
     the log-probability of a sample and the sample itself, a set of indices with an active pitch.
     """
     # set up p and not_p probabilities
-    if mode == "joint":
-        p = np.squeeze(acoustic * language)
-        not_p = np.squeeze((1 - acoustic) * (1 - language))
-        
-        norm_factor = p + not_p
-        p = p / (norm_factor)
-        not_p = not_p / norm_factor
-        
-    elif mode == "language":
-        p = np.squeeze(language)
-        not_p = np.squeeze(1 - p)
-        
-    elif mode == "acoustic":
-        p = np.squeeze(acoustic)
-        not_p = np.squeeze(1 - p)
-        
-    else:
-        raise("Unsupported mode for enumerate_samples: " + str(mode))
+    p = np.squeeze(weight[0] * acoustic + weight[1] * language)
+    not_p = np.squeeze(weight[0] * (1 - acoustic) + weight[1] * (1 - language))
     
     # Base case: most likely chosen greedily
     v_0 = np.where(p > not_p)[0]
@@ -230,9 +225,10 @@ if __name__ == '__main__':
     
     parser.add_argument("-b", "--beam", help="The beam size. Defaults to 100.", type=int, default=100)
     parser.add_argument("-k", "--branch", help="The branching factor. Defaults to 20.", type=int, default=20)
-    parser.add_argument("-s", "--sampling", help="The sampling method used. Either joint (default), language, " +
-                        "acoustic, or union.",
-                        default="joint")
+    
+    parser.add_argument("-u", "--union", help="Use the union sampling method.", action="store_true")
+    parser.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
+                        "Defaults to 0.5", type=float, default=0.5)
     
     args = parser.parse_args()
     
@@ -240,8 +236,8 @@ if __name__ == '__main__':
         print("Step type must be one of time, quant, or event.", file=sys.stderr)
         sys.exit(1)
         
-    if args.sampling not in ["joint", "language", "acoustic", "union"]:
-        print("Sampling method must be one of joint, language, acoustic, or union.", file=sys.stderr)
+    if not (0 <= args.weight <= 1):
+        print("Weight must be between 0 and 1.", file=sys.stderr)
         sys.exit(2)
     
     # Load data
@@ -258,7 +254,8 @@ if __name__ == '__main__':
     sess,_ = model.load(args.model, model_path=args.model)
     
     # Decode
-    pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam)
+    pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
+                        sampling_method="union" if args.union else "joint", weight=[args.weight, 1 - args.weight])
     
     # Evaluate
     np.save("pr", pr)
