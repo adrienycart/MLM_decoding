@@ -140,8 +140,8 @@ def get_best_thresh(inputs, targets,lengths,model,save_path,verbose=False,max_th
     for thresh in thresh_list1:
         F, prec, rec, XE = model.compute_eval_metrics_pred(inputs, targets,lengths,threshold=thresh,save_path=save_path)
         F_list1 += [F]
-    print thresh_list1
-    print F_list1
+    print(thresh_list1)
+    print(F_list1)
     max_value1 = max(F_list1)
     max_index1 = F_list1.index(max_value1)
     max_thresh1 = thresh_list1[max_index1]
@@ -158,7 +158,7 @@ def get_best_thresh(inputs, targets,lengths,model,save_path,verbose=False,max_th
 
     if verbose:
         model.print_params()
-        print "Best F0 : "+str(max_value2)
-        print "Best thresh : "+str(max_thresh2)
+        print("Best F0 : "+str(max_value2))
+        print("Best thresh : "+str(max_thresh2))
 
     return max_thresh2, max_value2

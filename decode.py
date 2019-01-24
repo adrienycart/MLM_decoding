@@ -219,8 +219,9 @@ if __name__ == '__main__':
     parser.add_argument("--hidden", help="The number of hidden layers in the language model. Defaults to 256",
                         type=int, default=256)
     
-    parser.add_argument("--step", help="Change the step type for frame timing. Either time (default), " +
-                        "quant (for 16th notes), or event (for onsets).", default="time")
+    parser.add_argument("--step", type=str, choices=["time", "quant", "event"], help="Change the step type " +
+                        "for frame timing. Either time (default), quant (for 16th notes), or event (for onsets).",
+                        default="time")
     
     parser.add_argument("-b", "--beam", help="The beam size. Defaults to 100.", type=int, default=100)
     parser.add_argument("-k", "--branch", help="The branching factor. Defaults to 20.", type=int, default=20)
@@ -229,19 +230,24 @@ if __name__ == '__main__':
     parser.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
                         "Defaults to 0.5", type=float, default=0.5)
     
-    args = parser.parse_args()
+    parser.add_argument("--max_len",type=str,help="test on the first max_len seconds of each text file. " +
+                        "Anything other than a number will evaluate on whole files. Default is 30s.",
+                        default=30)
     
-    if args.step not in ["time", "quant", "event"]:
-        print("Step type must be one of time, quant, or event.", file=sys.stderr)
-        sys.exit(1)
+    args = parser.parse_args()
         
     if not (0 <= args.weight <= 1):
         print("Weight must be between 0 and 1.", file=sys.stderr)
-        sys.exit(2)
+        sys.exit(1)
+        
+    try:
+        section = [0, float(args.max_len)]
+    except:
+        section = None
     
     # Load data
     data = dataMaps.DataMaps()
-    data.make_from_file(args.MIDI, args.step, section=[0, 30])
+    data.make_from_file(args.MIDI, args.step, section=section)
     
     # Load model
     model_param = make_model_param()

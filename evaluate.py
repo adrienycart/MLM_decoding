@@ -18,6 +18,7 @@ import numpy as np
 
 
 parser = argparse.ArgumentParser()
+
 parser.add_argument('model',type=str,help="location of the checkpoint to load (inside ckpt folder)")
 parser.add_argument('data_path',type=str,help="folder containing the split dataset")
 parser.add_argument("--step", type=str, choices=["time", "quant", "event"], help="Change the step type for frame timing. Either time (default), " +
@@ -27,11 +28,16 @@ parser.add_argument("--max_len",type=str,help="test on the first max_len seconds
 parser.add_argument('--save',type=str,help="location to save the computed results. If not provided, results are not saved")
 parser.add_argument("-b", "--beam", type=int, help="The beam size. Defaults to 100.", default=100)
 parser.add_argument("-k", "--branch", type=int, help="The branching factor. Defaults to 20.", default=20)
-parser.add_argument("-s", "--sampling", type=str,choices= ["joint", "language", "acoustic","union"], help="The sampling method used. Either joint (default), language, or acoustic.",
-                    default="joint")
+parser.add_argument("-u", "--union", help="Use the union sampling method.", action="store_true")
+parser.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
+                    "Defaults to 0.5", type=float, default=0.5)
 
 
 args = parser.parse_args()
+
+if not (0 <= args.weight <= 1):
+    print("Weight must be between 0 and 1.", file=sys.stderr)
+    sys.exit(2)
 
 try:
     max_len = float(args.max_len)
@@ -72,7 +78,8 @@ for fn in os.listdir(folder):
         data = DataMaps.make_from_file(filename,args.step,section)
 
         # Decode
-        pr, priors = decode.decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam)
+        pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
+                        union=args.union, weight=[args.weight, 1 - args.weight])
 
         if args.step in ['quant','event']:
             pr_time = convert_note_to_time(pr,data.corresp,max_len=max_len)
