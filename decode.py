@@ -56,20 +56,31 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_meth
         log_probs = []
         
         # Gather all computations to perform them batched
-        for state in beam:
-            for _, sample in itertools.islice(enumerate_samples(frame, state.prior, mode=sampling_method), branch_factor):
+        if sampling_method == "acoustic":
+            # If sampling method is acoustic, we generate the same samples for every current hypothesis
+            for _, sample in itertools.islice(enumerate_samples(frame, beam.beam[0].prior, mode=sampling_method), branch_factor):
                 binary_sample = np.zeros(88)
                 binary_sample[sample] = 1
                 
-                states.append(state)
-                samples.append(binary_sample)
-                log_probs.append(get_log_prob(binary_sample, state.prior, frame))
+                for state in beam:
+                    states.append(state)
+                    samples.append(binary_sample)
+                    log_probs.append(get_log_prob(binary_sample, state.prior, frame))
+            
+        else:
+            for state in beam:
+                for _, sample in itertools.islice(enumerate_samples(frame, state.prior, mode=sampling_method), branch_factor):
+                    binary_sample = np.zeros(88)
+                    binary_sample[sample] = 1
+
+                    states.append(state)
+                    samples.append(binary_sample)
+                    log_probs.append(get_log_prob(binary_sample, state.prior, frame))
                 
         np_samples = np.zeros((len(samples), 1, 88))
         for i, sample in enumerate(samples):
             np_samples[i, 0, :] = sample
         
-        print(len(states))
         hidden_states, priors = model.run_one_step([s.hidden_state for s in states], np_samples, sess)
         
         beam = Beam()
@@ -140,6 +151,10 @@ def enumerate_samples(acoustic, language, mode="joint"):
     if mode == "joint":
         p = np.squeeze(acoustic * language)
         not_p = np.squeeze((1 - acoustic) * (1 - language))
+        
+        norm_factor = p + not_p
+        p = p / (norm_factor)
+        not_p = not_p / norm_factor
         
     elif mode == "language":
         p = np.squeeze(language)
