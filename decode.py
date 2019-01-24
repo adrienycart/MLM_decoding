@@ -6,6 +6,7 @@ import pretty_midi
 import sys
 
 import dataMaps
+import eval_utils
 from beam import Beam
 from state import State
 from mlm_training.model import Model, make_model_param
@@ -241,8 +242,10 @@ if __name__ == '__main__':
         sys.exit(1)
         
     try:
-        section = [0, float(args.max_len)]
+        max_len = float(args.max_len)
+        section = [0, max_len]
     except:
+        max_len = None
         section = None
     
     # Load data
@@ -265,3 +268,11 @@ if __name__ == '__main__':
     # Evaluate
     np.save("pr", pr)
     np.save("priors", priors)
+    
+    if args.step in ['quant','event']:
+        pr = dataMaps.convert_note_to_time(pr, data.corresp, max_len=max_len)
+        
+    P_f, R_f, F_f = eval_utils.compute_eval_metrics_frame(pr, data.target)
+    P_n, R_n, F_n = eval_utils.compute_eval_metrics_note(pr, data.target, min_dur=0.05)
+
+    print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}")

@@ -494,8 +494,8 @@ def convert_note_to_time(pianoroll,corresp,max_len=None):
     time_roll = np.zeros([n_notes,n_times])
 
     for i in range(n_steps-1):
-        time1, step1 = corresp[i,:]
-        time2, step2 = corresp[i+1,:]
+        time1, step1 = corresp[i]
+        time2, step2 = corresp[i+1]
 
         index1 = int(round(time1*fs))
         index2 = int(round(time2*fs))
@@ -503,7 +503,7 @@ def convert_note_to_time(pianoroll,corresp,max_len=None):
         active = pianoroll[:,i:i+1] #do this to keep the shape [88,1] instead of [88]
         time_roll[:,index1:index2]=np.repeat(active,index2-index1,axis=1)
 
-    last_time = corresp[n_steps,0]
+    last_time = corresp[n_steps]
     last_index = int(round(last_time*fs))
     last_active = np.transpose([pianoroll[:,n_steps-1]],[1,0])
 
