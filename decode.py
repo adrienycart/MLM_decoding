@@ -11,7 +11,7 @@ from state import State
 from mlm_training.model import Model, make_model_param
 
 
-def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_method="joint", weight=[0.5, 0.5]):
+def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[0.5, 0.5]):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
     
@@ -34,8 +34,8 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_meth
     beam_size : int
         The beam size for the search. Defaults to 50.
         
-    sampling_method : string
-        The method to draw samples at each step. Can be either "joint" (default) or "union".
+    union : boolean
+        True to use union sampling. False (default) to use joint sampling with the weight.
         
     weight : list
         A length-2 list, whose first element is the weight for the acoustic model and whose 2nd
@@ -53,7 +53,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_meth
         An 88 x T piano roll, giving the prior assigned to each pitch detection by the
         most probable language model state.
     """
-    if sampling_method == "union":
+    if union:
         branch_factor = int(branch_factor / 2)
     
     beam = Beam()
@@ -69,31 +69,30 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, sampling_meth
         
         # Gather all computations to perform them batched
         # Acoustic sampling is done separately because the acoustic samples will be identical for every state.
-        if sampling_method is "union" or weight[0] == 1.0:
+        if union or weight[0] == 1.0:
             # If sampling method is acoustic (or union), we generate the same samples for every current hypothesis
             for _, sample in itertools.islice(enumerate_samples(frame, beam.beam[0].prior, weight=[1.0, 0.0]), branch_factor):
                 binary_sample = np.zeros(88)
                 binary_sample[sample] = 1
                 
                 # This is used to check for overlaps in union case
-                if sampling_method is "union":
-                    unique_samples.append(binary_sample)
+                if union:
+                    unique_samples.append(list(binary_sample))
                 
                 for state in beam:
                     states.append(state)
                     samples.append(binary_sample)
                     log_probs.append(get_log_prob(binary_sample, frame, state.prior, weight))
             
-        if sampling_method is "union" or weight[0] != 1.0:
+        if union or weight[0] != 1.0:
             for state in beam:
                 for _, sample in itertools.islice(enumerate_samples(frame, state.prior,
-                                                  weight=[0.0, 1.0] if sampling_method is "union" else weight),
-                                                  branch_factor):
+                                                  weight=[0.0, 1.0] if union else weight), branch_factor):
                     binary_sample = np.zeros(88)
                     binary_sample[sample] = 1
 
                     # Overlap with acoustic sample in union case. Skip this sample.
-                    if not (sampling_method is "union" and binary_sample in unique_samples):
+                    if not (union and list(binary_sample) in unique_samples):
                         states.append(state)
                         samples.append(binary_sample)
                         log_probs.append(get_log_prob(binary_sample, frame, state.prior, weight))
@@ -255,7 +254,7 @@ if __name__ == '__main__':
     
     # Decode
     pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                        sampling_method="union" if args.union else "joint", weight=[args.weight, 1 - args.weight])
+                        union=args.union, weight=[args.weight, 1 - args.weight])
     
     # Evaluate
     np.save("pr", pr)
