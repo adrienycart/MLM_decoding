@@ -4,6 +4,8 @@ import queue
 import argparse
 import pretty_midi
 import sys
+import pickle
+import os
 
 import dataMaps
 import eval_utils
@@ -12,7 +14,7 @@ from state import State
 from mlm_training.model import Model, make_model_param
 
 
-def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[0.5, 0.5]):
+def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[0.5, 0.5], out=None):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
     
@@ -43,6 +45,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         element is the weight for the language model. This list should be normalized to sum to 1.
         Defaults to [0.5, 0.5].
         
+    out : string
+        The directory in which to save the outputs, or None to not save anything. Defaults to None.
+        
     
     Returns
     =======
@@ -60,7 +65,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     beam = Beam()
     beam.add_initial_state(model, sess)
     
-    for frame in np.transpose(acoustic):
+    for frame_num, frame in enumerate(np.transpose(acoustic)):
         states = []
         samples = []
         log_probs = []
@@ -109,6 +114,11 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
             beam.add(state.transition(sample, log_prob, hidden_state, prior))
         
         beam.cut_to_size(beam_size)
+        
+        if out and frame_num % 10 == 0:
+            output = [(s.get_piano_roll(), s.get_priors()) for s in beam]
+            with open(os.path.join(out, 'data_' + str(frame_num) + '.pkl'), 'wb') as file:
+                pickle.dump(output, file, pickle.HIGHEST_PROTOCOL)
         
     return beam.get_top_state().get_piano_roll(), beam.get_top_state().get_priors()
 
@@ -235,6 +245,9 @@ if __name__ == '__main__':
                         "Anything other than a number will evaluate on whole files. Default is 30s.",
                         default=30)
     
+    parser.add_argument("-o", "--output", help="The directory to save outputs to. Defaults to None (don't save).",
+                        default=None)
+    
     args = parser.parse_args()
         
     if not (0 <= args.weight <= 1):
@@ -263,7 +276,7 @@ if __name__ == '__main__':
     
     # Decode
     pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                        union=args.union, weight=[args.weight, 1 - args.weight])
+                        union=args.union, weight=[args.weight, 1 - args.weight], out=args.output)
     
     # Evaluate
     np.save("pr", pr)
