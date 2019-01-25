@@ -100,7 +100,7 @@ class Beam:
         piano_rolls = []
         
         for state in beam:
-            pr = state.get_piano_roll()[:,-hash_length:]
+            pr = state.get_piano_roll(max_length=hash_length)
             if not any((pr == x).all() for x in piano_rolls):
                 self.beam.append(state)
                 piano_rolls.append(pr)
