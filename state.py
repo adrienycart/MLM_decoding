@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 
 class State:
     """
@@ -51,10 +52,10 @@ class State:
         state = State(hidden_state, prior)
         state.log_prob = self.log_prob + log_prob
         
-        state.sample_history = [s for s in self.sample_history]
+        state.sample_history = copy.deepcopy(self.sample_history)
         state.sample_history.append(sample)
         
-        state.prior_history = [p for p in self.prior_history]
+        state.prior_history = copy.deepcopy(self.prior_history)
         state.prior_history.append(prior)
         return state
         
