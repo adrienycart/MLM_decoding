@@ -130,7 +130,6 @@ class DataMaps:
         if timestep_type == "quant":
             PPQ = float(pm_data.resolution)
             end_note = end_tick/PPQ
-            print(end_note)
             note_steps = np.arange(0,end_note,0.25)
             tick_steps = np.round(note_steps*PPQ).astype(int)
             corresp = np.zeros_like(tick_steps,dtype=float)
