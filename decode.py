@@ -14,7 +14,8 @@ from state import State
 from mlm_training.model import Model, make_model_param
 
 
-def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[0.5, 0.5], out=None):
+def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[0.5, 0.5],
+           hash_length=10, out=None):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
     
@@ -44,6 +45,10 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         A length-2 list, whose first element is the weight for the acoustic model and whose 2nd
         element is the weight for the language model. This list should be normalized to sum to 1.
         Defaults to [0.5, 0.5].
+        
+    hash_length : int
+        The history length for the hashed beam. If two states do not differ in the past hash_length
+        frames, only the most probable one is saved in the beam. Defaults to 10.
         
     out : string
         The directory in which to save the outputs, or None to not save anything. Defaults to None.
@@ -113,9 +118,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         for hidden_state, prior, log_prob, state, sample in zip(hidden_states, priors, log_probs, states, samples):
             beam.add(state.transition(sample, log_prob, hidden_state, prior))
         
-        beam.cut_to_size(beam_size)
+        beam.cut_to_size(beam_size, min(hash_length, frame_num + 1))
         
-        if out and frame_num % 10 == 0:
+        if out and frame_num % 1 == 0:
             output = [(s.get_piano_roll(), s.get_priors()) for s in beam]
             with open(os.path.join(out, 'data_' + str(frame_num) + '.pkl'), 'wb') as file:
                 pickle.dump(output, file, pickle.HIGHEST_PROTOCOL)
@@ -247,6 +252,8 @@ if __name__ == '__main__':
     
     parser.add_argument("-o", "--output", help="The directory to save outputs to. Defaults to None (don't save).",
                         default=None)
+    parser.add_argument("--hash", help="The hash length to use. Defaults to 10.",
+                        type=int, default=10)
     
     args = parser.parse_args()
         
@@ -276,7 +283,8 @@ if __name__ == '__main__':
     
     # Decode
     pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                        union=args.union, weight=[args.weight, 1 - args.weight], out=args.output)
+                        union=args.union, weight=[args.weight, 1 - args.weight], out=args.output,
+                        hash_length=args.hash)
     
     # Evaluate
     np.save("pr", pr)

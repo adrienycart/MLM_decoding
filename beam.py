@@ -81,7 +81,7 @@ class Beam:
         self.beam.append(state.State(initial_state, prior))
             
         
-    def cut_to_size(self, beam_size):
+    def cut_to_size(self, beam_size, hash_length):
         """
         Removes all but the beam_size most probable states from this beam.
         
@@ -89,5 +89,21 @@ class Beam:
         ==========
         beam_size : int
             The maximum number of states to save.
+            
+        hash_length : int
+            The hash length to save. If two states do not differ in the past hash_length
+            frames, only the most probable one is saved in the beam.
         """
-        self.beam = sorted(self.beam, key=lambda s: s.log_prob, reverse=True)[:beam_size]
+        beam = sorted(self.beam, key=lambda s: s.log_prob, reverse=True)
+        self.beam = []
+        
+        piano_rolls = []
+        
+        for state in beam:
+            pr = state.get_piano_roll()[:,-hash_length:]
+            if not any((pr == x).all() for x in piano_rolls):
+                self.beam.append(state)
+                piano_rolls.append(pr)
+                
+                if len(self.beam) == beam_size:
+                    break

@@ -26,7 +26,7 @@ class DataMaps:
         self.end=0 # end of the considered section in seconds
         self.timestep_type = None
 
-    def make_from_file(self,filename,timestep_type,section=None,note_range=[21,109],method='step'):
+    def make_from_file(self,filename,timestep_type,section=None,note_range=[21,109],method='avg'):
 
         self.timestep_type = timestep_type
         self.set_name_from_maps(filename)

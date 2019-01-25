@@ -31,6 +31,7 @@ parser.add_argument("-k", "--branch", type=int, help="The branching factor. Defa
 parser.add_argument("-u", "--union", help="Use the union sampling method.", action="store_true")
 parser.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
                     "Defaults to 0.5", type=float, default=0.5)
+parser.add_argument("--hash", help="The hash length to use. Defaults to 10.", type=int, default=10)
 
 
 args = parser.parse_args()
@@ -83,7 +84,7 @@ for fn in os.listdir(folder):
 
         # Decode
         pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                        union=args.union, weight=[args.weight, 1 - args.weight])
+                        union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash)
         #pr = (data.input>0.5).astype(int)
 
         # Save output
