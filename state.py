@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 
 class State:
     """
@@ -20,9 +21,11 @@ class State:
         self.hidden_state = hidden_state
         self.prior = prior
         
-        self.sample_history = []
-        self.prior_history = []
+        self.sample = []
         self.log_prob = 0.0
+        
+        self.num = 0
+        self.prev = None
     
     
     def transition(self, sample, log_prob, hidden_state, prior):
@@ -51,11 +54,9 @@ class State:
         state = State(hidden_state, prior)
         state.log_prob = self.log_prob + log_prob
         
-        state.sample_history = [s for s in self.sample_history]
-        state.sample_history.append(sample)
-        
-        state.prior_history = [p for p in self.prior_history]
-        state.prior_history.append(prior)
+        state.sample = sample
+        state.num = self.num + 1
+        state.prev = self
         return state
         
         
@@ -68,15 +69,17 @@ class State:
         priors : np.matrix
             An 88 x T matrix containing the priors of this State at each frame.
         """
-        priors = np.zeros((88, len(self.prior_history)))
+        priors = np.zeros((88, self.num + 1))
         
-        for i, prior in enumerate(self.prior_history):
-            priors[:, i] = prior
+        state = self
+        for i in range(self.num + 1):
+            priors[:, self.num - i] = state.prior
+            state = state.prev
             
         return priors
     
     
-    def get_piano_roll(self):
+    def get_piano_roll(self, max_length=None):
         """
         Get the piano roll of this State.
         
@@ -85,10 +88,13 @@ class State:
         priors : np.matrix
             An 88 x T binary matrix containing the pitch detections of this State.
         """
-        piano_roll = np.zeros((88, len(self.sample_history)))
+        length = min(self.num, max_length) if max_length else self.num
+        piano_roll = np.zeros((88, length))
         
-        for i, sample in enumerate(self.sample_history):
-            piano_roll[:, i] = sample
+        state = self
+        for i in range(length):
+            piano_roll[:, length - 1 - i] = state.sample
+            state = state.prev
             
         return piano_roll
     

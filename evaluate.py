@@ -31,6 +31,7 @@ parser.add_argument("-k", "--branch", type=int, help="The branching factor. Defa
 parser.add_argument("-u", "--union", help="Use the union sampling method.", action="store_true")
 parser.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
                     "Defaults to 0.5", type=float, default=0.5)
+parser.add_argument("--hash", help="The hash length to use. Defaults to 10.", type=int, default=10)
 
 
 args = parser.parse_args()
@@ -70,6 +71,8 @@ if not args.save is None:
 
 results = {}
 folder = args.data_path
+frames = np.zeros((0, 3))
+notes = np.zeros((0, 3))
 
 for fn in os.listdir(folder):
     if fn.endswith('.mid') and not fn.startswith('.'):
@@ -81,7 +84,8 @@ for fn in os.listdir(folder):
 
         # Decode
         pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                        union=args.union, weight=[args.weight, 1 - args.weight])
+                        union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash)
+        #pr = (data.input>0.5).astype(int)
 
         # Save output
         if not args.save is None:
@@ -98,10 +102,17 @@ for fn in os.listdir(folder):
         #Evaluate
         P_f,R_f,F_f = compute_eval_metrics_frame(pr,target)
         P_n,R_n,F_n = compute_eval_metrics_note(pr,target,min_dur=0.05)
+        
+        frames = np.vstack((frames, [P_f, R_f, F_f]))
+        notes = np.vstack((frames, [P_n, R_n, F_n]))
 
         print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
 
         results[fn] = [[P_f,R_f,F_f],[P_n,R_n,F_n]]
 
+P_f, R_f, F_f = np.mean(frames, axis=0)
+P_n, R_n, F_n = np.mean(notes, axis=0)
+print(f"Averages: Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
+        
 if not args.save is None:
     pickle.dump(results,open(os.path.join(args.save,'results.p'), "wb"))
