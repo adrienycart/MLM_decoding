@@ -16,7 +16,7 @@ from mlm_training.model import Model, make_model_param
 
 
 def get_gt_rank(gt, acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[0.5, 0.5],
-           hash_length=10, gt_only=False):
+           hash_length=10, gt_max=None, gt_only=False):
     """
     Get the average ranks of the ground truth frame from decode.enumerate_samples().
     
@@ -54,6 +54,9 @@ def get_gt_rank(gt, acoustic, model, sess, branch_factor=50, beam_size=200, unio
         The history length for the hashed beam. If two states do not differ in the past hash_length
         frames, only the most probable one is saved in the beam. Defaults to 10.
         
+    gt_max : int
+        The maximum rank to check for the ground truth sample. Defaults to None (no limit).
+        
     gt_only : boolean
         True to transition only on the ground truth sample, no matter its rank. Flase to transition
         normally. Defaults to False.
@@ -73,6 +76,9 @@ def get_gt_rank(gt, acoustic, model, sess, branch_factor=50, beam_size=200, unio
     gt = np.transpose(gt)
     ranks = []
     
+    if gt_max is not None and union:
+        gt_max = int(gt_max / 2)
+    
     for frame_num, frame in enumerate(np.transpose(acoustic)):
         print(str(frame_num) + " / " + str(acoustic.shape[1]))
         gt_frame = np.nonzero(gt[frame_num, :])[0]
@@ -89,7 +95,7 @@ def get_gt_rank(gt, acoustic, model, sess, branch_factor=50, beam_size=200, unio
         if union or weight[0] == 1.0:
             # If sampling method is acoustic (or union), we generate the same samples for every current hypothesis
             rank_ac, enumerated_samples = get_rank_and_samples(gt_frame, frame, beam.beam[0].prior,
-                                                            [1.0, 0.0], 0 if gt_only else branch_factor)
+                                                            [1.0, 0.0], 0 if gt_only else branch_factor, gt_max)
             if not union:
                 ranks.append(rank_ac)
                 
@@ -111,8 +117,9 @@ def get_gt_rank(gt, acoustic, model, sess, branch_factor=50, beam_size=200, unio
             
         if union or weight[0] != 1.0:
             for state in beam:
-                rank_la, enumerated_samples = get_rank_and_samples(gt_frame, frame, beam.beam[0].prior,
-                                                            [1.0, 0.0], 0 if gt_only else branch_factor)
+                rank_la, enumerated_samples = get_rank_and_samples(gt_frame, frame, state.prior,
+                                                            [0.0, 1.0] if union else weight,
+                                                            0 if gt_only else branch_factor, gt_max)
                 
                 if union:
                     ranks.append(min(rank_ac, rank_la))
@@ -149,7 +156,7 @@ def get_gt_rank(gt, acoustic, model, sess, branch_factor=50, beam_size=200, unio
 
 
 
-def get_rank_and_samples(gt, acoustic, language, weight, branch_factor):
+def get_rank_and_samples(gt, acoustic, language, weight, branch_factor, gt_max):
     """
     Get the rank of the ground truth, and enumerate the samples of a frame by probability.
     
@@ -173,6 +180,9 @@ def get_rank_and_samples(gt, acoustic, language, weight, branch_factor):
     branch_factor : int
         The number of samples to return in samples.
         
+    gt_max : int
+        The maximum rank to check for the ground truth sample. Defaults to None (no limit).
+        
     Return
     ======
     rank : int
@@ -186,13 +196,13 @@ def get_rank_and_samples(gt, acoustic, language, weight, branch_factor):
     
     num = 0
     for _, sample in decode.enumerate_samples(acoustic, language, weight):
-        if rank is None and np.array_equal(sample, gt):
+        if num <= gt_max and rank is None and np.array_equal(sample, gt):
             rank = num
             
         if len(samples) < branch_factor:
             samples.append(sample)
             
-        if rank is not None and len(samples) == branch_factor:
+        if len(samples) == branch_factor and (rank is not None or gt_max <= num):
             return rank, samples
         
         num = num + 1
@@ -223,7 +233,7 @@ if __name__ == '__main__':
     parser.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
                         "Defaults to 0.5", type=float, default=0.5)
     
-    parser.add_argument("--max_len",type=str,help="test on the first max_len seconds of each text file. " +
+    parser.add_argument("--max_len", type=str, help="test on the first max_len seconds of each text file. " +
                         "Anything other than a number will evaluate on whole files. Default is 30s.",
                         default=30)
     
@@ -231,6 +241,8 @@ if __name__ == '__main__':
                         type=int, default=10)
     
     parser.add_argument("--gt", help="Transition on ground truth samples only.", action="store_true")
+    parser.add_argument("--gt_max", type=int, help="The maximum rank to check for the ground truth sample.",
+                        default=None)
     
     args = parser.parse_args()
         
@@ -261,6 +273,6 @@ if __name__ == '__main__':
     # Decode
     ranks = get_gt_rank(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                         union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash,
-                        gt_only=args.gt)
+                        gt_max=args.gt_max, gt_only=args.gt)
     
     print(ranks)
