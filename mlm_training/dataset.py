@@ -178,6 +178,26 @@ class Dataset:
         return np.asarray(dataset), np.asarray(lengths)
 
 
+    def get_dataset_chunks_generator(self,subset,batch_size,len_chunk):
+        seq_buff = []
+        len_buff = []
+        pr_list = getattr(self,subset)
+        files_left = list(range(len(pr_list)))
+
+        while files_left != [] or len(seq_buff)>=batch_size:
+            if len(seq_buff)<batch_size:
+                file_index = files_left.pop()
+                piano_roll = pr_list[file_index]
+                chunks, chunks_len = piano_roll.cut(len_chunk,keep_padding=False,as_list=True)
+                seq_buff.extend(chunks)
+                len_buff.extend(chunks_len)
+            else:
+                output = (np.array(seq_buff[:batch_size]),np.array(len_buff[:batch_size]))
+                del seq_buff[:batch_size]
+                del len_buff[:batch_size]
+                yield output
+
+
     def shuffle_one(self,subset):
         data = getattr(self,subset)
         shuffle(data)
@@ -250,7 +270,30 @@ def ground_truth(data):
 
 # data = Dataset()
 # data.load_data('data/test_dataset/',
-#         fs=4,max_len=None,note_range=[21,109],quant=True,length_of_chunks=30)
+#         timestep_type='quant',max_len=None,note_range=[21,109])
+#
+# for pr in data.test:
+#     print pr.name
+#
+# data_gen = data.get_dataset_chunks_generator('test',3,50)
+#
+#
+# for batch,lens in data_gen:
+#     print lens
+# for pr in data.test:
+#     print pr.name
+#
+# dataset,lengths = data.get_dataset_chunks_no_pad('test',50)
+# ptr = 0
+# print "================"
+# while ptr+3<dataset.shape[0]:
+#     print lengths[ptr:ptr+3]
+#     ptr +=3
+# for pr in data.test:
+#     print pr.name
+
+# print 'finish'
+
 # # data.load_data_custom('data/Piano-midi-sorted',train=['albeniz','borodin'],valid=['clementi'],test=['grieg'],
 # #         fs=4,max_len=15,note_range=[21,109],quant=True,length_of_chunks=None)
 # # print data.train

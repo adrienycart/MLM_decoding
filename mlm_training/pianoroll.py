@@ -89,7 +89,7 @@ class Pianoroll:
         return
 
 
-    def cut(self,len_chunk,keep_padding=True):
+    def cut(self,len_chunk,keep_padding=True,as_list=False):
         #Returns the roll cut in chunks of len_chunk elements, as well as
         #the list of lengths of the chunks
         #The last element is zero-padded to have len_chunk elements
@@ -100,23 +100,35 @@ class Pianoroll:
         else:
             size = self.length
         N_notes = roll.shape[0]
-        n_chunks = int(np.ceil(float(size)/len_chunk))
-
-        roll_cut = np.zeros([n_chunks,N_notes,len_chunk])
-        lengths = np.zeros([n_chunks])
+        if as_list:
+            roll_cut = []
+            lengths = []
+        else:
+            n_chunks = int(np.ceil(float(size)/len_chunk))
+            roll_cut = np.zeros([n_chunks,N_notes,len_chunk])
+            lengths = np.zeros([n_chunks])
 
         j = 0
         n = 0
         length = self.length
         while j < size:
-            lengths[n] = min(length,len_chunk)
+            if as_list:
+                lengths += [min(length,len_chunk)]
+            else:
+                lengths[n] = min(length,len_chunk)
             length = max(0, length-len_chunk)
             if j + len_chunk < size:
-                roll_cut[n]= roll[:,j:j+len_chunk]
+                if as_list:
+                    roll_cut += [roll[:,j:j+len_chunk]]
+                else:
+                    roll_cut[n]= roll[:,j:j+len_chunk]
                 j += len_chunk
                 n += 1
             else : #Finishing clause : zero-pad the remaining
-                roll_cut[n,:,:]= np.pad(roll[:,j:size],pad_width=((0,0),(0,len_chunk-(size-j))),mode='constant')
+                if as_list:
+                    roll_cut += [np.pad(roll[:,j:size],pad_width=((0,0),(0,len_chunk-(size-j))),mode='constant')]
+                else:
+                    roll_cut[n,:,:]= np.pad(roll[:,j:size],pad_width=((0,0),(0,len_chunk-(size-j))),mode='constant')
                 j += len_chunk
         return roll_cut, lengths
 
