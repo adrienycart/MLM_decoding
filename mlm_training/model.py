@@ -734,8 +734,8 @@ class Model:
         output_state = self.output_state
 
         c,h= list(zip(*hidden_states_in))
-        c = np.squeeze(np.array(c))
-        h = np.squeeze(np.array(h))
+        c = np.squeeze(np.array(c), axis=1)
+        h = np.squeeze(np.array(h), axis=1)
 
         hidden_states_in =  tf.nn.rnn_cell.LSTMStateTuple(c=c,h=h)
 
