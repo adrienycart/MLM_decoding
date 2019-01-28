@@ -196,13 +196,13 @@ def get_rank_and_samples(gt, acoustic, language, weight, branch_factor, gt_max):
     
     num = 0
     for _, sample in decode.enumerate_samples(acoustic, language, weight):
-        if num <= gt_max and rank is None and np.array_equal(sample, gt):
+        if (gt_max is None or num <= gt_max) and rank is None and np.array_equal(sample, gt):
             rank = num
             
         if len(samples) < branch_factor:
             samples.append(sample)
             
-        if len(samples) == branch_factor and (rank is not None or gt_max <= num):
+        if len(samples) == branch_factor and (rank is not None or (gt_max is not None and gt_max <= num)):
             return rank, samples
         
         num = num + 1
