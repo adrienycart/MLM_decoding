@@ -98,7 +98,14 @@ class DataMaps:
         #Makes a quantised piano-roll
         corresp = self.corresp
 
-        pr = pm_data.get_piano_roll(fs=100,times=corresp)
+        c_prev = corresp[0]
+        for c in corresp[1:]:
+            if c-c_prev < 0.04:
+                print(c_prev,c,c-c_prev)
+            c_prev=c
+
+
+        pr = pm_data.get_piano_roll(fs=500,times=corresp)
         pr = (pr>=7).astype(int)
 
         if not section==None:
@@ -130,7 +137,6 @@ class DataMaps:
         if timestep_type == "quant":
             PPQ = float(pm_data.resolution)
             end_note = end_tick/PPQ
-            print(end_note)
             note_steps = np.arange(0,end_note,0.25)
             tick_steps = np.round(note_steps*PPQ).astype(int)
             corresp = np.zeros_like(tick_steps,dtype=float)
@@ -394,7 +400,13 @@ def align_matrix(csv_matrix,corresp,section=None,method='avg'):
     #specifies the downsampling method.
 
     n_notes = csv_matrix.shape[0]
-    aligned_input = np.zeros([n_notes,corresp.shape[0]])
+
+    end_sec = min(csv_matrix.shape[1]*0.04,corresp[-1])
+    (n_steps,_),_ = get_closest(end_sec,corresp)
+
+    aligned_input = np.zeros([n_notes,n_steps])
+
+
 
     def fill_value(sub_input,i):
         #Computes the value of the note-based input, and puts it in the matrix
@@ -443,14 +455,15 @@ def align_matrix(csv_matrix,corresp,section=None,method='avg'):
         begin = corresp[i]
         end = corresp[i+1]
         begin_index = int(round(begin*25)) #25 is the sampling frequency of the input
-        end_index = int(round(end*25))
+        end_index = max(int(round(end*25)),int(round(begin*25))+1) #We want to select at least 1 frame of the input
         sub_input = csv_matrix[:,begin_index:end_index]
 
         if sub_input.shape[1]==0:
             #Used for debugging
             print("error making align input")
-            print(begin, end)
+            print(begin, end,end-begin)
             print(begin_index, end_index)
+            print(begin*25,end*25)
             print(sub_input.shape)
             print(csv_matrix.shape)
 
@@ -520,11 +533,15 @@ def get_name_from_maps(filename):
     name = '_'.join(name)
     return name
 
+
+# filename = 'data/outputs_default_config_split/test/MAPS_MUS-scn15_11_ENSTDkAm.mid'
 # np.seterr(all='raise')
-# filename = 'data/outputs_default_config/test/MAPS_MUS-chpn-p4_ENSTDkAm.mid'
-#
 # data = DataMaps()
-# data.make_from_file(filename,'event',[0,30])
+# data.make_from_file(filename,'quant',[0,30])
+
+
+
+
 #
 #
 # import matplotlib.pyplot as plt
