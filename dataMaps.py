@@ -98,11 +98,11 @@ class DataMaps:
         #Makes a quantised piano-roll
         corresp = self.corresp
 
-        c_prev = corresp[0]
-        for c in corresp[1:]:
-            if c-c_prev < 0.04:
-                print(c_prev,c,c-c_prev)
-            c_prev=c
+        # c_prev = corresp[0]
+        # for c in corresp[1:]:
+        #     if c-c_prev < 0.04:
+        #         print(c_prev,c,c-c_prev)
+        #     c_prev=c
 
 
         pr = pm_data.get_piano_roll(fs=500,times=corresp)
