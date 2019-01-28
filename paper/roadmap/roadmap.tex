@@ -145,6 +145,8 @@ We will investigate whether it actually does.
 \subsection{Get continuations at timestep $t$}
 \label{sec:sampling}
 
+\subsubsection{Strategies}
+
 At each timestep, we will have to get a set of binary continuations.
 A naive strategy would be to sample binary vectors from the acoustic model independent pitch-wise distributions.
 
@@ -165,6 +167,20 @@ Also, the set of continuations will be the same for each candidate sequence.
 In the two last cases, the set of continuation will depend on the language model, and thus on the candidate sequences, which might represent a potentially significant extra computational cost.
 
 Experiments will include a comparison of these strategies.
+
+\subsubsection{Evaluating these strategies}
+
+To have an idea of the potential success of each of these strategies, we could compute at each time step the rank of the ground-truth in the list of most likely continuations.
+If this rank is lower than the branching factor, the correct solution will not be evaluated, so it is not possible to obtain it.
+A more computationally efficient method would be to set a branching factor (e.g. 20), and check the proportion of frames for which the ground truth is in the first 20 most likely samples.
+We could then plot this proportion for various branching factor values (e.g. 10, 20, 50, 100, 200).
+
+This is easy to do when only the acoustic model is considered.
+When the language model is also taken into account, the samples chosen at times $1 ... t$ influence the distribution at time $t+1$.
+One solution would be to use the ground truth sequence, to obtain an upper bound for performance.
+Another solution, more realistic but more computationally expensive, is to evaluate it for each sequence in the beam at each timestep.
+
+
 
 \subsection{Compute the likelihood of the extended sequences}
 \label{sec:schedsamp}
