@@ -84,7 +84,8 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
     ranks = []
     
     for frame_num, frame in enumerate(np.transpose(acoustic)):
-        print(str(frame_num) + " / " + str(acoustic.shape[1]))
+        if frame_num % 20 == 0:
+            print(str(frame_num) + " / " + str(acoustic.shape[1]))
         gt_frame = gt[frame_num, :]
         
         states = []
@@ -243,16 +244,16 @@ if __name__ == '__main__':
                                    union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash,
                                    gt_only=args.gt, history=args.history, min_diff=args.min_diff)
             
-            np.vstack((X, x))
-            np.append(Y, y)
+            X = np.vstack((X, x))
+            Y = np.append(Y, y)
     
     print(X.shape)
     print(Y.shape)
     
     # Save data
-    with open(os.path.join(args.output, args.prefix + ("" if args.prefix == "" else "_") + 'X.pkl'), 'wb') as file:
+    with open(os.path.join(args.dir, args.prefix + ("" if args.prefix == "" else "_") + 'X.pkl'), 'wb') as file:
         pickle.dump(X, file, pickle.HIGHEST_PROTOCOL)
                         
-    with open(os.path.join(args.output, args.prefix + ("" if args.prefix == "" else "_") + 'Y.pkl'), 'wb') as file:
+    with open(os.path.join(args.dir, args.prefix + ("" if args.prefix == "" else "_") + 'Y.pkl'), 'wb') as file:
         pickle.dump(Y, file, pickle.HIGHEST_PROTOCOL)
     
