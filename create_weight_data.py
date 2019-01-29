@@ -5,6 +5,7 @@ import numpy as np
 import os
 import pickle
 import itertools
+import glob
 
 from beam import Beam
 from mlm_training.model import Model, make_model_param
@@ -158,11 +159,14 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("MIDI", help="The MIDI file to load. This should be in the same location as the " +
-                        "corresponding acoustic csv, and have the same name (except the extension).")
+    parser.add_argument("MIDI", help="The MIDI file to load, or a directory containing MIDI files. " +
+                        "They should be in the same location as the " +
+                        "corresponding acoustic csvs, and have the same name (except the extension).")
     
     parser.add_argument("--prefix", help="The prefix on the file name for output. Defaults to None.",
                         default="")
+    parser.add_argument("--dir", help="The directory to save data. Defaults to '.'.",
+                        default=".")
     
     parser.add_argument("-m", "--model", help="The location of the trained language model.", required=True)
     parser.add_argument("--hidden", help="The number of hidden layers in the language model. Defaults to 256",
@@ -183,8 +187,6 @@ if __name__ == '__main__':
                         "Anything other than a number will evaluate on whole files. Default is 30s.",
                         default=30)
     
-    parser.add_argument("-o", "--output", help="The directory to save data. Defaults to '.'.",
-                        default=".")
     parser.add_argument("--hash", help="The hash length to use. Defaults to 10.",
                         type=int, default=10)
     
@@ -209,10 +211,6 @@ if __name__ == '__main__':
         max_len = None
         section = None
     
-    # Load data
-    data = dataMaps.DataMaps()
-    data.make_from_file(args.MIDI, args.step, section=section)
-    
     # Load model
     model_param = make_model_param()
     model_param['n_hidden'] = args.hidden
@@ -222,18 +220,39 @@ if __name__ == '__main__':
     model = Model(model_param)
     sess,_ = model.load(args.model, model_path=args.model)
     
-    # Decode
-    x, y = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                           union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash,
-                           gt_only=args.gt, history=args.history, min_diff=args.min_diff)
+    # Load data
+    if args.MIDI.endswith(".mid"):
+        data = dataMaps.DataMaps()
+        data.make_from_file(args.MIDI, args.step, section=section)
     
-    print(x.shape)
-    print(y.shape)
+        # Decode
+        X, Y = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
+                               union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash,
+                               gt_only=args.gt, history=args.history, min_diff=args.min_diff)
+    else:
+        X = np.zeros((0, args.history + 2))
+        Y = np.zeros(0)
+        
+        for file in glob.glob(os.path.join(args.MIDI, "*.mid")):
+            print(file)
+            data = dataMaps.DataMaps()
+            data.make_from_file(file, args.step, section=section)
+
+            # Decode
+            x, y = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
+                                   union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash,
+                                   gt_only=args.gt, history=args.history, min_diff=args.min_diff)
+            
+            np.vstack((X, x))
+            np.append(Y, y)
+    
+    print(X.shape)
+    print(Y.shape)
     
     # Save data
     with open(os.path.join(args.output, args.prefix + ("" if args.prefix == "" else "_") + 'X.pkl'), 'wb') as file:
-        pickle.dump(x, file, pickle.HIGHEST_PROTOCOL)
+        pickle.dump(X, file, pickle.HIGHEST_PROTOCOL)
                         
     with open(os.path.join(args.output, args.prefix + ("" if args.prefix == "" else "_") + 'Y.pkl'), 'wb') as file:
-        pickle.dump(y, file, pickle.HIGHEST_PROTOCOL)
+        pickle.dump(Y, file, pickle.HIGHEST_PROTOCOL)
     
