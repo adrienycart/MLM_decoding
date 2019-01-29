@@ -529,31 +529,37 @@ class Model:
         print("Training for "+str(epochs)+" epochs")
         batch_size = train_param['batch_size']
         i = n_epoch
+
+        valid_data, valid_target, valid_lengths = self.extract_data(data,'valid')
+
         while i < n_epoch+epochs and epoch_since_best<train_param['early_stop_epochs']:
             start_epoch = datetime.now()
             ptr = 0
 
-            training_data, training_target, training_lengths = self.extract_data(data,'train')
-            valid_data, valid_target, valid_lengths = self.extract_data(data,'valid')
+            # training_data, training_target, training_lengths = self.extract_data(data,'train')
+            train_data_generator = data.get_dataset_generator('train',batch_size,self.chunks)
+            display_step = None
 
 
+            # n_files = training_data.shape[0]
+            # no_of_batches = int(np.ceil(float(n_files)/batch_size))
+            #
+            # if train_param['display_per_epoch'] is None:
+            #     display_step = None
+            # else:
+            #     display_step = max(int(round(float(no_of_batches)/train_param['display_per_epoch'])),1)
+            # for j in range(no_of_batches):
+            #     batch_x = training_data[ptr:ptr+batch_size]
+            #     batch_y = training_target[ptr:ptr+batch_size]
+            #     batch_lens = training_lengths[ptr:ptr+batch_size]
+            #
+            #     ptr += batch_size
 
-            n_files = training_data.shape[0]
-            no_of_batches = int(np.ceil(float(n_files)/batch_size))
+            for sequences, seq_len in train_data_generator:
+                sequences_trans = np.transpose(sequence,[0,2,1])
+                batch_x = sequences_trans[:,:-1,:]
+                batch_y = sequences_trans[:,1:,:]
 
-            if train_param['display_per_epoch'] is None:
-                display_step = None
-            else:
-                display_step = max(int(round(float(no_of_batches)/train_param['display_per_epoch'])),1)
-
-
-
-            for j in range(no_of_batches):
-                batch_x = training_data[ptr:ptr+batch_size]
-                batch_y = training_target[ptr:ptr+batch_size]
-                batch_lens = training_lengths[ptr:ptr+batch_size]
-
-                ptr += batch_size
                 sess.run(optimizer, feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens, drop: train_param['dropout'],batch_size_ph:batch_x.shape[0]})
                 if not display_step is None and j%display_step == 0 :
                     cross_batch = sess.run(cross_entropy, feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens,batch_size_ph:batch_x.shape[0]})
