@@ -29,9 +29,16 @@ parser.add_argument('--save',type=str,help="location to save the computed result
 parser.add_argument("-b", "--beam", type=int, help="The beam size. Defaults to 100.", default=100)
 parser.add_argument("-k", "--branch", type=int, help="The branching factor. Defaults to 20.", default=20)
 parser.add_argument("-u", "--union", help="Use the union sampling method.", action="store_true")
-parser.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
+weight = parser.add_mutually_exclusive_group()
+weight.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
                     "Defaults to 0.5", type=float, default=0.5)
+weight.add_argument("-wm", "--weight_model", help="Load the given sklearn model using pickle, to dynamically " +
+                    "set weights. Defaults to None, which uses the static weight from -w instead.",
+                    default=None)
 parser.add_argument("--hash", help="The hash length to use. Defaults to 10.", type=int, default=10)
+parser.add_argument("--history", help="The history length to use. Defaults to 5.",
+                    type=int, default=5)
+
 
 
 args = parser.parse_args()
@@ -66,6 +73,12 @@ model_param['n_steps'] = 1 # To generate 1 step at a time
 model = Model(model_param)
 sess,_ = model.load(args.model, model_path=args.model)
 
+# Load weight model
+weight_model = None
+if args.weight_model:
+    with open(args.weight_model, "rb") as file:
+        weight_model = pickle.load(file)
+
 if not args.save is None:
     safe_mkdir(args.save)
 
@@ -84,7 +97,8 @@ for fn in os.listdir(folder):
 
         # Decode
         pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                        union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash)
+                            union=args.union, weight=[args.weight, 1 - args.weight], out=None,
+                            hash_length=args.hash, history=args.history, weight_model=weight_model)
         #pr = (data.input>0.5).astype(int)
 
         # Save output
@@ -98,11 +112,11 @@ for fn in os.listdir(folder):
         data = DataMaps()
         data.make_from_file(filename, "time", section=section)
         target = data.target
-            
+
         #Evaluate
         P_f,R_f,F_f = compute_eval_metrics_frame(pr,target)
         P_n,R_n,F_n = compute_eval_metrics_note(pr,target,min_dur=0.05)
-        
+
         frames = np.vstack((frames, [P_f, R_f, F_f]))
         notes = np.vstack((frames, [P_n, R_n, F_n]))
 
@@ -113,6 +127,6 @@ for fn in os.listdir(folder):
 P_f, R_f, F_f = np.mean(frames, axis=0)
 P_n, R_n, F_n = np.mean(notes, axis=0)
 print(f"Averages: Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
-        
+
 if not args.save is None:
-    pickle.dump(results,open(os.path.join(args.save,'results.p'), "wb"))
+    pickle.dump(results,open(os.path.join(args.save), "wb"))
