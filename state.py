@@ -79,20 +79,31 @@ class State:
         return priors
     
     
-    def get_piano_roll(self, max_length=None):
+    def get_piano_roll(self, min_length=None, max_length=None):
         """
         Get the piano roll of this State.
+        
+        Parameters
+        ==========
+        min_length : int
+            The minimum length for a returned piano roll. It will be left-padded with 0s if
+            T < min_length. Defaults to None, which does no left padding.
+            
+        max_length : int
+            The maximum length for a returned piano roll. This will return at most the most recent
+            max_length frames.
         
         Returns
         =======
         priors : np.matrix
-            An 88 x T binary matrix containing the pitch detections of this State.
+            An 88 x max(min_length, min(T, max_length)) binary matrix containing the pitch detections of this State.
         """
         length = min(self.num, max_length) if max_length else self.num
+        length = max(min_length, length) if min_length else length
         piano_roll = np.zeros((88, length))
         
         state = self
-        for i in range(length):
+        for i in range(min(length, self.num)):
             piano_roll[:, length - 1 - i] = state.sample
             state = state.prev
             
