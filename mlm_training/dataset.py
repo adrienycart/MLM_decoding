@@ -8,6 +8,78 @@ import copy
 from mlm_training.pianoroll import Pianoroll
 from tqdm import tqdm
 
+from queue import Queue
+from threading import Thread
+
+
+class ThreadedDataset:
+    def __init__(self,folder,timestep_type,chunks_len,rand_transp=True,note_range=[21,109]):
+        self.train = []
+        self.valid = []
+        self.valid_rolls = []
+        self.valid_lens = []
+
+        self.timestep_type = timestep_type
+        self.note_range = note_range
+        self.rand_transp=rand_transp
+        self.chunks_len = chunks_len
+
+
+        self.init_data_list(folder)
+        self.set_valid_data()
+
+
+    def init_data_list(folder):
+        for subset in ['train','valid']:
+            file_list = []
+
+            for fn in os.listdir(os.path.join(folder,subset)):
+                if (fn.endswith('.mid') or fn.endswith('.midi')) and not fn.startswith('.'):
+                    file_list += [os.path.join(folder,subset,fn)]
+            setattr(self,subset,file_list)
+
+    def load_one_midi(self,filename):
+        midi_data = pm.PrettyMIDI(filename)
+        piano_roll = Pianoroll()
+        piano_roll.make_from_pm(midi_data,self.timestep_type,None,self.note_range)
+        chunks, chunks_len = piano_roll.cut(len_chunk,keep_padding=False,as_list=True)
+        return chunks, chunks_len
+
+    def set_valid_data():
+
+        data = []
+        lengths = []
+
+        for filename in self.valid:
+            chunks, chunks_len = self.load_one_midi(filename)
+            data.extend(chunks)
+            lengths.extend(chunks_len)
+
+        self.valid_rolls = np.array(data)
+        self.valid_lens  = np.array(lengths)
+
+    def init_queue_thread(self,batch_size):
+        self.queue = Queue(maxsize=batch_size*10)
+        thread = threading.Thread(target=self.enqueue_piano_rolls, args=())
+
+
+    def enqueue_piano_rolls():
+        for filename in self.train:
+            chunks, chunks_len = self.load_one_midi(filename)
+            for chunk, chunk_len in zip(chunks, chunks_len):
+                self.queue.put([chunk, chunk_len])
+
+
+    def shuffle_one(self,subset):
+        data = getattr(self,subset)
+        shuffle(data)
+
+
+
+
+
+
+
 class Dataset:
     """Classe representing the dataset."""
 
