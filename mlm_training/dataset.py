@@ -209,10 +209,9 @@ class Dataset:
                     output_roll = np.zeros([batch_size,n_notes,self.max_len])
                     for i,seq in enumerate(seq_buff[:batch_size]):
                         output[i,:,seq.shape[1]]=seq
-                    output = (output_roll,,np.array(len_buff[:batch_size]))
-
-
-                output = (np.array(seq_buff[:batch_size]),np.array(len_buff[:batch_size]))
+                    output = (output_roll,np.array(len_buff[:batch_size]))
+                else:
+                    output = (np.array(seq_buff[:batch_size]),np.array(len_buff[:batch_size]))
                 del seq_buff[:batch_size]
                 del len_buff[:batch_size]
                 yield output
