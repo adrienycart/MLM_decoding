@@ -556,7 +556,7 @@ class Model:
             #     ptr += batch_size
 
             for sequences, seq_len in train_data_generator:
-                sequences_trans = np.transpose(sequence,[0,2,1])
+                sequences_trans = np.transpose(sequences,[0,2,1])
                 batch_x = sequences_trans[:,:-1,:]
                 batch_y = sequences_trans[:,1:,:]
 
