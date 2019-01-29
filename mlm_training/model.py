@@ -536,6 +536,8 @@ class Model:
             training_data, training_target, training_lengths = self.extract_data(data,'train')
             valid_data, valid_target, valid_lengths = self.extract_data(data,'valid')
 
+
+
             n_files = training_data.shape[0]
             no_of_batches = int(np.ceil(float(n_files)/batch_size))
 

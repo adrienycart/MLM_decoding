@@ -17,7 +17,7 @@ class Dataset:
         self.valid = []
 
         self.note_range = [0,128]
-        self.max_len = 0
+        self.max_len = None
         self.rand_transp=rand_transp
 
     def walkdir(self,folder):
@@ -178,20 +178,40 @@ class Dataset:
         return np.asarray(dataset), np.asarray(lengths)
 
 
-    def get_dataset_chunks_generator(self,subset,batch_size,len_chunk):
+    def get_dataset_generator(self,subset,batch_size,len_chunk=None):
         seq_buff = []
         len_buff = []
         pr_list = getattr(self,subset)
         files_left = list(range(len(pr_list)))
 
+        n_notes = self.note_range[1]-self.note_range[0]
+        if self.max_len is None:
+            self.set_max_len()
+
         while files_left != [] or len(seq_buff)>=batch_size:
             if len(seq_buff)<batch_size:
                 file_index = files_left.pop()
                 piano_roll = pr_list[file_index]
-                chunks, chunks_len = piano_roll.cut(len_chunk,keep_padding=False,as_list=True)
-                seq_buff.extend(chunks)
-                len_buff.extend(chunks_len)
+                if self.rand_transp:
+                    transp = np.random.randint(-7,6)
+                    piano_roll = piano_roll.transpose(transp)
+                if len_chunk is None:
+                    roll= piano_roll.roll
+                    length = piano_roll.length
+                    seq_buff.append(roll)
+                    len_buff.append(length)
+                else:
+                    chunks, chunks_len = piano_roll.cut(len_chunk,keep_padding=False,as_list=True)
+                    seq_buff.extend(chunks)
+                    len_buff.extend(chunks_len)
             else:
+                if len_chunk is None:
+                    output_roll = np.zeros([batch_size,n_notes,self.max_len])
+                    for i,seq in enumerate(seq_buff[:batch_size]):
+                        output[i,:,seq.shape[1]]=seq
+                    output = (output_roll,,np.array(len_buff[:batch_size]))
+
+
                 output = (np.array(seq_buff[:batch_size]),np.array(len_buff[:batch_size]))
                 del seq_buff[:batch_size]
                 del len_buff[:batch_size]
@@ -209,16 +229,20 @@ class Dataset:
         else :
             return max([x.length for x in dataset])
 
-    def zero_pad(self):
-
+    def set_max_len(self):
         max_train = self.__max_len(self.train)
         max_valid = self.__max_len(self.valid)
         max_test = self.__max_len(self.test)
         max_len = max([max_train,max_valid,max_test])
         self.max_len = max_len
 
+    def zero_pad(self):
+        if self.max_len is None:
+            self.set_max_len()
+
+
         for subset in ["train","valid","test"]:
-            self.zero_pad_one(subset,max_len)
+            self.zero_pad_one(subset,self.max_len)
 
 
     def zero_pad_one(self,subset,max_len):
@@ -272,10 +296,10 @@ def ground_truth(data):
 # data.load_data('data/test_dataset/',
 #         timestep_type='quant',max_len=None,note_range=[21,109])
 #
-# for pr in data.test:
-#     print pr.name
+# # for pr in data.test:
+#     # print pr.name
 #
-# data_gen = data.get_dataset_chunks_generator('test',3,50)
+# data_gen = data.get_dataset_generator('test',2,len_chunk = None)
 #
 #
 # for batch,lens in data_gen:
