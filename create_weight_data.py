@@ -96,13 +96,12 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
         unique_samples = []
         
         # Get data
-        for state in beam:
-            pitches = np.argwhere(1 - np.isclose(state.prior, frame, rtol=0.0, atol=min_diff))[:,0]
-            if len(pitches) > 0:
-                x = np.vstack((x, np.hstack((state.get_piano_roll(min_length=history, max_length=history),
-                                             np.reshape(state.prior, (88, -1)),
-                                             np.reshape(frame, (88, -1))))[pitches]))
-                y = np.append(y, gt_frame[pitches])
+        if frame_num != 0:
+            for state in beam:
+                pitches = np.argwhere(1 - np.isclose(np.squeeze(state.prior), np.squeeze(frame), rtol=0.0, atol=min_diff))[:,0]
+                if len(pitches) > 0:
+                    x = np.vstack((x, decode.create_weight_x(state, frame, history, pitches=pitches)))
+                    y = np.append(y, gt_frame[pitches])
         
         # Gather all computations to perform them batched
         # Acoustic sampling is done separately because the acoustic samples will be identical for every state.

@@ -15,7 +15,7 @@ from mlm_training.model import Model, make_model_param
 
 
 def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[0.5, 0.5],
-           hash_length=10, out=None):
+           hash_length=10, out=None, history=5, weight_model=None):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
     
@@ -53,6 +53,13 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     out : string
         The directory in which to save the outputs, or None to not save anything. Defaults to None.
         
+    history : int
+        How many frames to save in the x data point. Defaults to 5.
+        
+    weight_model : sklearn.model
+        The sklearn model to use to set dynamic weights for the models. Defaults to None, which uses
+        the static weight of the weight parameter.
+        
     
     Returns
     =======
@@ -70,7 +77,11 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     beam = Beam()
     beam.add_initial_state(model, sess)
     
+    
     for frame_num, frame in enumerate(np.transpose(acoustic)):
+        if frame_num % 20 == 0:
+            print(str(frame_num) + " / " + str(acoustic.shape[1]))
+            
         states = []
         samples = []
         log_probs = []
@@ -80,7 +91,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         
         # Gather all computations to perform them batched
         # Acoustic sampling is done separately because the acoustic samples will be identical for every state.
-        if union or weight[0] == 1.0:
+        if union or (not weight_model and weight[0] == 1.0):
             # If sampling method is acoustic (or union), we generate the same samples for every current hypothesis
             for _, sample in itertools.islice(enumerate_samples(frame, beam.beam[0].prior, weight=[1.0, 0.0]), branch_factor):
                 binary_sample = np.zeros(88)
@@ -91,12 +102,20 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
                     unique_samples.append(list(binary_sample))
                 
                 for state in beam:
+                    if weight_model:
+                        x = create_weight_x(state, frame, history)
+                        weight = np.transpose(weight_model.predict_proba(x))
+                    
                     states.append(state)
                     samples.append(binary_sample)
                     log_probs.append(get_log_prob(binary_sample, frame, state.prior, weight))
             
-        if union or weight[0] != 1.0:
+        if union or weight_model or weight[0] != 1.0:
             for state in beam:
+                if weight_model:
+                    x = create_weight_x(state, frame, history)
+                    weight = np.transpose(weight_model.predict_proba(x))
+                        
                 for _, sample in itertools.islice(enumerate_samples(frame, state.prior,
                                                   weight=[0.0, 1.0] if union else weight), branch_factor):
                     binary_sample = np.zeros(88)
@@ -126,6 +145,34 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
                 pickle.dump(output, file, pickle.HIGHEST_PROTOCOL)
         
     return beam.get_top_state().get_piano_roll(), beam.get_top_state().get_priors()
+
+
+
+
+def create_weight_x(state, acoustic, history, pitches=range(88)):
+    """
+    Get the x input for the dynamic weighting model.
+    
+    Parameters
+    ==========
+    state : State
+        The state to examine for its piano roll and prior.
+        
+    acoustic : np.array
+        The acoustic prior for the frame.
+        
+    history : int
+        How many frames to save in the x data point. Defaults to 5.
+        
+    pitches : list
+        The pitches we want data points for. Defaults to [0:88] (all pitches).
+        
+    Returns
+    =======
+    x : np.ndarray
+    """
+    return np.hstack((state.get_piano_roll(min_length=history, max_length=history),
+                      np.reshape(acoustic, (88, -1)), np.reshape(state.prior, (88, -1))))[pitches]
 
 
 
@@ -245,6 +292,12 @@ if __name__ == '__main__':
     parser.add_argument("-u", "--union", help="Use the union sampling method.", action="store_true")
     parser.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
                         "Defaults to 0.5", type=float, default=0.5)
+    parser.add_argument("-wm", "--weight_model", help="Load the given sklearn model using pickle, to dynamically " +
+                        "set weights. Defaults to None, which uses the static weight from -w instead.",
+                        default=None)
+    
+    parser.add_argument("--history", help="The history length to use. Defaults to 5.",
+                        type=int, default=5)
     
     parser.add_argument("--max_len",type=str,help="test on the first max_len seconds of each text file. " +
                         "Anything other than a number will evaluate on whole files. Default is 30s.",
@@ -281,10 +334,16 @@ if __name__ == '__main__':
     model = Model(model_param)
     sess,_ = model.load(args.model, model_path=args.model)
     
+    # Load weight model
+    weight_model = None
+    if args.weight_model:
+        with open(args.weight_model, "rb") as file:
+            weight_model = pickle.load(file)
+    
     # Decode
     pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                         union=args.union, weight=[args.weight, 1 - args.weight], out=args.output,
-                        hash_length=args.hash)
+                        hash_length=args.hash, history=args.history, weight_model=weight_model)
     
     # Evaluate
     np.save("pr", pr)
