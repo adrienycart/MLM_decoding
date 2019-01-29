@@ -94,7 +94,7 @@ class Dataset:
 
     def walkdir(self,folder):
         for fn in os.listdir(folder):
-            if fn.endswith('.mid') and not fn.startswith('.'):
+            if (fn.endswith('.mid') or fn.endswith('.midi')) and not fn.startswith('.'):
                 yield fn
 
 
