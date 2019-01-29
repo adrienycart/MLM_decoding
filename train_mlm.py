@@ -21,6 +21,7 @@ parser.add_argument('-early_stop_epochs',type=int,default=100,help="stop trainin
 parser.add_argument('-lr',type=float,default=0.01,help="learning rate")
 parser.add_argument('-use_focal_loss',action='store_true',help="use focal loss instead of usual cross-entropy loss")
 
+
 args = parser.parse_args()
 
 if args.quant:
