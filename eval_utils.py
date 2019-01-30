@@ -184,13 +184,14 @@ def make_midi_from_roll(roll,fs):
             velocity=100, pitch=note, start=start, end=end)
         piano.notes.append(note)
     midi_data.instruments.append(piano)
+    return midi_data
 
 def save_midi(midi,dest):
     midi.write(dest)
 
 def synthesize_midi(midi,dest):
     # Requires fluidsynth and pyFluidSynth installed!!!
-    return midi_data.fluidsynth()
+    return midi.fluidsynth()
 
 def write_sound(sound,filename):
     sound = 16000*sound #increase gain
@@ -201,3 +202,21 @@ def write_sound(sound,filename):
        ssignal += wave.struct.pack('h',sound[i]) # transform to binary
     wave_write.writeframes(ssignal)
     wave_write.close()
+
+
+def play_audio(audio,from_sec=0):
+    """
+    Play some audio. Requires the :mod:`sounddevice` module.
+    Audio must be sampled at 44100 Hz.
+
+    Parameters
+    ----------
+    audio: numpy array
+        Audio samples
+    from_sec: float
+        Play start position in seconds
+    """
+
+    start_sample = int(round(from_sec*44100))
+    import sounddevice as sd
+    sd.play(audio[start_sample:], 44100)
