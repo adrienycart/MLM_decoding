@@ -275,6 +275,8 @@ def enumerate_samples(acoustic, language, weight=[0.5, 0.5]):
     v_0 = np.where(p > not_p)[0]
     l_0 = np.sum(np.log(np.maximum(p, not_p)))
     yield l_0, v_0
+    
+    v_0 = set(v_0)
 
     # Sort likelihoods by likelihood penalty for flipping
     L = np.abs(np.log(p / not_p))
@@ -284,16 +286,22 @@ def enumerate_samples(acoustic, language, weight=[0.5, 0.5]):
     # Num solves crash for duplicate likelihoods
     num = 1
     q = queue.PriorityQueue()
-    q.put((L_sorted[0], 0, np.array([0])))
+    q.put((L_sorted[0], 0, [0]))
 
     while not q.empty():
         l, _, v = q.get()
-        yield l_0 - l, np.setxor1d(v_0, R[v], assume_unique=True)
+        yield l_0 - l, list(v_0.symmetric_difference(R[v]))
 
         i = np.max(v)
         if i + 1 < len(L_sorted):
-            q.put((l + L_sorted[i + 1], num, np.append(v, i + 1)))
-            q.put((l + L_sorted[i + 1] - L_sorted[i], num+1, np.setxor1d(np.append(v, i + 1), [i])))
+            v.append(i + 1)
+            q.put((l + L_sorted[i + 1], num, v))
+            v = v.copy()
+            try:
+                v.remove(i)
+            except:
+                v.append(i)
+            q.put((l + L_sorted[i + 1] - L_sorted[i], num+1, v))
             num += 2
 
 
