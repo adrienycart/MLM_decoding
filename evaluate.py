@@ -36,8 +36,6 @@ weight.add_argument("-wm", "--weight_model", help="Load the given sklearn model 
                     "set weights. Defaults to None, which uses the static weight from -w instead.",
                     default=None)
 parser.add_argument("--hash", help="The hash length to use. Defaults to 10.", type=int, default=10)
-parser.add_argument("--history", help="The history length to use. Defaults to 5.",
-                    type=int, default=5)
 
 
 
@@ -47,6 +45,8 @@ if not (0 <= args.weight <= 1):
     print("Weight must be between 0 and 1.", file=sys.stderr)
     sys.exit(2)
 
+print('####################################')
+
 try:
     max_len = float(args.max_len)
     section = [0,max_len]
@@ -55,6 +55,19 @@ except:
     max_len = None
     section=None
     print(f"Evaluate on whole files")
+
+print(f"Step: {args.step}")
+print(f"Beam size: {args.beam}")
+print(f"Branching factor: {args.branch}")
+print(f"Hash size: {args.hash}")
+if args.weight_model is None:
+    print(f"Weight: {args.weight}")
+else:
+    print(f"Auto-weight: {args.weight_model}")
+print(f"Sampling union: {args.union}")
+
+print('####################################')
+
 
 note_range = [21,109]
 note_min = note_range[0]
@@ -98,7 +111,7 @@ for fn in os.listdir(folder):
         # Decode
         pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                             union=args.union, weight=[args.weight, 1 - args.weight], out=None,
-                            hash_length=args.hash, history=args.history, weight_model=weight_model)
+                            hash_length=args.hash, weight_model=weight_model,verbose=False)
         #pr = (data.input>0.5).astype(int)
 
         # Save output
@@ -129,4 +142,4 @@ P_n, R_n, F_n = np.mean(notes, axis=0)
 print(f"Averages: Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
 
 if not args.save is None:
-    pickle.dump(results,open(os.path.join(args.save), "wb"))
+    pickle.dump(results,open(os.path.join(args.save,'results.p'), "wb"))
