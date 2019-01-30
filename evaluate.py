@@ -111,7 +111,7 @@ for fn in os.listdir(folder):
         # Decode
         pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                             union=args.union, weight=[args.weight, 1 - args.weight], out=None,
-                            hash_length=args.hash, weight_model=weight_model)
+                            hash_length=args.hash, weight_model=weight_model,verbose=False)
         #pr = (data.input>0.5).astype(int)
 
         # Save output
