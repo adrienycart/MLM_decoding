@@ -90,7 +90,9 @@ sess,_ = model.load(args.model, model_path=args.model)
 weight_model = None
 if args.weight_model:
     with open(args.weight_model, "rb") as file:
-        weight_model = pickle.load(file)
+        weight_model_dict = pickle.load(file)
+        weight_model = weight_model_dict['model']
+        history = weight_model_dict['history']
 
 if not args.save is None:
     safe_mkdir(args.save)
@@ -111,7 +113,7 @@ for fn in os.listdir(folder):
         # Decode
         pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                             union=args.union, weight=[[args.weight], [1 - args.weight]], out=None,
-                            hash_length=args.hash, weight_model=weight_model,verbose=False)
+                            hash_length=args.hash, history=history, weight_model=weight_model,verbose=False)
         #pr = (data.input>0.5).astype(int)
 
         # Save output
@@ -131,7 +133,7 @@ for fn in os.listdir(folder):
         P_n,R_n,F_n = compute_eval_metrics_note(pr,target,min_dur=0.05)
 
         frames = np.vstack((frames, [P_f, R_f, F_f]))
-        notes = np.vstack((frames, [P_n, R_n, F_n]))
+        notes = np.vstack((notes, [P_n, R_n, F_n]))
 
         print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
 
