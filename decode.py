@@ -16,7 +16,7 @@ from mlm_training.model import Model, make_model_param
 
 
 def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.5], [0.5]],
-           hash_length=10, out=None, weight_model=None,verbose=True):
+           hash_length=10, out=None, history=5, weight_model=None, verbose=True):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
 
@@ -54,6 +54,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     out : string
         The directory in which to save the outputs, or None to not save anything. Defaults to None.
 
+    history : int
+        This history length to use for the weight_model. Defaults to 5.
+
     weight_model : sklearn.model
         The sklearn model to use to set dynamic weights for the models. Defaults to None, which uses
         the static weight of the weight parameter.
@@ -75,9 +78,6 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     if union:
         branch_factor = int(branch_factor / 2)
 
-    if weight_model:
-        history = weight_model.coef_.shape[1] - 2
-
     beam = Beam()
     beam.add_initial_state(model, sess)
 
@@ -90,7 +90,6 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         samples = []
         weights = []
         priors = []
-        lps = []
 
         if weight_model:
             X = np.vstack([create_weight_x(state, frame, history) for state in beam])
@@ -101,9 +100,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
 
         # Gather all computations to perform them batched
         # Acoustic sampling is done separately because the acoustic samples will be identical for every state.
-        if union or (not weight_model and weight[0] == 1.0):
+        if union or (not weight_model and weight[0][0] == 1.0):
             # If sampling method is acoustic (or union), we generate the same samples for every current hypothesis
-            for _, sample in itertools.islice(enumerate_samples(frame, beam.beam[0].prior, weight=[1.0, 0.0]), branch_factor):
+            for _, sample in itertools.islice(enumerate_samples(frame, beam.beam[0].prior, weight=[[1.0], [0.0]]), branch_factor):
                 binary_sample = np.zeros(88)
                 binary_sample[sample] = 1
 
@@ -118,22 +117,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
                     weights.append(weight_this)
                     samples.append(binary_sample)
 
-        if union or weight_model or weight[0] != 1.0:
-
-            #TODO: vectorize all what follows as much as possible:
-            # * weight_model.predict_proba
-            # * get_log_prob
-            #
-            # Ideas:
-            # * Create an X matrix that is the concatenation of create_weight_x for each state
-            #   --> divide by beam_size the number of calls to weight_model.predict_proba
-            # * Create a Sample matrix that is the concatenation of enumerate_samples for each weight
-            #   --> divide by branching_factor the number of calls to get_log_prob
-            # * Maybe even concatenate the Sample matrices for all Xs
-            #   --> divide by beam_size the number of calls to get_log_prob
-
+        if union or weight_model or weight[0][0] != 1.0:
             for i, state in enumerate(beam):
-                sample_weight = [0.0, 1.0] if union else weight
+                sample_weight = [[0.0], [1.0]] if union else weight
                 for _, sample in itertools.islice(enumerate_samples(frame, state.prior,
                                                   weight=sample_weight), branch_factor):
 
@@ -344,6 +330,7 @@ if __name__ == '__main__':
                         default=None)
     parser.add_argument("--hash", help="The hash length to use. Defaults to 10.",
                         type=int, default=10)
+    parser.add_argument("-v", "--verbose", help="Print frame status updates.", action="store_true")
 
     args = parser.parse_args()
 
@@ -377,12 +364,15 @@ if __name__ == '__main__':
     weight_model = None
     if args.weight_model:
         with open(args.weight_model, "rb") as file:
-            weight_model = pickle.load(file)
+            weight_model_dict = pickle.load(file)
+            weight_model = weight_model_dict['model']
+            history = weight_model_dict['history']
 
     # Decode
     pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                         union=args.union, weight=[[args.weight], [1 - args.weight]], out=args.output,
-                        hash_length=args.hash, weight_model=weight_model)
+                        hash_length=args.hash, history=history, weight_model=weight_model,
+                        verbose=args.verbose)
 
     # Evaluate
     np.save("pr", pr)

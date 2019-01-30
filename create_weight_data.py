@@ -13,7 +13,7 @@ from mlm_training.model import Model, make_model_param
 
 
 
-def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[0.5, 0.5],
+def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.5], [0.5]],
            hash_length=10, gt_only=False, history=5, min_diff=0.01):
     """
     Get the average ranks of the ground truth frame from decode.enumerate_samples().
@@ -90,7 +90,8 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
         
         states = []
         samples = []
-        log_probs = []
+        weights = []
+        priors = []
         
         # Used for union sampling
         unique_samples = []
@@ -98,7 +99,8 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
         # Get data
         if frame_num != 0:
             for state in beam:
-                pitches = np.argwhere(1 - np.isclose(np.squeeze(state.prior), np.squeeze(frame), rtol=0.0, atol=min_diff))[:,0]
+                pitches = np.argwhere(1 - np.isclose(np.squeeze(state.prior), np.squeeze(frame),
+                                                     rtol=0.0, atol=min_diff))[:,0]
                 if len(pitches) > 0:
                     x = np.vstack((x, decode.create_weight_x(state, frame, history, pitches=pitches)))
                     y = np.append(y, gt_frame[pitches])
@@ -108,13 +110,14 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
         if gt_only:
             states = [beam.get_top_state()]
             samples = [gt_frame]
-            log_probs = [decode.get_log_prob(gt_frame, frame, states[0].prior, weight)]
+            weights = [[[1.0], [0.0]]]
+            priors = [np.squeeze(states[0].prior)]
             
         else:
-            if union or weight[0] == 1.0:
+            if union or weight[0][0] == 1.0:
                 # If sampling method is acoustic (or union), we generate the same samples for every current hypothesis
                 for _, sample in itertools.islice(decode.enumerate_samples(frame, beam.beam[0].prior,
-                                                  weight=[1.0, 0.0]), branch_factor):
+                                                  weight=[[1.0], [0.0]]), branch_factor):
                     binary_sample = np.zeros(88)
                     binary_sample[sample] = 1
 
@@ -122,34 +125,43 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
                     if union:
                         unique_samples.append(list(binary_sample))
 
-                    for state in beam:
+                    for i, state in enumerate(beam):
+                        weight_this = weight
                         states.append(state)
+                        priors.append(np.squeeze(state.prior))
+                        weights.append(weight_this)
                         samples.append(binary_sample)
-                        log_probs.append(decode.get_log_prob(binary_sample, frame, state.prior, weight))
 
-            if union or weight[0] != 1.0:
-                for state in beam:
+            if union or weight[0][0] != 1.0:
+                for i, state in enumerate(beam):
+                    sample_weight = [[0.0], [1.0]] if union else weight
                     for _, sample in itertools.islice(decode.enumerate_samples(frame, state.prior,
-                                                      weight=[0.0, 1.0] if union else weight), branch_factor):
+                                                      weight=sample_weight), branch_factor):
+
                         binary_sample = np.zeros(88)
                         binary_sample[sample] = 1
 
                         # Overlap with acoustic sample in union case. Skip this sample.
                         if not (union and list(binary_sample) in unique_samples):
+                            weight_this = weight
+
+                            priors.append(np.squeeze(state.prior))
                             states.append(state)
                             samples.append(binary_sample)
-                            log_probs.append(decode.get_log_prob(binary_sample, frame, state.prior, weight))
-                
+                            weights.append(weight_this)
+
+        log_probs = decode.get_log_prob(np.array(samples), np.array(frame), np.array(priors), np.array(weights))
+
         np_samples = np.zeros((len(samples), 1, 88))
         for i, sample in enumerate(samples):
             np_samples[i, 0, :] = sample
-        
+
         hidden_states, priors = model.run_one_step([s.hidden_state for s in states], np_samples, sess)
-        
+
         beam = Beam()
         for hidden_state, prior, log_prob, state, sample in zip(hidden_states, priors, log_probs, states, samples):
             beam.add(state.transition(sample, log_prob, hidden_state, prior))
-        
+
         beam.cut_to_size(beam_size, min(hash_length, frame_num + 1))
         
     return x, y
@@ -240,7 +252,7 @@ if __name__ == '__main__':
 
             # Decode
             x, y = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                                   union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash,
+                                   union=args.union, weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
                                    gt_only=args.gt, history=args.history, min_diff=args.min_diff)
             
             X = np.vstack((X, x))
