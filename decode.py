@@ -15,7 +15,7 @@ from mlm_training.model import Model, make_model_param
 
 
 def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.5], [0.5]],
-           hash_length=10, out=None, history=5, weight_model=None):
+           hash_length=10, out=None, weight_model=None):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
 
@@ -53,9 +53,6 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     out : string
         The directory in which to save the outputs, or None to not save anything. Defaults to None.
 
-    history : int
-        How many frames to save in the x data point. Defaults to 5.
-
     weight_model : sklearn.model
         The sklearn model to use to set dynamic weights for the models. Defaults to None, which uses
         the static weight of the weight parameter.
@@ -73,6 +70,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     """
     if union:
         branch_factor = int(branch_factor / 2)
+
+    if weight_model:
+        history = weight_model.coef_.shape[1] - 2
 
     beam = Beam()
     beam.add_initial_state(model, sess)
@@ -324,9 +324,6 @@ if __name__ == '__main__':
                         "set weights. Defaults to None, which uses the static weight from -w instead.",
                         default=None)
 
-    parser.add_argument("--history", help="The history length to use. Defaults to 5.",
-                        type=int, default=5)
-
     parser.add_argument("--max_len",type=str,help="test on the first max_len seconds of each text file. " +
                         "Anything other than a number will evaluate on whole files. Default is 30s.",
                         default=30)
@@ -371,7 +368,7 @@ if __name__ == '__main__':
     # Decode
     pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                         union=args.union, weight=[[args.weight], [1 - args.weight]], out=args.output,
-                        hash_length=args.hash, history=args.history, weight_model=weight_model)
+                        hash_length=args.hash, weight_model=weight_model)
 
     # Evaluate
     np.save("pr", pr)
