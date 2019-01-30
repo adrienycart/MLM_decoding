@@ -14,7 +14,7 @@ from state import State
 from mlm_training.model import Model, make_model_param
 
 
-def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[0.5, 0.5],
+def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.5], [0.5]],
            hash_length=10, out=None, history=5, weight_model=None):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
@@ -84,7 +84,13 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
 
         states = []
         samples = []
-        log_probs = []
+        weights = []
+        priors = []
+        lps = []
+        
+        if weight_model:
+            X = np.vstack([create_weight_x(state, frame, history) for state in beam])
+            weights_all = np.transpose(weight_model.predict_proba(X)) # 2 x len(X) matrix
 
         # Used for union sampling
         unique_samples = []
@@ -101,14 +107,12 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
                 if union:
                     unique_samples.append(list(binary_sample))
 
-                for state in beam:
-                    if weight_model:
-                        x = create_weight_x(state, frame, history)
-                        weight = np.transpose(weight_model.predict_proba(x))
-
+                for i, state in enumerate(beam):
+                    weight_this = weights_all[:, i * 88 : (i + 1) * 88] if weight_model else weight
                     states.append(state)
+                    priors.append(np.squeeze(state.prior))
+                    weights.append(weight_this)
                     samples.append(binary_sample)
-                    log_probs.append(get_log_prob(binary_sample, frame, state.prior, weight))
 
         if union or weight_model or weight[0] != 1.0:
 
@@ -123,24 +127,26 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
             #   --> divide by branching_factor the number of calls to get_log_prob
             # * Maybe even concatenate the Sample matrices for all Xs
             #   --> divide by beam_size the number of calls to get_log_prob
-
-
-            for state in beam:
-                if weight_model:
-                    x = create_weight_x(state, frame, history)
-                    weight = np.transpose(weight_model.predict_proba(x))
-
+            
+            for i, state in enumerate(beam):
+                sample_weight = [0.0, 1.0] if union else weight
                 for _, sample in itertools.islice(enumerate_samples(frame, state.prior,
-                                                  weight=[0.0, 1.0] if union else weight), branch_factor):
+                                                  weight=sample_weight), branch_factor):
+
                     binary_sample = np.zeros(88)
                     binary_sample[sample] = 1
 
                     # Overlap with acoustic sample in union case. Skip this sample.
                     if not (union and list(binary_sample) in unique_samples):
+                        weight_this = weights_all[:, i * 88 : (i + 1) * 88] if weight_model else weight
+                        
+                        priors.append(np.squeeze(state.prior))
                         states.append(state)
                         samples.append(binary_sample)
-                        log_probs.append(get_log_prob(binary_sample, frame, state.prior, weight))
+                        weights.append(weight_this)
 
+        log_probs = get_log_prob(np.array(samples), np.array(frame), np.array(priors), np.array(weights))
+        
         np_samples = np.zeros((len(samples), 1, 88))
         for i, sample in enumerate(samples):
             np_samples[i, 0, :] = sample
@@ -193,35 +199,43 @@ def create_weight_x(state, acoustic, history, pitches=range(88)):
 
 def get_log_prob(sample, acoustic, language, weight):
     """
-    Get the log probability of the given sample given the priors.
+    Get the log probability of a set of samples given the priors and weights.
 
     Parameters
     ==========
-    sample : vector
-        An 88-length binarized vector, containing pitch detections.
+    sample : np.ndarray
+        An N x 88 matrix representing N possible samples.
 
-    acoustic : vector
+    acoustic : np.array
         An 88-length array, containing the probability of each pitch being present,
         according to the acoustic model.
 
-    language : vector
-        An 88-length array, containing the probability of each pitch being present,
-        according to the language model.
+    language : np.ndarray
+        An N x 88 matrix containing the probability of each pitch being present,
+        according to each sampled state.
 
-    weight : list
-        A length-2 list, whose first element is the weight for the acoustic model and whose 2nd
-        element is the weight for the language model. This list should be normalized to sum to 1.
-        Defaults to [0.5, 0.5].
+    weight : np.ndarray
+        An N x 2 x (1 or 88) size tensor, whose first index corresponds to each of the N samples,
+        second index corresponds to the prior (index 0 for acoustic prior, index 1 for language prior),
+        and whose third dimension is either length 1 (when each pitch has the same prior) or length
+        88 (when each pitch has a different prior).
 
     Returns
     =======
-    log_prob : float
-        The log probability of the given sample, as a weighted sum of p(. | acoustic) and p(. | language).
+    log_prob : np.array
+        The log probability of each given sample, as a weighted sum of p(. | acoustic) and p(. | language).
     """
-    p = np.squeeze(weight[0] * acoustic + weight[1] * language)
-    not_p = np.squeeze(weight[0] * (1 - acoustic) + weight[1] * (1 - language))
-
-    return np.sum(np.where(sample == 1, np.log(p), np.log(not_p)))
+    weight_acoustic = np.squeeze(weight[:, 0, :]) # N or N x 88
+    weight_language = np.squeeze(weight[:, 1, :]) # N or N x 88
+    
+    if np.ndim(weight_acoustic) == 1:
+        p = np.outer(weight_acoustic, acoustic) + language * np.reshape(weight_language, (-1, 1))
+        not_p = np.outer(weight_acoustic, (1 - acoustic)) + (1 - language) * np.reshape(weight_language, (-1, 1))
+    else:
+        p = weight_acoustic * acoustic + weight_language * language # N x 88
+        not_p = weight_acoustic * (1 - acoustic) + weight_language * (1 - language) # N x 88
+    
+    return np.sum(np.where(sample == 1, np.log(p), np.log(not_p)), axis=1)
 
 
 
@@ -356,7 +370,7 @@ if __name__ == '__main__':
 
     # Decode
     pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                        union=args.union, weight=[args.weight, 1 - args.weight], out=args.output,
+                        union=args.union, weight=[[args.weight], [1 - args.weight]], out=args.output,
                         hash_length=args.hash, history=args.history, weight_model=weight_model)
 
     # Evaluate
