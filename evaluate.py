@@ -58,8 +58,8 @@ except:
 
 print(f"Step: {args.step}")
 print(f"Beam size: {args.beam}")
-print(f"Branching factor: {args.k}")
-print(f"Hash size: {args.h}")
+print(f"Branching factor: {args.branch}")
+print(f"Hash size: {args.hash}")
 if args.weight_model is None:
     print(f"Weight: {args.weight}")
 else:
