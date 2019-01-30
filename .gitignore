@@ -7,6 +7,8 @@ venv/
 framewise_2016/
 tests.py
 example_stepwise_prediction.py
+results/
+*.pkl
 
 
 # Latex
