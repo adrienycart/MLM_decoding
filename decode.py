@@ -75,7 +75,8 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         branch_factor = int(branch_factor / 2)
 
     if weight_model:
-        history = weight_model.coef_.shape[1] - 2
+        #history = weight_model.coef_.shape[1] - 2
+        history = 5
 
     beam = Beam()
     beam.add_initial_state(model, sess)
@@ -100,9 +101,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
 
         # Gather all computations to perform them batched
         # Acoustic sampling is done separately because the acoustic samples will be identical for every state.
-        if union or (not weight_model and weight[0] == 1.0):
+        if union or (not weight_model and weight[0][0] == 1.0):
             # If sampling method is acoustic (or union), we generate the same samples for every current hypothesis
-            for _, sample in itertools.islice(enumerate_samples(frame, beam.beam[0].prior, weight=[1.0, 0.0]), branch_factor):
+            for _, sample in itertools.islice(enumerate_samples(frame, beam.beam[0].prior, weight=[[1.0], [0.0]]), branch_factor):
                 binary_sample = np.zeros(88)
                 binary_sample[sample] = 1
 
@@ -117,22 +118,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
                     weights.append(weight_this)
                     samples.append(binary_sample)
 
-        if union or weight_model or weight[0] != 1.0:
-
-            #TODO: vectorize all what follows as much as possible:
-            # * weight_model.predict_proba
-            # * get_log_prob
-            #
-            # Ideas:
-            # * Create an X matrix that is the concatenation of create_weight_x for each state
-            #   --> divide by beam_size the number of calls to weight_model.predict_proba
-            # * Create a Sample matrix that is the concatenation of enumerate_samples for each weight
-            #   --> divide by branching_factor the number of calls to get_log_prob
-            # * Maybe even concatenate the Sample matrices for all Xs
-            #   --> divide by beam_size the number of calls to get_log_prob
-
+        if union or weight_model or weight[0][0] != 1.0:
             for i, state in enumerate(beam):
-                sample_weight = [0.0, 1.0] if union else weight
+                sample_weight = [[0.0], [1.0]] if union else weight
                 for _, sample in itertools.islice(enumerate_samples(frame, state.prior,
                                                   weight=sample_weight), branch_factor):
 
