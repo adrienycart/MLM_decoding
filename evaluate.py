@@ -129,4 +129,4 @@ P_n, R_n, F_n = np.mean(notes, axis=0)
 print(f"Averages: Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
 
 if not args.save is None:
-    pickle.dump(results,open(os.path.join(args.save), "wb"))
+    pickle.dump(results,open(os.path.join(args.save,'results.p'), "wb"))
