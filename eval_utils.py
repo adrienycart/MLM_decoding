@@ -164,3 +164,40 @@ def get_best_thresh(inputs, targets,lengths,model,save_path,verbose=False,max_th
         print("Best thresh : "+str(max_thresh2))
 
     return max_thresh2, max_value2
+
+
+#####################################################
+#### To synthesize some pianorolls
+#####################################################
+
+def make_midi_from_roll(roll,fs):
+    #Outputs the waveform corresponding to the pianoroll
+
+    pitches, intervals = get_notes_intervals(roll,fs)
+
+    midi_data = pm.PrettyMIDI()
+    piano_program = pm.instrument_name_to_program('Acoustic Grand Piano')
+    piano = pm.Instrument(program=piano_program)
+
+    for note,(start,end) in zip(pitches,intervals):
+        note = pm.Note(
+            velocity=100, pitch=note, start=start, end=end)
+        piano.notes.append(note)
+    midi_data.instruments.append(piano)
+
+def save_midi(midi,dest):
+    midi.write(dest)
+
+def synthesize_midi(midi,dest):
+    # Requires fluidsynth and pyFluidSynth installed!!!
+    return midi_data.fluidsynth()
+
+def write_sound(sound,filename):
+    sound = 16000*sound #increase gain
+    wave_write = wave.open(filename,'w')
+    wave_write.setparams([1,2,44100,10,'NONE','noncompressed'])
+    ssignal = ''
+    for i in range(len(sound)):
+       ssignal += wave.struct.pack('h',sound[i]) # transform to binary
+    wave_write.writeframes(ssignal)
+    wave_write.close()
