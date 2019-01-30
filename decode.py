@@ -288,7 +288,7 @@ def enumerate_samples(acoustic, language, weight=[0.5, 0.5]):
 
     while not q.empty():
         l, _, v = q.get()
-        yield l_0 - l, np.setxor1d(v_0, R[v])
+        yield l_0 - l, np.setxor1d(v_0, R[v], assume_unique=True)
 
         i = np.max(v)
         if i + 1 < len(L_sorted):
