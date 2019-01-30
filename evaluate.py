@@ -9,6 +9,7 @@ import argparse
 from datetime import datetime
 import sys
 import pickle
+import warnings
 
 import tensorflow as tf
 import pretty_midi as pm
@@ -68,6 +69,9 @@ print(f"Sampling union: {args.union}")
 
 print('####################################')
 
+
+
+warnings.filterwarnings("ignore", message="tick should be an int.")
 
 note_range = [21,109]
 note_min = note_range[0]

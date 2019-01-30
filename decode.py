@@ -6,6 +6,7 @@ import pretty_midi
 import sys
 import pickle
 import os
+import warnings
 
 import dataMaps
 import eval_utils
@@ -264,7 +265,7 @@ def enumerate_samples(acoustic, language, weight=[0.5, 0.5]):
     v_0 = np.where(p > not_p)[0]
     l_0 = np.sum(np.log(np.maximum(p, not_p)))
     yield l_0, v_0
-    
+
     v_0 = set(v_0)
 
     # Sort likelihoods by likelihood penalty for flipping
@@ -336,6 +337,8 @@ if __name__ == '__main__':
     if not (0 <= args.weight <= 1):
         print("Weight must be between 0 and 1.", file=sys.stderr)
         sys.exit(1)
+
+    warnings.filterwarnings("ignore", message="tick should be an int.")
 
     try:
         max_len = float(args.max_len)
