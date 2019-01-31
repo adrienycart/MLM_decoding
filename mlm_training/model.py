@@ -463,10 +463,12 @@ class Model:
         else:
             variables_to_initialize = sess.run(tf.report_uninitialized_variables())
             var_list = []
+
             for var in tf.global_variables():
                 for var_to_init in variables_to_initialize:
-                    if var_to_init in var.name:
+                    if var_to_init.decode("utf-8")  in var.name:
                         var_list += [var]
+            print(var_list)
             init = tf.variables_initializer(var_list)
             sess.run(init)
 
