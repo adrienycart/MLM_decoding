@@ -20,7 +20,7 @@ parser.add_argument('-epochs',type=int,default=1000,help="maximum number of epoc
 parser.add_argument('-early_stop_epochs',type=int,default=100,help="stop training after this number of epochs without improvement on valid set")
 parser.add_argument('-lr',type=float,default=0.01,help="learning rate")
 parser.add_argument('-use_focal_loss',action='store_true',help="use focal loss instead of usual cross-entropy loss")
-
+parser.add_argument('-resume',action='store_true',help="resume training from latest checkpoint in save_path")
 
 args = parser.parse_args()
 
@@ -76,7 +76,11 @@ safe_mkdir(log_path)
 
 model = make_model_from_dataset(data,model_param)
 model.print_params()
-model.train(data,save_path=save_path,train_param=train_param)
+
+if args.resume:
+    model.resume_training(save_path,data,save_path,train_param)
+else:
+    model.train(data,save_path=save_path,train_param=train_param)
 
 
 
