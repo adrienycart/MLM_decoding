@@ -1,5 +1,6 @@
 import numpy as np
 import mir_eval
+import pretty_midi as pm
 
 def filter_short_notes(data,thresh=1):
     #Removes all notes shorter than thresh
@@ -181,7 +182,7 @@ def make_midi_from_roll(roll,fs):
 
     for note,(start,end) in zip(pitches,intervals):
         note = pm.Note(
-            velocity=100, pitch=note, start=start, end=end)
+            velocity=100, pitch=note+21, start=start, end=end)
         piano.notes.append(note)
     midi_data.instruments.append(piano)
     return midi_data
