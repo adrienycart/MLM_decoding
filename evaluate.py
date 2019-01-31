@@ -91,15 +91,23 @@ model = Model(model_param)
 sess,_ = model.load(args.model, model_path=args.model)
 
 # Load weight model
-history = None
 weight_model = None
+history = None
+features = None
+is_weight = None
 if args.weight_model:
     with open(args.weight_model, "rb") as file:
         weight_model_dict = pickle.load(file)
         weight_model = weight_model_dict['model']
         history = weight_model_dict['history']
-else:
-    history=None
+        if 'features' in weight_model_dict:
+            features = weight_model_dict['features']
+        else:
+            features = False
+        if 'weight' in weight_model_dict:
+            is_weight = weight_model_dict['weight']
+        else:
+            is_weight = True
 
 if not args.save is None:
     safe_mkdir(args.save)
@@ -118,9 +126,10 @@ for fn in os.listdir(folder):
         data.make_from_file(filename,args.step,section)
 
         # Decode
-        pr, priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
+        pr, priors, weights = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                             union=args.union, weight=[[args.weight], [1 - args.weight]], out=None,
-                            hash_length=args.hash, history=history, weight_model=weight_model, verbose=False)
+                            hash_length=args.hash, history=history, weight_model=weight_model, verbose=False,
+                            features=features, is_weight=is_weight)
         #pr = (data.input>0.5).astype(int)
 
         # Save output

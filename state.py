@@ -16,11 +16,12 @@ class State:
             The LSTM state associated with this State.
             
         prior : vector
-            An 88-length vector, representing the state's for the next frame's detections.
+            An 88-length vector, representing the state's prior for the next frame's detections.
         """
         self.hidden_state = hidden_state
         self.prior = prior
         
+        self.weights = []
         self.sample = []
         self.log_prob = 0.0
         
@@ -28,7 +29,7 @@ class State:
         self.prev = None
     
     
-    def transition(self, sample, log_prob, hidden_state, prior):
+    def transition(self, sample, log_prob, hidden_state, prior, weights):
         """
         Get the resulting state from the given transition, without altering this state.
         
@@ -46,6 +47,9 @@ class State:
         prior : np.array
             An 88-length probabilistic array containing this state's model's prior for the next frame.
             
+        weights : np.array
+            An 88-length probabilistic array containing the state's acoustic weights for the next frame.
+            
         Returns
         =======
         state : State
@@ -55,9 +59,29 @@ class State:
         state.log_prob = self.log_prob + log_prob
         
         state.sample = sample
+        state.weights = np.repeat(np.array(weights), 88) if len(weights) == 0 else weights
         state.num = self.num + 1
         state.prev = self
         return state
+    
+    
+    def get_weights(self):
+        """
+        Get the weights of this State from each frame.
+        
+        Returns
+        =======
+        weights : np.matrix
+            An 88 x T matrix containing the weights of this State at each frame.
+        """
+        weights = np.zeros((88, self.num))
+        
+        state = self
+        for i in range(self.num):
+            weights[:, self.num - 1 - i] = state.weights
+            state = state.prev
+            
+        return weights
         
         
     def get_priors(self):
@@ -98,8 +122,8 @@ class State:
         priors : np.matrix
             An 88 x max(min_length, min(T, max_length)) binary matrix containing the pitch detections of this State.
         """
-        length = min(self.num, max_length) if max_length else self.num
-        length = max(min_length, length) if min_length else length
+        length = min(self.num, max_length) if max_length is not None else self.num
+        length = max(min_length, length) if min_length is not None else length
         piano_roll = np.zeros((88, length))
         
         state = self

@@ -14,7 +14,7 @@ from mlm_training.model import Model, make_model_param
 
 
 def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.5], [0.5]],
-           hash_length=10, gt_only=False, history=5, min_diff=0.01):
+           hash_length=10, gt_only=False, history=5, min_diff=0.01, features=False):
     """
     Get the average ranks of the ground truth frame from decode.enumerate_samples().
     
@@ -62,6 +62,9 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
     min_diff : float
         The minimum difference (between language and acoustic) to save a data point. Defaults to 0.01.
         
+    features : boolean
+        Whether to use features in the weight_model's data points. Defaults to False.
+        
     
     Returns
     =======
@@ -74,7 +77,7 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
     if union:
         branch_factor = int(branch_factor / 2)
     
-    x = np.zeros((0, history + 2))
+    x = None
     y = np.zeros(0)
     
     beam = Beam()
@@ -83,9 +86,11 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
     gt = np.transpose(gt)
     ranks = []
     
-    for frame_num, frame in enumerate(np.transpose(acoustic)):
+    acoustic = np.transpose(acoustic)
+    
+    for frame_num, frame in enumerate(acoustic):
         if frame_num % 20 == 0:
-            print(str(frame_num) + " / " + str(acoustic.shape[1]))
+            print(str(frame_num) + " / " + str(acoustic.shape[0]))
         gt_frame = gt[frame_num, :]
         
         states = []
@@ -97,13 +102,16 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
         unique_samples = []
         
         # Get data
-        if frame_num != 0:
-            for state in beam:
-                pitches = np.argwhere(1 - np.isclose(np.squeeze(state.prior), np.squeeze(frame),
-                                                     rtol=0.0, atol=min_diff))[:,0]
-                if len(pitches) > 0:
-                    x = np.vstack((x, decode.create_weight_x(state, frame, history, pitches=pitches)))
-                    y = np.append(y, gt_frame[pitches])
+        for state in beam:
+            pitches = np.argwhere(1 - np.isclose(np.squeeze(state.prior), np.squeeze(frame),
+                                                 rtol=0.0, atol=min_diff))[:,0] if min_diff > 0 else np.arange(88)
+            if len(pitches) > 0:
+                if x is not None:
+                    x = np.vstack((x, decode.create_weight_x(state, acoustic, frame_num, history, pitches=pitches,
+                                                             features=features)))
+                else:
+                    x = decode.create_weight_x(state, acoustic, frame_num, history, pitches=pitches, features=features)
+                y = np.append(y, gt_frame[pitches])
         
         # Gather all computations to perform them batched
         # Acoustic sampling is done separately because the acoustic samples will be identical for every state.
@@ -159,8 +167,8 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
         hidden_states, priors = model.run_one_step([s.hidden_state for s in states], np_samples, sess)
 
         beam = Beam()
-        for hidden_state, prior, log_prob, state, sample in zip(hidden_states, priors, log_probs, states, samples):
-            beam.add(state.transition(sample, log_prob, hidden_state, prior))
+        for hidden_state, prior, log_prob, state, sample, w in zip(hidden_states, priors, log_probs, states, samples, weights):
+            beam.add(state.transition(sample, log_prob, hidden_state, prior, w))
 
         beam.cut_to_size(beam_size, min(hash_length, frame_num + 1))
         
@@ -210,6 +218,8 @@ if __name__ == '__main__':
     
     parser.add_argument("--gt", help="Transition on ground truth samples only.", action="store_true")
     
+    parser.add_argument("--features", help="Use features in the x data points.", action="store_true")
+    
     args = parser.parse_args()
         
     if not (0 <= args.weight <= 1):
@@ -240,9 +250,9 @@ if __name__ == '__main__':
         # Decode
         X, Y = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                                union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash,
-                               gt_only=args.gt, history=args.history, min_diff=args.min_diff)
+                               gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff)
     else:
-        X = np.zeros((0, args.history + 2))
+        X = None
         Y = np.zeros(0)
         
         for file in glob.glob(os.path.join(args.MIDI, "*.mid")):
@@ -253,9 +263,12 @@ if __name__ == '__main__':
             # Decode
             x, y = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                                    union=args.union, weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
-                                   gt_only=args.gt, history=args.history, min_diff=args.min_diff)
+                                   gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff)
             
-            X = np.vstack((X, x))
+            if X is not None:
+                X = np.vstack((X, x))
+            else:
+                X = x
             Y = np.append(Y, y)
     
     print(X.shape)
