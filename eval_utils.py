@@ -43,6 +43,7 @@ def get_notes_intervals(data,fs):
         # print pitch1, pitch2
         # print onset, offset
         assert pitch1 == pitch2
+        # Add +1 because pitches cannot be equal to zeros for evaluation
         pitches += [pitch1+1]
         if fs is None:
             intervals += [[onset, offset]]
@@ -182,10 +183,11 @@ def make_midi_from_roll(roll,fs):
 
     for note,(start,end) in zip(pitches,intervals):
         note = pm.Note(
-            velocity=100, pitch=note+21, start=start, end=end)
+            velocity=100, pitch=note+20, start=start, end=end) #Note +20 and not 21 because get_notes_intervals adds +1
         piano.notes.append(note)
     midi_data.instruments.append(piano)
     return midi_data
+
 
 def save_midi(midi,dest):
     midi.write(dest)
