@@ -78,7 +78,8 @@ model = make_model_from_dataset(data,model_param)
 model.print_params()
 
 if args.resume:
-    model.resume_training(save_path,data,save_path,train_param)
+    save_mkdir(os.path.join(save_path,'resume'))
+    model.resume_training(save_path,data,os.path.join(save_path,'resume'),train_param)
 else:
     model.train(data,save_path=save_path,train_param=train_param)
 
