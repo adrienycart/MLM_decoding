@@ -98,6 +98,8 @@ if args.weight_model:
         weight_model_dict = pickle.load(file)
         weight_model = weight_model_dict['model']
         history = weight_model_dict['history']
+else:
+    history=None
 
 if not args.save is None:
     safe_mkdir(args.save)

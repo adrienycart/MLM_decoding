@@ -164,3 +164,59 @@ def get_best_thresh(inputs, targets,lengths,model,save_path,verbose=False,max_th
         print("Best thresh : "+str(max_thresh2))
 
     return max_thresh2, max_value2
+
+
+#####################################################
+#### To synthesize some pianorolls
+#####################################################
+
+def make_midi_from_roll(roll,fs):
+    #Outputs the waveform corresponding to the pianoroll
+
+    pitches, intervals = get_notes_intervals(roll,fs)
+
+    midi_data = pm.PrettyMIDI()
+    piano_program = pm.instrument_name_to_program('Acoustic Grand Piano')
+    piano = pm.Instrument(program=piano_program)
+
+    for note,(start,end) in zip(pitches,intervals):
+        note = pm.Note(
+            velocity=100, pitch=note, start=start, end=end)
+        piano.notes.append(note)
+    midi_data.instruments.append(piano)
+    return midi_data
+
+def save_midi(midi,dest):
+    midi.write(dest)
+
+def synthesize_midi(midi,dest):
+    # Requires fluidsynth and pyFluidSynth installed!!!
+    return midi.fluidsynth()
+
+def write_sound(sound,filename):
+    sound = 16000*sound #increase gain
+    wave_write = wave.open(filename,'w')
+    wave_write.setparams([1,2,44100,10,'NONE','noncompressed'])
+    ssignal = ''
+    for i in range(len(sound)):
+       ssignal += wave.struct.pack('h',sound[i]) # transform to binary
+    wave_write.writeframes(ssignal)
+    wave_write.close()
+
+
+def play_audio(audio,from_sec=0):
+    """
+    Play some audio. Requires the :mod:`sounddevice` module.
+    Audio must be sampled at 44100 Hz.
+
+    Parameters
+    ----------
+    audio: numpy array
+        Audio samples
+    from_sec: float
+        Play start position in seconds
+    """
+
+    start_sample = int(round(from_sec*44100))
+    import sounddevice as sd
+    sd.play(audio[start_sample:], 44100)

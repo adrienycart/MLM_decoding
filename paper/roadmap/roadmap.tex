@@ -104,9 +104,9 @@ We expect to see no improvement, maybe even a decrease in performance from using
 We will compare 3 kinds of timesteps for the language model decoding:
 
 \begin{enumerate}
-\item 40ms timesteps, similar to \citep{sigtia2016end} (Kelz's uses a framerate of 25 fps).
-\item 16th-note timesteps, as recommended in \citep{Ycart2017}
-\item event timesteps, as in \citep{app8030470}
+\item \emph{time}: 40ms timesteps, similar to \citep{sigtia2016end} (Kelz's uses a framerate of 25 fps).
+\item \emph{quant}:16th-note timesteps, as recommended in \citep{Ycart2017}
+\item \emph{event}: event timesteps, as in \citep{app8030470}
 \end{enumerate}
 
 In this first experiment, we will use rhythm ground truth annotations from A-MAPS for 16th note timesteps, and ground-truth onset annotations for event timesteps.
@@ -214,6 +214,19 @@ from all candidates that are identical in the previous $M$ frames, we only keep 
 
 
 \section{Evaluation}
+
+\subsection{Baseline}
+
+We will compare our system to various baselines:
+
+\begin{itemize}
+\item Simple threshold at $0.5$
+\item Threshold + median filtering
+\item HMM smoothing \citep{Poliner2006}
+\end{itemize}
+
+When using \emph{quant} and \emph{event}, the output of our system will be converted back to \emph{time} timesteps (40ms).
+For each baseline system, we will also report the performance of the system using 16th-note quantisation as a post processing step, for fair comparison with \emph{quant} timesteps.
 
 \subsection{Benchmark evaluation}
 
