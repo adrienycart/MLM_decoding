@@ -110,7 +110,8 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
             weights_all = np.transpose(weight_model.predict_proba(X)) if is_weight else np.zeros((2, len(X)))
             # len(X) array
             priors_all = np.squeeze(weight_model.predict_proba(X)[:, 1]) if not is_weight else np.zeros(len(X))
-            p = []
+            if not is_weight:
+                p = []
 
         # Used for union sampling
         unique_samples = []
@@ -154,10 +155,11 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
                         states.append(state)
                         samples.append(binary_sample)
                         weights.append(weight_this)
-                        if priors_all is not None:
+                        if p is not None:
                             p.append(prior_this)
 
-        log_probs = get_log_prob(np.array(samples), np.array(frame), np.array(priors), np.array(weights), p=np.array(p))
+        log_probs = get_log_prob(np.array(samples), np.array(frame), np.array(priors), np.array(weights),
+                                 p=None if p is None else np.array(p))
 
         np_samples = np.zeros((len(samples), 1, 88))
         for i, sample in enumerate(samples):
