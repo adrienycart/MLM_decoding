@@ -460,7 +460,7 @@ if __name__ == '__main__':
 
     parser.add_argument("-u", "--union", help="Use the union sampling method.", action="store_true")
     parser.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
-                        "Defaults to 0.5", type=float, default=0.5)
+                        "Defaults to 0.8", type=float, default=0.8)
     parser.add_argument("-wm", "--weight_model", help="Load the given sklearn model using pickle, to dynamically " +
                         "set weights. Defaults to None, which uses the static weight from -w instead.",
                         default=None)
