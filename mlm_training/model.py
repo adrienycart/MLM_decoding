@@ -29,6 +29,7 @@ class Model:
         self._seq_lens = None
         self._labels = None
         self._thresh = None
+        self._sched_samp_p = None
         self._gamma = None
 
         self.initial_state = None
@@ -37,6 +38,7 @@ class Model:
         self._prediction = None
         self._pred_sigm = None
         self._last_pred_sigm = None
+        self._prediction_sched_samp = None
         self._pred_thresh = None
         self._cross_entropy = None
         self._cross_entropy2 = None
@@ -192,6 +194,43 @@ class Model:
             self._seq_lens = seq_len
         return self._seq_lens
 
+    @property
+    def sched_samp_p(self):
+        """
+        Placeholder for scheduled sampling probability
+        """
+        if self._sched_samp_p is None:
+            suffix = self.suffix
+            sched_samp_p = tf.placeholder(shape=[],name="sched_samp_p"+suffix)
+            self._sched_samp_p = sched_samp_p
+        return self._sched_samp_p
+
+    @property
+    def inputs_sched_samp(self):
+        """
+        Remplace some inputs with sampled values
+        """
+        if self._inputs_sched_samp is None:
+
+            prediction_estimates = tf.stop_gradient(self.pred_sigm)
+            sched_samp_p = self.sched_samp_p
+
+            #pred is : Batch size, n_steps, n_notes
+            distrib_indices = tf.distributions.Bernoulli(probs=sched_samp_p,type=tf.bool)
+            sample_indices = distrib_indices.sample(shape=tf.get_shape(tf.prediction_estimates)[0:2])
+
+            frames_to_sample =  prediction_estimates[sample_indices]
+            distrib_frames = tf.distributions.Bernouilli(probs=frames_to_sample,type=tf.float32)
+            sampled_frames = distrib_frames.sample()
+
+            input_sampled = self.inputs
+            input_sampled[sample_indices] = sampled_frames
+
+
+            self._inputs_sched_samp = input_sampled
+        return self._inputs_sched_samp
+
+
 
     @property
     def prediction(self):
@@ -206,7 +245,6 @@ class Model:
                 n_hidden = self.n_hidden
                 suffix = self.suffix
                 batch_size = self.batch_size
-
 
                 x = self.inputs
                 seq_len = self.seq_lens
@@ -309,8 +347,12 @@ class Model:
         if self._cross_entropy is None:
             with tf.device(self.device_name):
                 y = self.labels
+                if self.scheduled_sampling:
+                    pred = self.prediction_sched_samp
+                else:
+                    pred = self.prediction
 
-                cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.prediction, labels=y))
+                cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=pred, labels=y))
                 self._cross_entropy = cross_entropy
         return self._cross_entropy
 
