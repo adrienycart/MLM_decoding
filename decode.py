@@ -350,16 +350,14 @@ def get_log_prob(sample, acoustic, language, weight, p=None):
 
         if np.ndim(weight_acoustic) == 1:
             p = np.outer(weight_acoustic, acoustic) + language * np.reshape(weight_language, (-1, 1))
-            not_p = np.outer(weight_acoustic, (1 - acoustic)) + (1 - language) * np.reshape(weight_language, (-1, 1))
         else:
             p = weight_acoustic * acoustic + weight_language * language # N x 88
-            not_p = weight_acoustic * (1 - acoustic) + weight_language * (1 - language) # N x 88
     else:
         p = np.squeeze(p)
-        not_p = 1 - p
+        
+    not_p = 1 - p
 
-    combined_priors = np.where(sample == 1, p, not_p)
-    return np.sum(np.log(combined_priors), axis=1), combined_priors
+    return np.sum(np.log(np.where(sample == 1, p, not_p)), axis=1), p
 
 
 
@@ -429,10 +427,13 @@ def enumerate_samples(acoustic, language, weight=[[0.8], [0.2]], p=None):
             v.append(i + 1)
             q.put((l + L_sorted[i + 1], num, v))
             v = v.copy()
+            
+            # XOR between v and [i]
             try:
                 v.remove(i)
             except:
                 v.append(i)
+                
             q.put((l + L_sorted[i + 1] - L_sorted[i], num+1, v))
             num += 2
 

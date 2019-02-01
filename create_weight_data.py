@@ -158,7 +158,8 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
                             samples.append(binary_sample)
                             weights.append(weight_this)
 
-        log_probs = decode.get_log_prob(np.array(samples), np.array(frame), np.array(priors), np.array(weights))
+        log_probs, combined_priors = decode.get_log_prob(np.array(samples), np.array(frame),
+                                                         np.array(priors), np.array(weights))
 
         np_samples = np.zeros((len(samples), 1, 88))
         for i, sample in enumerate(samples):
@@ -167,8 +168,10 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
         hidden_states, priors = model.run_one_step([s.hidden_state for s in states], np_samples, sess)
 
         beam = Beam()
-        for hidden_state, prior, log_prob, state, sample, w in zip(hidden_states, priors, log_probs, states, samples, weights):
-            beam.add(state.transition(sample, log_prob, hidden_state, prior, w))
+        for hidden_state, prior, log_prob, state, sample, w, combined_prior in zip(hidden_states, priors,
+                                                                                   log_probs, states, samples,
+                                                                                   weights, combined_priors):
+            beam.add(state.transition(sample, log_prob, hidden_state, prior, w, combined_prior))
 
         beam.cut_to_size(beam_size, min(hash_length, frame_num + 1))
         
@@ -183,10 +186,7 @@ if __name__ == '__main__':
                         "They should be in the same location as the " +
                         "corresponding acoustic csvs, and have the same name (except the extension).")
     
-    parser.add_argument("--prefix", help="The prefix on the file name for output. Defaults to None.",
-                        default="")
-    parser.add_argument("--dir", help="The directory to save data. Defaults to '.'.",
-                        default=".")
+    parser.add_argument("--out", help="The file to save data.", required=True)
     
     parser.add_argument("-m", "--model", help="The location of the trained language model.", required=True)
     parser.add_argument("--hidden", help="The number of hidden layers in the language model. Defaults to 256",
@@ -275,9 +275,9 @@ if __name__ == '__main__':
     print(Y.shape)
     
     # Save data
-    with open(os.path.join(args.dir, args.prefix + ("" if args.prefix == "" else "_") + 'X.pkl'), 'wb') as file:
-        pickle.dump(X, file, pickle.HIGHEST_PROTOCOL)
-                        
-    with open(os.path.join(args.dir, args.prefix + ("" if args.prefix == "" else "_") + 'Y.pkl'), 'wb') as file:
-        pickle.dump(Y, file, pickle.HIGHEST_PROTOCOL)
+    with open(args.out, "wb") as file:
+              pickle.dump({'X' : X,
+                           'Y' : Y,
+                           'history' : args.history,
+                           'features' : args.features}, file)
     
