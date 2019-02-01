@@ -126,7 +126,7 @@ for fn in os.listdir(folder):
         data.make_from_file(filename,args.step,section)
 
         # Decode
-        pr, priors, weights = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
+        pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                             union=args.union, weight=[[args.weight], [1 - args.weight]], out=None,
                             hash_length=args.hash, history=history, weight_model=weight_model, verbose=False,
                             features=features, is_weight=is_weight)

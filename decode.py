@@ -158,8 +158,8 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
                         if p is not None:
                             p.append(prior_this)
 
-        log_probs = get_log_prob(np.array(samples), np.array(frame), np.array(priors), np.array(weights),
-                                 p=None if p is None else np.array(p))
+        log_probs, combined_priors = get_log_prob(np.array(samples), np.array(frame), np.array(priors),
+                                                  np.array(weights), p=None if p is None else np.array(p))
 
         np_samples = np.zeros((len(samples), 1, 88))
         for i, sample in enumerate(samples):
@@ -168,17 +168,20 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         hidden_states, priors = model.run_one_step([s.hidden_state for s in states], np_samples, sess)
 
         beam = Beam()
-        for hidden_state, prior, log_prob, state, sample, w in zip(hidden_states, priors, log_probs, states, samples, weights):
-            beam.add(state.transition(sample, log_prob, hidden_state, prior, w[0]))
+        for hidden_state, prior, log_prob, state, sample, w, combined_prior in zip(hidden_states, priors,
+                                                                                   log_probs, states, samples,
+                                                                                   weights, combined_priors):
+            beam.add(state.transition(sample, log_prob, hidden_state, prior, w[0], combined_prior))
 
         beam.cut_to_size(beam_size, min(hash_length, frame_num + 1))
 
         if out and frame_num % 1 == 0:
-            output = [(s.get_piano_roll(), s.get_priors()) for s in beam]
+            output = [(s.get_piano_roll(), s.get_priors(), s.get_weights(), s.get_combined_priors()) for s in beam]
             with open(os.path.join(out, 'data_' + str(frame_num) + '.pkl'), 'wb') as file:
-                pickle.dump(output, file, pickle.HIGHEST_PROTOCOL)
+                pickle.dump(output, file)
 
-    return beam.get_top_state().get_piano_roll(), beam.get_top_state().get_priors(), beam.get_top_state().get_weights()
+    top_state = beam.get_top_state()
+    return top_state.get_piano_roll(), top_state.get_priors(), top_state.get_weights(), top_state.get_combined_priors()
 
 
 
@@ -335,7 +338,11 @@ def get_log_prob(sample, acoustic, language, weight, p=None):
     Returns
     =======
     log_prob : np.array
-        The log probability of each given sample, as a weighted sum of p(. | acoustic) and p(. | language).
+        The log probability of each given sample, as a weighted sum of p(. | acoustic) and p(. | language),
+        in an N x 1 array.
+        
+    combined_priors : np.ndarray
+        The combined (NOT log) prior of each given sample, in an N x 88 nd-array.
     """
     if p is None:
         weight_acoustic = np.squeeze(weight[:, 0, :]) # N or N x 88
@@ -351,7 +358,8 @@ def get_log_prob(sample, acoustic, language, weight, p=None):
         p = np.squeeze(p)
         not_p = 1 - p
 
-    return np.sum(np.where(sample == 1, np.log(p), np.log(not_p)), axis=1)
+    combined_priors = np.where(sample == 1, p, not_p)
+    return np.sum(np.log(combined_priors), axis=1), combined_priors
 
 
 
@@ -514,15 +522,16 @@ if __name__ == '__main__':
                 is_weight = True
 
     # Decode
-    pr, priors, weights = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                          union=args.union, weight=[[args.weight], [1 - args.weight]], out=args.output,
-                          hash_length=args.hash, history=history, weight_model=weight_model, is_weight=is_weight,
-                          features=features, verbose=args.verbose)
+    pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
+                         beam_size=args.beam, union=args.union, weight=[[args.weight], [1 - args.weight]],
+                         out=args.output, hash_length=args.hash, history=history, weight_model=weight_model,
+                         is_weight=is_weight, features=features, verbose=args.verbose)
 
     # Evaluate
     np.save("pr", pr)
     np.save("priors", priors)
     np.save("weights", weights)
+    np.save("combined_priors", combined_priors)
     if args.step in ['quant','event']:
         pr = dataMaps.convert_note_to_time(pr, data.corresp, max_len=max_len)
 

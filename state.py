@@ -22,6 +22,7 @@ class State:
         self.prior = prior
         
         self.weights = []
+        self.combined_prior = []
         self.sample = []
         self.log_prob = 0.0
         
@@ -29,7 +30,7 @@ class State:
         self.prev = None
     
     
-    def transition(self, sample, log_prob, hidden_state, prior, weights):
+    def transition(self, sample, log_prob, hidden_state, prior, weights, combined_prior):
         """
         Get the resulting state from the given transition, without altering this state.
         
@@ -48,7 +49,10 @@ class State:
             An 88-length probabilistic array containing this state's model's prior for the next frame.
             
         weights : np.array
-            An 88-length probabilistic array containing the state's acoustic weights for the next frame.
+            An 88-length probabilistic array containing the state's acoustic weights from this frame.
+            
+        combined_prior : np.array
+            An 88-length probabilistic array containing the combined prior for this frame.
             
         Returns
         =======
@@ -60,9 +64,29 @@ class State:
         
         state.sample = sample
         state.weights = np.repeat(np.array(weights), 88) if len(weights) == 0 else weights
+        state.combined_prior = combined_prior
         state.num = self.num + 1
         state.prev = self
         return state
+    
+    
+    def get_combined_priors(self):
+        """
+        Get the combined priors of this State from each frame.
+        
+        Returns
+        =======
+        combined_priors : np.matrix
+            An 88 x T matrix containing the combined priors of this State at each frame.
+        """
+        combined_priors = np.zeros((88, self.num))
+        
+        state = self
+        for i in range(self.num):
+            combined_priors[:, self.num - 1 - i] = state.combined_prior
+            state = state.prev
+            
+        return combined_priors
     
     
     def get_weights(self):
