@@ -347,7 +347,7 @@ class Model:
         if self._cross_entropy is None:
             with tf.device(self.device_name):
                 y = self.labels
-                if self.scheduled_sampling:
+                if hasattr(self, 'scheduled_sampling') and self.scheduled_sampling:
                     pred = self.prediction_sched_samp
                 else:
                     pred = self.prediction
