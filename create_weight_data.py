@@ -14,7 +14,7 @@ from mlm_training.model import Model, make_model_param
 
 
 def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.5], [0.5]],
-           hash_length=10, gt_only=False, history=5, min_diff=0.01, features=False):
+           hash_length=10, gt_only=False, history=5, min_diff=0.01, features=False, verbose=False):
     """
     Get the average ranks of the ground truth frame from decode.enumerate_samples().
     
@@ -89,7 +89,7 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
     acoustic = np.transpose(acoustic)
     
     for frame_num, frame in enumerate(acoustic):
-        if frame_num % 20 == 0:
+        if frame_num % 20 == 0 and verbose:
             print(str(frame_num) + " / " + str(acoustic.shape[0]))
         gt_frame = gt[frame_num, :]
         
@@ -220,6 +220,8 @@ if __name__ == '__main__':
     
     parser.add_argument("--features", help="Use features in the x data points.", action="store_true")
     
+    parser.add_argument("-v", "--verbose", help="Print frame updates", action="store_true")
+    
     args = parser.parse_args()
         
     if not (0 <= args.weight <= 1):
@@ -250,20 +252,23 @@ if __name__ == '__main__':
         # Decode
         X, Y = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                                union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash,
-                               gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff)
+                               gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
+                               verbose=args.verbose)
     else:
         X = None
         Y = np.zeros(0)
         
         for file in glob.glob(os.path.join(args.MIDI, "*.mid")):
-            print(file)
+            if args.verbose:
+                print(file)
             data = dataMaps.DataMaps()
             data.make_from_file(file, args.step, section=section)
 
             # Decode
             x, y = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                                    union=args.union, weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
-                                   gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff)
+                                   gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
+                                   verbose=args.verbose)
             
             if X is not None:
                 X = np.vstack((X, x))
