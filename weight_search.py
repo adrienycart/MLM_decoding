@@ -10,6 +10,7 @@ import os
 import glob
 import pickle
 import warnings
+import sys
 
 import tensorflow as tf
 import pretty_midi as pm
@@ -24,6 +25,7 @@ def weight_search(params, verbose=False):
     features = params[0][5]
     
     print(params)
+    sys.stdout.flush()
     
     warnings.filterwarnings("ignore", message="tick should be an int.")
     folder = "data/outputs/valid"
@@ -78,6 +80,9 @@ def weight_search(params, verbose=False):
     notes = np.zeros((0, 3))
 
     for filename in glob.glob(os.path.join(folder, "*.mid")):
+        print(filename)
+        sys.stdout.flush()
+        
         data = DataMaps()
         data.make_from_file(filename,"quant",section)
 
@@ -96,6 +101,9 @@ def weight_search(params, verbose=False):
         #Evaluate
         P_f,R_f,F_f = compute_eval_metrics_frame(pr,target)
         P_n,R_n,F_n = compute_eval_metrics_note(pr,target,min_dur=0.05)
+        
+        print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
+        sys.stdout.flush()
 
         frames = np.vstack((frames, [P_f, R_f, F_f]))
         notes = np.vstack((notes, [P_n, R_n, F_n]))
@@ -104,4 +112,5 @@ def weight_search(params, verbose=False):
     P_n, R_n, F_n = np.mean(notes, axis=0)
     
     print(str(F_n) + ": " + str(params))
+    sys.stdout.flush()
     return F_n

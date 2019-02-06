@@ -3,8 +3,6 @@ from weight_search import weight_search
 import GPyOpt
 import dill
 
-func = weight_search
-
 domain = [{'name' : 'gt', 'type' : 'categorical', 'domain' : (True, False)},
           {'name' : 'min_diff', 'type' : 'continuous', 'domain' : (0, 1)},
           {'name' : 'history', 'type' : 'discrete', 'domain' : range(11)},
@@ -12,7 +10,7 @@ domain = [{'name' : 'gt', 'type' : 'categorical', 'domain' : (True, False)},
           {'name' : 'is_weight', 'type' : 'categorical', 'domain' : (True, False)},
           {'name' : 'features', 'type' : 'categorical', 'domain' : (True, False)}]
 
-myBopt = GPyOpt.methods.BayesianOptimization(f=func, domain=domain, maximize=True)
+myBopt = GPyOpt.methods.BayesianOptimization(f=weight_search, domain=domain, maximize=True, verbosity=True, num_cores=4)
 
 max_iter = 1000
 
