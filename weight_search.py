@@ -15,13 +15,15 @@ import tensorflow as tf
 import pretty_midi as pm
 import numpy as np
 
-def weight_search(params):
+def weight_search(params, verbose=False):
     gt = params[0][0]
     min_diff = params[0][1]
     history = int(params[0][2])
     num_layers = int(params[0][3])
     is_weight = params[0][4]
     features = params[0][5]
+    
+    print(params)
     
     warnings.filterwarnings("ignore", message="tick should be an int.")
     folder = "data/outputs/valid"
@@ -46,7 +48,7 @@ def weight_search(params):
                         model_path="./ckpt/piano_midi/quant/quant_0.001_2/best_model.ckpt-374")
 
     # Get weight_model data
-    X = None
+    X = np.zeros(0)
     Y = np.zeros(0)
 
     for file in glob.glob(os.path.join(folder, "*.mid")):
@@ -56,14 +58,14 @@ def weight_search(params):
         # Decode
         x, y = get_weight_data(data.target, data.input, model, sess, branch_factor=1 if gt else 10, beam_size=1 if gt else 10,
                                union=False, weight=[[0.8], [0.2]], hash_length=12,
-                               gt_only=gt, history=history, features=features, min_diff=min_diff, verbose=False)
+                               gt_only=gt, history=history, features=features, min_diff=min_diff, verbose=verbose)
         
-        if X is not None:
+        if len(X.shape) > 1:
             X = np.vstack((X, x))
         else:
             X = x
         Y = np.append(Y, y)
-            
+    
     # Train weight model
     layers = []
     for i in range(num_layers):
@@ -83,7 +85,7 @@ def weight_search(params):
         pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=50,
                             beam_size=200, union=False, weight=[[0.8], [0.2]],
                             out=None, hash_length=12, history=history, weight_model=weight_model,
-                            verbose=False, features=features, is_weight=is_weight)
+                            verbose=verbose, features=features, is_weight=is_weight)
 
         pr = convert_note_to_time(pr,data.corresp,max_len=max_len)
 
