@@ -21,6 +21,8 @@ parser.add_argument('-early_stop_epochs',type=int,default=100,help="stop trainin
 parser.add_argument('-lr',type=float,default=0.01,help="learning rate")
 parser.add_argument('-use_focal_loss',action='store_true',help="use focal loss instead of usual cross-entropy loss")
 parser.add_argument('-resume',action='store_true',help="resume training from latest checkpoint in save_path")
+parser.add_argument('-sched_sampl',type=str,help="type of schedule for scheduled sampling. If not specified, no scheduled sampling")
+
 
 args = parser.parse_args()
 
@@ -52,6 +54,7 @@ train_param['save_step']=1
 train_param['max_to_keep']=1
 train_param['summarize']=True
 train_param['early_stop_epochs']=args.early_stop_epochs
+train_param['scheduled_sampling']=args.sched_sampl
 
 print("Computation start : "+str(datetime.now()))
 
