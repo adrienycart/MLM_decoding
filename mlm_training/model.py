@@ -589,7 +589,6 @@ class Model:
             raise ValueError('Schedule not understood: '+sched_sampl)
 
 
-        print(schedule)
 
         while i < n_epoch+epochs and epoch_since_best<train_param['early_stop_epochs']:
             start_epoch = datetime.now()
@@ -625,7 +624,7 @@ class Model:
 
                     #pred is : Batch size, n_steps, n_notes
                     preds = sess.run(sigm_pred,{x: batch_x,seq_len: batch_lens,batch_size_ph:batch_x.shape[0]})
-                    sample_idx = sample(p,outshape=batch_x.shape[:-1]).astype(bool)
+                    sample_idx = sample(1-p,outshape=batch_x.shape[:-1]).astype(bool)
                     sampled_frames = sample(preds[sample_idx])
                     batch_x = preds
                     batch_x[sample_idx]=sampled_frames
