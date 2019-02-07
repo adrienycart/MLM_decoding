@@ -194,41 +194,42 @@ class Model:
             self._seq_lens = seq_len
         return self._seq_lens
 
-    @property
-    def sched_samp_p(self):
-        """
-        Placeholder for scheduled sampling probability
-        """
-        if self._sched_samp_p is None:
-            suffix = self.suffix
-            sched_samp_p = tf.placeholder(shape=[],name="sched_samp_p"+suffix)
-            self._sched_samp_p = sched_samp_p
-        return self._sched_samp_p
 
-    @property
-    def inputs_sched_samp(self):
-        """
-        Remplace some inputs with sampled values
-        """
-        if self._inputs_sched_samp is None:
-
-            prediction_estimates = tf.stop_gradient(self.pred_sigm)
-            sched_samp_p = self.sched_samp_p
-
-            #pred is : Batch size, n_steps, n_notes
-            distrib_indices = tf.distributions.Bernoulli(probs=sched_samp_p,type=tf.bool)
-            sample_indices = distrib_indices.sample(shape=tf.get_shape(tf.prediction_estimates)[0:2])
-
-            frames_to_sample =  prediction_estimates[sample_indices]
-            distrib_frames = tf.distributions.Bernouilli(probs=frames_to_sample,type=tf.float32)
-            sampled_frames = distrib_frames.sample()
-
-            input_sampled = self.inputs
-            input_sampled[sample_indices] = sampled_frames
-
-
-            self._inputs_sched_samp = input_sampled
-        return self._inputs_sched_samp
+    # @property
+    # def sched_samp_p(self):
+    #     """
+    #     Placeholder for scheduled sampling probability
+    #     """
+    #     if self._sched_samp_p is None:
+    #         suffix = self.suffix
+    #         sched_samp_p = tf.placeholder(shape=[],name="sched_samp_p"+suffix)
+    #         self._sched_samp_p = sched_samp_p
+    #     return self._sched_samp_p
+    #
+    # @property
+    # def inputs_sched_samp(self):
+    #     """
+    #     Remplace some inputs with sampled values
+    #     """
+    #     if self._inputs_sched_samp is None:
+    #
+    #         prediction_estimates = tf.stop_gradient(self.pred_sigm)
+    #         sched_samp_p = self.sched_samp_p
+    #
+    #         #pred is : Batch size, n_steps, n_notes
+    #         distrib_indices = tf.distributions.Bernoulli(probs=sched_samp_p,type=tf.bool)
+    #         sample_indices = distrib_indices.sample(shape=tf.get_shape(tf.prediction_estimates)[0:2])
+    #
+    #         frames_to_sample =  prediction_estimates[sample_indices]
+    #         distrib_frames = tf.distributions.Bernouilli(probs=frames_to_sample,type=tf.float32)
+    #         sampled_frames = distrib_frames.sample()
+    #
+    #         input_sampled = self.inputs
+    #         input_sampled[sample_indices] = sampled_frames
+    #
+    #
+    #         self._inputs_sched_samp = input_sampled
+    #     return self._inputs_sched_samp
 
 
 
@@ -539,11 +540,13 @@ class Model:
         return sess, saver, train_writer, ckpt_save_path, summary_batch, summary_epoch
 
 
-    def perform_training(self,data,save_path,train_param,sess,saver,train_writer,ckpt_save_path,summary_batch, summary_epoch,n_batch=0,n_epoch=0):
+    def perform_training(self,data,save_path,train_param,sess,saver,train_writer,
+        ckpt_save_path,summary_batch, summary_epoch,n_batch=0,n_epoch=0):
         """
         Actually performs training steps.
         """
 
+        sigm_pred = self.pred_sigm
         optimizer = self.optimize
         cross_entropy = self.cross_entropy
         cross_entropy2= self.cross_entropy2
@@ -556,6 +559,8 @@ class Model:
         x = self.inputs
         y = self.labels
         seq_len = self.seq_lens
+
+        sched_sampl = train_param['scheduled_sampling']
 
         drop = tf.get_default_graph().get_tensor_by_name("dropout"+suffix+":0")
 
@@ -574,6 +579,16 @@ class Model:
         i = n_epoch
 
         valid_data, valid_target, valid_lengths = self.extract_data(data,'valid')
+
+        ## scheduled sampling strategy
+        if sched_sampl == 'linear':
+            schedule = np.linspace(1.0,0.0,epochs)
+        elif sched_sampl == 'sigmoid':
+            schedule = 1 / (1 + np.exp(np.linspace(-5.0,5.0,epochs)))
+        else:
+            raise ValueError('Schedule not understood: '+sched_sampl)
+
+
 
         while i < n_epoch+epochs and epoch_since_best<train_param['early_stop_epochs']:
             start_epoch = datetime.now()
@@ -602,6 +617,19 @@ class Model:
                 sequences_trans = np.transpose(sequences,[0,2,1])
                 batch_x = sequences_trans[:,:-1,:]
                 batch_y = sequences_trans[:,1:,:]
+
+                ## Simple scheduled sampling
+                if sched_sampl is not None:
+                    p = schedule[i]
+
+                    #pred is : Batch size, n_steps, n_notes
+                    preds = sess.run(sigm_pred,{x: batch_x,seq_len: batch_lens,batch_size_ph:batch_x.shape[0]})
+                    sample_idx = sample(1-p,outshape=batch_x.shape[:-1]).astype(bool)
+                    sampled_frames = sample(preds[sample_idx])
+                    batch_x = preds
+                    batch_x[sample_idx]=sampled_frames
+
+
 
                 sess.run(optimizer, feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens, drop: train_param['dropout'],batch_size_ph:batch_x.shape[0]})
                 if not display_step is None and j%display_step == 0 :
@@ -863,9 +891,15 @@ class Model:
 
 
 
-def sample(probs):
+def sample(probs,outshape=None):
     #Takes in a vector of probabilities, and returns a random vector of 0s and 1s sampled from the input vector
-    return np.floor(probs + np.random.uniform(0, 1,probs.shape))
+    if outshape is None:
+        output = np.floor(probs + np.random.uniform(0, 1,probs.shape))
+    else:
+        output = np.floor(probs + np.random.uniform(0, 1,outshape))
+    return output
+
+
 
 def LeakyReLU(x, alpha=0.2):
     return tf.maximum(alpha*x, x)
@@ -966,6 +1000,8 @@ def make_train_param():
     train_param['summarize']=True
     train_param['early_stop']=True
     train_param['early_stop_epochs']=15
+    train_param['scheduled_sampling'] = None
+
     return train_param
 
 

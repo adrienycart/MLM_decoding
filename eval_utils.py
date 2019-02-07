@@ -130,8 +130,11 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None):
     notes_est , intervals_est = get_notes_intervals(input, fs)
     notes_ref , intervals_ref = get_notes_intervals(target, fs)
 
-    P,R,F,_ = mir_eval.transcription.precision_recall_f1_overlap(intervals_ref,notes_ref,intervals_est,notes_est,pitch_tolerance=0.25,offset_ratio=None,onset_tolerance=tolerance)
-    return P,R,F
+    if len(notes_est) == 0:
+        return 0,0,0
+    else:
+        P,R,F,_ = mir_eval.transcription.precision_recall_f1_overlap(intervals_ref,notes_ref,intervals_est,notes_est,pitch_tolerance=0.25,offset_ratio=None,onset_tolerance=tolerance)
+        return P,R,F
 
 
 def get_best_thresh(inputs, targets,lengths,model,save_path,verbose=False,max_thresh=1,step=0.01):
