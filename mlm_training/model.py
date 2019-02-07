@@ -582,9 +582,9 @@ class Model:
 
         ## scheduled sampling strategy
         if sched_sampl == 'linear':
-            schedule = np.linspace(1.0,0.0,epochs)
+            schedule = np.linspace(1.0,0.0,train_param['schedule_duration'])
         elif sched_sampl == 'sigmoid':
-            schedule = 1 / (1 + np.exp(np.linspace(-5.0,5.0,epochs)))
+            schedule = 1 / (1 + np.exp(np.linspace(-5.0,5.0,train_param['schedule_duration'])))
         else:
             raise ValueError('Schedule not understood: '+sched_sampl)
 
@@ -620,7 +620,10 @@ class Model:
 
                 ## Simple scheduled sampling
                 if sched_sampl is not None:
-                    p = schedule[i]
+                    if i < train_param['schedule_duration']:
+                        p = schedule[i]
+                    else:
+                        p=0
 
                     preds = sess.run(sigm_pred,{x: batch_x,seq_len: batch_lens,batch_size_ph:batch_x.shape[0]})
                     idx = sample(1-p,outshape=[batch_x.shape[0],batch_x.shape[1]-1]).astype(bool)
@@ -644,7 +647,10 @@ class Model:
 
             ## Simple scheduled sampling
             if sched_sampl is not None:
-                p = 0
+                if i < train_param['schedule_duration']:
+                    p = schedule[i]
+                else:
+                    p=0
                 #pred is : Batch size, n_steps, n_notes
                 preds = sess.run(sigm_pred,{x: valid_data,seq_len: valid_lengths,batch_size_ph:valid_data.shape[0]})
                 idx = sample(1-p,outshape=[valid_data.shape[0],valid_data.shape[1]-1]).astype(bool)
@@ -1016,6 +1022,7 @@ def make_train_param():
     train_param['early_stop']=True
     train_param['early_stop_epochs']=15
     train_param['scheduled_sampling'] = None
+    train_param['scheduled_duration'] = 0
 
     return train_param
 
