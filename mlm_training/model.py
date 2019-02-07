@@ -642,7 +642,7 @@ class Model:
 
             ## Simple scheduled sampling
             if sched_sampl is not None:
-                p = schedule[i]
+                p = 0
                 #pred is : Batch size, n_steps, n_notes
                 preds = sess.run(sigm_pred,{x: valid_data,seq_len: valid_lengths,batch_size_ph:valid_data.shape[0]})
                 sample_idx = sample(1-p,outshape=valid_data.shape[:-1]).astype(bool)
