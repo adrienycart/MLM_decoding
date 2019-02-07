@@ -50,23 +50,42 @@ def weight_search(params, verbose=False):
                         model_path="./ckpt/piano_midi/quant/quant_0.001_2/best_model.ckpt-374")
 
     # Get weight_model data
-    X = np.zeros(0)
-    Y = np.zeros(0)
-
-    for file in glob.glob(os.path.join(folder, "*.mid")):
-        data = DataMaps()
-        data.make_from_file(file, "quant", section=section)
-
-        # Decode
-        x, y = get_weight_data(data.target, data.input, model, sess, branch_factor=1 if gt else 10, beam_size=1 if gt else 10,
-                               union=False, weight=[[0.8], [0.2]], hash_length=12,
-                               gt_only=gt, history=history, features=features, min_diff=min_diff, verbose=verbose)
+    if gt:
+        with open("optim/data/gt.all.quant.pkl", "rb") as file:
+            pkl = pickle.load(file)
+    else:
+        with open("optim/data/beam.all.quant.pkl", "rb") as file:
+            pkl = pickle.load(file)
+            
+    X = pkl['X']
+    Y = pkl['Y']
+    D = pkl['D']
+    
+    if np.max(D) < min_diff:
+        print("No training data generated")
+        sys.stdout.flush()
+        return 0.0
+    
+    data_points = np.where(D > min_diff)
+    data_features = []
+    
+    if history > 0:
+        data_features.extend(range(10 - history, 10))
         
-        if len(X.shape) > 1:
-            X = np.vstack((X, x))
-        else:
-            X = x
-        Y = np.append(Y, y)
+    if features:
+        data_features.extend(range(10, len(X[0]) - 2))
+            
+    data_features.append(-2)
+    data_features.append(-1)
+    
+    X = X[data_points]
+    X = X[:, data_features]
+    Y = Y[data_points]
+    
+    if len(X) == 0:
+        print("No training data generated")
+        sys.stdout.flush()
+        return 0.0
     
     # Train weight model
     layers = []
@@ -111,6 +130,7 @@ def weight_search(params, verbose=False):
     P_f, R_f, F_f = np.mean(frames, axis=0)
     P_n, R_n, F_n = np.mean(notes, axis=0)
     
+    print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
     print(str(F_n) + ": " + str(params))
     sys.stdout.flush()
     return F_n

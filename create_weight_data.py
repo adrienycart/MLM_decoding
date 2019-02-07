@@ -73,12 +73,16 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
         
     y : np.array
         The y data from this decoding process. A data-length array.
+        
+    diffs : np.array
+        The differences between the language and acoustic model priors for each data point.
     """
     if union:
         branch_factor = int(branch_factor / 2)
     
-    x = None
+    x = np.zeros((0, 0))
     y = np.zeros(0)
+    diffs = np.zeros(0)
     
     beam = Beam()
     beam.add_initial_state(model, sess)
@@ -106,12 +110,13 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
             pitches = np.argwhere(1 - np.isclose(np.squeeze(state.prior), np.squeeze(frame),
                                                  rtol=0.0, atol=min_diff))[:,0] if min_diff > 0 else np.arange(88)
             if len(pitches) > 0:
-                if x is not None:
+                if len(x) > 0:
                     x = np.vstack((x, decode.create_weight_x(state, acoustic, frame_num, history, pitches=pitches,
                                                              features=features)))
                 else:
                     x = decode.create_weight_x(state, acoustic, frame_num, history, pitches=pitches, features=features)
                 y = np.append(y, gt_frame[pitches])
+                diffs = np.append(diffs, np.abs(np.squeeze(frame)[pitches] - np.squeeze(state.prior)[pitches]))
         
         # Gather all computations to perform them batched
         # Acoustic sampling is done separately because the acoustic samples will be identical for every state.
@@ -175,7 +180,7 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
 
         beam.cut_to_size(beam_size, min(hash_length, frame_num + 1))
         
-    return x, y
+    return x, y, diffs
 
 
 
@@ -250,13 +255,14 @@ if __name__ == '__main__':
         data.make_from_file(args.MIDI, args.step, section=section)
     
         # Decode
-        X, Y = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
+        X, Y, D = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                                union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash,
                                gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
                                verbose=args.verbose)
     else:
-        X = None
+        X = np.zeros((0, 0))
         Y = np.zeros(0)
+        D = np.zeros(0)
         
         for file in glob.glob(os.path.join(args.MIDI, "*.mid")):
             if args.verbose:
@@ -265,24 +271,28 @@ if __name__ == '__main__':
             data.make_from_file(file, args.step, section=section)
 
             # Decode
-            x, y = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
+            x, y, d = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                                    union=args.union, weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
                                    gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
                                    verbose=args.verbose)
             
-            if X is not None:
+            if len(X) > 0:
                 X = np.vstack((X, x))
             else:
                 X = x
+                
             Y = np.append(Y, y)
+            D = np.append(D, d)
     
     print(X.shape)
     print(Y.shape)
+    print(D.shape)
     
     # Save data
     with open(args.out, "wb") as file:
               pickle.dump({'X' : X,
                            'Y' : Y,
+                           'D' : D,
                            'history' : args.history,
                            'features' : args.features}, file)
     
