@@ -640,6 +640,16 @@ class Model:
                         train_writer.add_summary(summary_b,global_step=n_batch)
                 n_batch += 1
 
+            ## Simple scheduled sampling
+            if sched_sampl is not None:
+                p = schedule[i]
+                #pred is : Batch size, n_steps, n_notes
+                preds = sess.run(sigm_pred,{x: valid_data,seq_len: valid_lengths,batch_size_ph:valid_data.shape[0]})
+                sample_idx = sample(1-p,outshape=valid_data.shape[:-1]).astype(bool)
+                sampled_frames = sample(preds[sample_idx])
+                valid_data = preds
+                valid_data[sample_idx]=sampled_frames
+
             cross = self._run_by_batch(sess,cross_entropy2,{x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size},batch_size)
             if train_param['summarize']:
                 summary_e = sess.run(summary_epoch,feed_dict={x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:valid_data.shape[0]})
