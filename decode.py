@@ -284,7 +284,7 @@ def get_features(acoustic, frame_num, priors):
         """
         return np.sum(np.where(array == 0, 0, -array * np.log2(array))) / np.log2(len(array))
     
-    num_features = 8
+    num_features = 9
     frame = acoustic[frame_num, :]
     language = np.squeeze(priors[:, -1])
     features = np.zeros((88, num_features))
@@ -296,12 +296,16 @@ def get_features(acoustic, frame_num, priors):
     features[:, 4] = np.mean(acoustic)
     features[:, 5] = np.mean(language)
     
+    # Flux
     if frame_num != 0:
         features[:, 6] = frame - acoustic[frame_num, :]
         features[:, 7] = language - priors[:, -2]
     else:
         features[:, 6] = frame
         features[:, 7] = language
+        
+    # Absolute pitch (0, 1) range
+    features[:, 8] = np.arange(88) / 87
     
     return features
 
