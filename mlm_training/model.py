@@ -622,12 +622,14 @@ class Model:
                 if sched_sampl is not None:
                     p = schedule[i]
 
-                    #pred is : Batch size, n_steps, n_notes
                     preds = sess.run(sigm_pred,{x: batch_x,seq_len: batch_lens,batch_size_ph:batch_x.shape[0]})
-                    sample_idx = sample(1-p,outshape=batch_x.shape[:-1]).astype(bool)
+                    idx = sample(1-p,outshape=[batch_x.shape[0],batch_x.shape[1]-1]).astype(bool)
+                    #We sample from frame i of preds the vector we will put in frame i+1 of input data
+                    sample_idx = np.concatenate([idx,np.full([batch_x.shape[0],1],False)],axis=1)
                     sampled_frames = sample(preds[sample_idx])
                     batch_x = preds
-                    batch_x[sample_idx]=sampled_frames
+                    replace_idx = np.concatenate([np.full([batch_x.shape[0],1],False),idx],axis=1)
+                    batch_x[replace_idx]=sampled_frames
 
 
 
@@ -645,10 +647,13 @@ class Model:
                 p = 0
                 #pred is : Batch size, n_steps, n_notes
                 preds = sess.run(sigm_pred,{x: valid_data,seq_len: valid_lengths,batch_size_ph:valid_data.shape[0]})
-                sample_idx = sample(1-p,outshape=valid_data.shape[:-1]).astype(bool)
+                idx = sample(1-p,outshape=[valid_data.shape[0],valid_data.shape[1]-1]).astype(bool)
+                #We sample from frame i of preds the vector we will put in frame i+1 of input data
+                sample_idx = np.concatenate([idx,np.full([valid_data.shape[0],1],False)],axis=1)
                 sampled_frames = sample(preds[sample_idx])
                 valid_data = preds
-                valid_data[sample_idx]=sampled_frames
+                replace_idx = np.concatenate([np.full([valid_data.shape[0],1],False),idx],axis=1)
+                valid_data[replace_idx]=sampled_frames
 
             cross = self._run_by_batch(sess,cross_entropy2,{x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size},batch_size)
             if train_param['summarize']:
