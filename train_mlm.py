@@ -23,7 +23,7 @@ parser.add_argument('-use_focal_loss',action='store_true',help="use focal loss i
 parser.add_argument('-resume',action='store_true',help="resume training from latest checkpoint in save_path")
 parser.add_argument('-sched_sampl',type=str,help="type of schedule for scheduled sampling. If not specified, no scheduled sampling")
 parser.add_argument('-sched_dur',type=int,default=1000,help="duration in epochs of the schedule (if lower than epochs, sampling will always be applied after the end of schedule)")
-parser.add_argument('-sched_valid',actions="store_true",help='validate on sampled inputs')
+parser.add_argument('-sched_valid',action="store_true",help='validate on sampled inputs')
 
 
 args = parser.parse_args()
