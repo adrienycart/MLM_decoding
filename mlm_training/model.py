@@ -630,7 +630,6 @@ class Model:
                     #We sample from frame i of preds the vector we will put in frame i+1 of input data
                     sample_idx = np.concatenate([idx,np.full([batch_x.shape[0],1],False)],axis=1)
                     sampled_frames = sample(preds[sample_idx])
-                    batch_x = preds
                     replace_idx = np.concatenate([np.full([batch_x.shape[0],1],False),idx],axis=1)
                     batch_x[replace_idx]=sampled_frames
 
@@ -646,19 +645,35 @@ class Model:
                 n_batch += 1
 
             ## Simple scheduled sampling
-            if sched_sampl is not None and train_param['sched_valid']:
-                p=0 #Always use fully-sampled inputs for validation
-                #pred is : Batch size, n_steps, n_notes
+            if sched_sampl is not None and train_param['sched_valid'] is not None:
                 preds = sess.run(sigm_pred,{x: valid_data,seq_len: valid_lengths,batch_size_ph:valid_data.shape[0]})
-                idx = sample(1-p,outshape=[valid_data.shape[0],valid_data.shape[1]-1]).astype(bool)
-                #We sample from frame i of preds the vector we will put in frame i+1 of input data
-                sample_idx = np.concatenate([idx,np.full([valid_data.shape[0],1],False)],axis=1)
-                sampled_frames = sample(preds[sample_idx])
-                valid_data = preds
-                replace_idx = np.concatenate([np.full([valid_data.shape[0],1],False),idx],axis=1)
-                valid_data[replace_idx]=sampled_frames
+                if train_param['sched_valid'] == 'sample' or train_param['sched_valid'] == 'avg':
+                    if train_param['sched_valid'] == 'sample':
+                        n_repeat = 1
+                    elif train_param['sched_valid'] == 'avg':
+                        n_repeat=5
 
-            cross = self._run_by_batch(sess,cross_entropy2,{x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size},batch_size)
+                    p=0 #Always use fully-sampled inputs for validation
+                    #pred is : Batch size, n_steps, n_notes
+
+                    crosses = np.array([n_repeat],dtype=float)
+                    for i in range(n_repeat):
+                        idx = sample(1-p,outshape=[valid_data.shape[0],valid_data.shape[1]-1]).astype(bool)
+                        #We sample from frame i of preds the vector we will put in frame i+1 of input data
+                        sample_idx = np.concatenate([idx,np.full([valid_data.shape[0],1],False)],axis=1)
+                        sampled_frames = sample(preds[sample_idx])
+                        replace_idx = np.concatenate([np.full([valid_data.shape[0],1],False),idx],axis=1)
+                        valid_data[replace_idx]=sampled_frames
+                        cross = self._run_by_batch(sess,cross_entropy2,{x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size},batch_size)
+                        crosses[i] = cross
+                    cross = np.mean(np.array(crosses))
+                elif train_param['sched_valid'] == 'thresh':
+                    pred_thresh = (preds>0.5).astype(float)
+                    valid_data[:,1:,:] = pred_thresh[:,:-1,:]
+                    cross = self._run_by_batch(sess,cross_entropy2,{x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size},batch_size)
+
+            else:
+                cross = self._run_by_batch(sess,cross_entropy2,{x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size},batch_size)
             if train_param['summarize']:
                 summary_e = sess.run(summary_epoch,feed_dict={x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:valid_data.shape[0]})
                 train_writer.add_summary(summary_e, global_step=i)
@@ -1020,7 +1035,7 @@ def make_train_param():
     train_param['early_stop_epochs']=15
     train_param['scheduled_sampling'] = None
     train_param['scheduled_duration'] = 0
-    train_param['sched_valid'] = False
+    train_param['sched_valid'] = None
 
     return train_param
 
