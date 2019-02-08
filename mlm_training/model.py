@@ -657,7 +657,7 @@ class Model:
                     #pred is : Batch size, n_steps, n_notes
 
                     crosses = np.array([n_repeat],dtype=float)
-                    for i in range(n_repeat):
+                    for repeat in range(n_repeat):
                         idx = sample(1-p,outshape=[valid_data.shape[0],valid_data.shape[1]-1]).astype(bool)
                         #We sample from frame i of preds the vector we will put in frame i+1 of input data
                         sample_idx = np.concatenate([idx,np.full([valid_data.shape[0],1],False)],axis=1)
@@ -665,7 +665,7 @@ class Model:
                         replace_idx = np.concatenate([np.full([valid_data.shape[0],1],False),idx],axis=1)
                         valid_data[replace_idx]=sampled_frames
                         cross = self._run_by_batch(sess,cross_entropy2,{x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size},batch_size)
-                        crosses[i] = cross
+                        crosses[repeat] = cross
                     cross = np.mean(np.array(crosses))
                 elif train_param['sched_valid'] == 'thresh':
                     pred_thresh = (preds>0.5).astype(float)
