@@ -646,11 +646,8 @@ class Model:
                 n_batch += 1
 
             ## Simple scheduled sampling
-            if sched_sampl is not None:
-                if i < train_param['schedule_duration']:
-                    p = schedule[i]
-                else:
-                    p=0
+            if sched_sampl is not None and train_param['sched_valid']:
+                p=0 #Always use fully-sampled inputs for validation
                 #pred is : Batch size, n_steps, n_notes
                 preds = sess.run(sigm_pred,{x: valid_data,seq_len: valid_lengths,batch_size_ph:valid_data.shape[0]})
                 idx = sample(1-p,outshape=[valid_data.shape[0],valid_data.shape[1]-1]).astype(bool)
@@ -1023,6 +1020,7 @@ def make_train_param():
     train_param['early_stop_epochs']=15
     train_param['scheduled_sampling'] = None
     train_param['scheduled_duration'] = 0
+    train_param['sched_valid'] = False
 
     return train_param
 
