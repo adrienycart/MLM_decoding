@@ -42,6 +42,7 @@ class Model:
         self._pred_thresh = None
         self._cross_entropy = None
         self._cross_entropy2 = None
+        self._cross_entropy_transition = None
         self._focal_loss = None
         self._optimize = None
         self._tp = None
@@ -372,6 +373,66 @@ class Model:
                 cross_entropy2 = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.prediction, labels=y),axis=[1,2])
                 self._cross_entropy2 = cross_entropy2
         return self._cross_entropy2
+
+    def split_trans(self, x,*args):
+        #x is one single input, same for all tensors in args
+        data_extended = tf.pad(x,[[1,1],[0,0]],'constant')
+        diff = data_extended[1:,:] - data_extended[:-1,:]
+        # diff = tf.split(diff,tf.shape(diff)[0])
+        trans_mask = tf.logical_or(tf.equal(diff,1), tf.equal(diff,-1))
+        transitions= tf.where(trans_mask)
+
+        transitions_unique, _ ,count_trans = tf.unique_with_counts(transitions[:,0])
+        #We drop the first onset and last offset
+        transitions_unique = transitions_unique[1:-1]
+        count_trans = count_trans[1:-1]
+
+        out = []
+
+        # pred_trans = tf.gather(pred,tf.add(transitions_unique,-1))
+        # y_trans = tf.gather(y,tf.add(transitions_unique,-1))
+        for tensor in args:
+            out += [tf.gather(tensor,tf.add(transitions_unique,-1))]
+        out += [count_trans]
+
+        #return pred_trans, y_trans, count_trans
+        return out
+
+    @property
+    def cross_entropy_transition(self):
+        if self._cross_entropy_transition is None:
+            with tf.device(self.device_name):
+
+                def compute_one(elems):
+                    x = elems[0]
+                    y = elems[1]
+                    pred = elems[2]
+
+                    y, pred, count = self.split_trans(x,y,pred)
+
+
+
+                    cross_entropy_trans = tf.nn.sigmoid_cross_entropy_with_logits(logits=pred, labels=y)
+                    cross_entropy_trans = tf.reduce_mean(cross_entropy_trans,axis=[1])
+                    cross_entropy_trans = tf.reduce_mean(tf.div(cross_entropy_trans,tf.cast(count,tf.float32)))
+
+                    #It is necessary that the output has the same dimensions as input (even if not used)
+                    return cross_entropy_trans, 0.0, 0.0
+
+                pred = self.prediction
+                xs = self.inputs
+                ys = self.labels
+
+
+                XEs = tf.map_fn(compute_one,[xs,ys,pred],dtype=(tf.float32,tf.float32,tf.float32))
+                XEs = tf.gather(XEs[0],tf.where(tf.logical_not(tf.is_nan(XEs[0]))))
+                cross_entropy_trans = tf.reduce_mean(XEs)
+
+                # pred_test, y_test , count_test = self.split_trans(xs[0],ys[0],pred[0])
+                # test1 = tf.identity([pred_test,y_test],name='test1')
+
+                self._cross_entropy_transition = cross_entropy_trans
+        return self._cross_entropy_transition
 
     @property
     def gamma(self):
@@ -900,16 +961,17 @@ class Model:
         if sess==None:
             sess, _ = self.load(save_path,n_model)
 
+        pred = self.pred_sigm
         cross = self.cross_entropy
+        cross_tr = self.cross_entropy_transition
+        F0 = tf.reduce_mean(self.f_measure)
+
 
         data = self._transpose_data(dataset[:,:,:-1])
         targets = self._transpose_data(dataset[:,:,1:])
 
 
 
-        prec = tf.reduce_mean(self.precision)
-        rec = tf.reduce_mean(self.recall)
-        F0 = tf.reduce_mean(self.f_measure)
 
         suffix = self.suffix
         x = self.inputs
@@ -918,9 +980,16 @@ class Model:
         thresh = self.thresh
         batch_size_ph = self.batch_size
 
-        cross, precision, recall, F_measure = sess.run([cross, prec, rec, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0]} )
+        #Metrics with perfect input
+        preds, cross_GT, cross_tr_GT, F_measure_GT = sess.run([pred,cross, cross_tr, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0]} )
 
-        return F_measure, precision, recall, cross
+        #Metrics with sampled input
+        sampled_frames = sample(preds)
+        data[:,1:,:]=sampled_frames[:,:-1,:]
+        cross_s, cross_tr_s, F_measure_s = sess.run([cross, cross_tr, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0]} )
+
+
+        return [cross_GT, cross_tr_GT, F_measure_GT],[cross_s, cross_tr_s, F_measure_s]
 
 
 
