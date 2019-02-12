@@ -77,13 +77,21 @@ def convert_targets_to_weight(X, Y):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
-    parser.add_argument("data", help="A pickle file containing a dictionary with X, Y, history, and features. " +
+    parser.add_argument("--all", help="The data pickle file contains ALL possible data.", action="store_true")
+    
+    parser.add_argument("data", help="A pickle file containing a dictionary with X, Y, D, history, and features. " +
                         "This should be created by create_weight_data.py")
     
     parser.add_argument("out", help="The file to save the model to.")
     
+    parser.add_argument("--min_diff", help="The minimum difference to use.", type=float, default=0.0)
+    
+    parser.add_argument("--history", help="The history length to use.", type=int, default=10)
+    
     parser.add_argument("--layers", nargs='+', type=int, help="The hidden layer sizes of the network to train. " +
                         "If not given, logistic regression will be used.")
+    
+    parser.add_argument("--features", help="Use features (used if --all is given).", action="store_true")
     
     parser.add_argument("-w", "--weight", help="Create a model which outputs the prior weights (rather than " +
                         "the default, which will output the prior directly).", action="store_true")
@@ -95,14 +103,32 @@ if __name__ == '__main__':
         
     X = model_dict['X']
     Y = model_dict['Y']
+    D = model_dict['D']
     features = model_dict['features']
     history = model_dict['history']
+    
+    if args.all:
+        data_points = np.where(D > args.min_diff)
+        data_features = []
+        
+        if args.history > 0:
+            data_features.extend(range(10 - args.history, 10))
+
+        if args.features:
+            data_features.extend(range(10, len(X[0]) - 2))
+
+        data_features.append(-2)
+        data_features.append(-1)
+
+        X = X[data_points]
+        X = X[:, data_features]
+        Y = Y[data_points]
     
     model = train_model(X, Y, layers=args.layers, weight=args.weight)
     
     with open(args.out, "wb") as file:
         pickle.dump({'model' : model,
-                     'history' : history,
-                     'features' : features,
+                     'history' : args.history if args.all else history,
+                     'features' : args.features if args.all else features,
                      'weight' : args.weight}, file)
         
