@@ -37,6 +37,7 @@ weight.add_argument("-wm", "--weight_model", help="Load the given sklearn model 
                     "set weights. Defaults to None, which uses the static weight from -w instead.",
                     default=None)
 parser.add_argument("--hash", help="The hash length to use. Defaults to 10.", type=int, default=10)
+parser.add_argument("-v", "--verbose", help="Use verbose printing.", action="store_true")
 
 
 
@@ -128,7 +129,7 @@ for fn in os.listdir(folder):
         # Decode
         pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                             union=args.union, weight=[[args.weight], [1 - args.weight]], out=None,
-                            hash_length=args.hash, history=history, weight_model=weight_model, verbose=False,
+                            hash_length=args.hash, history=history, weight_model=weight_model, verbose=args.verbose,
                             features=features, is_weight=is_weight)
         #pr = (data.input>0.5).astype(int)
 
