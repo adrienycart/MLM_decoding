@@ -108,6 +108,10 @@ if __name__ == '__main__':
     history = model_dict['history']
     
     if args.all:
+        if np.max(D) < min_diff:
+            print("No training data found. Try with a lower min_diff.")
+            sys.exit(0)
+    
         data_points = np.where(D > args.min_diff)
         data_features = []
         
