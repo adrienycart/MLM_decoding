@@ -51,10 +51,10 @@ def weight_search(params, verbose=False):
 
     # Get weight_model data
     if gt:
-        with open("optim/data/gt.all.quant.pkl", "rb") as file:
+        with open("weight_models/data/gt.all.quant.pkl", "rb") as file:
             pkl = pickle.load(file)
     else:
-        with open("optim/data/beam.all.quant.pkl", "rb") as file:
+        with open("weight_models/data/beam.all.quant.pkl", "rb") as file:
             pkl = pickle.load(file)
             
     X = pkl['X']
@@ -93,6 +93,23 @@ def weight_search(params, verbose=False):
         layers.append(5)
 
     weight_model = train_model(X, Y, layers=layers, weight=is_weight)
+    
+    weight_model_name = "weight_model."
+    weight_model_name += "gt" if gt else "b10"
+    weight_model_name += "_md" + str(min_diff)
+    weight_model_name += "_h" + str(history)
+    weight_model_name += "_l" + str(num_layers)
+    if features:
+        weight_model_name += "_f"
+    weight_model_name += "_weight" if is_weight else "_prior"
+    weight_model_name += ".quant.pkl"
+    
+    # Write out weight model
+    with open("weight_models/models/" + weight_model_name, "wb") as file:
+        pickle.dump({'model' : weight_model,
+                     'history' : history,
+                     'features' : features,
+                     'weight' : is_weight}, file)
 
     results = {}
     frames = np.zeros((0, 3))
