@@ -988,8 +988,14 @@ class Model:
         data[:,1:,:]=sampled_frames[:,:-1,:]
         cross_s, cross_tr_s, F_measure_s = sess.run([cross, cross_tr, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0]} )
 
+        #Metrics with thresholded input
+        sampled_frames = (preds>0.5).astype(int)
+        data[:,1:,:]=sampled_frames[:,:-1,:]
+        cross_th, cross_tr_th, F_measure_th = sess.run([cross, cross_tr, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0]} )
 
-        return [cross_GT, cross_tr_GT, F_measure_GT],[cross_s, cross_tr_s, F_measure_s]
+
+
+        return [cross_GT, cross_tr_GT, F_measure_GT],[cross_s, cross_tr_s, F_measure_s],[cross_th, cross_tr_th, F_measure_th]
 
 
 

@@ -54,7 +54,8 @@ model.print_params()
 
 dataset, seq_lens = data.get_dataset_chunks_no_pad('test',max_len)
 
-result_GT,result_s = model.compute_eval_metrics_pred(dataset,seq_lens,0.5,save_path)
+result_GT,result_s, results_th = model.compute_eval_metrics_pred(dataset,seq_lens,0.5,save_path)
 
 print(f"XE_GT: {result_GT[0]},XE_tr_GT: {result_GT[1]},F0_GT: {result_GT[2]}")
-print(f"XE_s: {result_s[0]},XE_tr_s: {result_s[1]},F0_GT: {result_s[2]}")
+print(f"XE_s: {result_s[0]},XE_tr_s: {result_s[1]},F0_s: {result_s[2]}")
+print(f"XE_th: {result_th[0]},XE_tr_th: {result_th[1]},F0_th: {result_th[2]}")

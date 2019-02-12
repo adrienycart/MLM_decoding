@@ -37,6 +37,7 @@ for filename in os.listdir(input_folder):
         data = DataMaps()
         data.make_from_file(os.path.join(input_folder,filename),'quant',[0,30])
 
+
         csv_path = os.path.join(result_folder,filename.replace('.mid','_pr.csv'))
         roll = np.loadtxt(csv_path)
         roll_time = convert_note_to_time(roll,data.corresp,max_len=30)
@@ -48,6 +49,10 @@ for filename in os.listdir(input_folder):
         roll_time_baseline = convert_note_to_time(roll_baseline,data.corresp,max_len=30)
         midi_data_baseline = make_midi_from_roll(roll_time_baseline,25)
 
+        data_GT = DataMaps()
+        data_GT.make_from_file(os.path.join(input_folder,filename),'time',[0,30])
+        midi_data_GT = make_midi_from_roll(data_GT.target,25)
 
         save_midi(midi_data,output_filename+'.mid')
         save_midi(midi_data_baseline,output_filename+'_baseline.mid')
+        save_midi(midi_data_GT,output_filename+'_GT.mid')
