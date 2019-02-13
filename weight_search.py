@@ -16,6 +16,12 @@ import tensorflow as tf
 import pretty_midi as pm
 import numpy as np
 
+
+step = {'step' : 'quant'}
+
+def set_step(new_step):
+    step['step'] = new_step
+    
 def weight_search(params, verbose=False):
     gt = params[0][0]
     min_diff = params[0][1]
@@ -46,15 +52,21 @@ def weight_search(params, verbose=False):
 
     # Build model object
     model = Model(model_param)
-    sess,_ = model.load("./ckpt/piano_midi/quant/quant_0.001_2/best_model.ckpt-374",
-                        model_path="./ckpt/piano_midi/quant/quant_0.001_2/best_model.ckpt-374")
+    if step['step'] == "quant":
+        model_path = "./ckpt/piano_midi/quant/quant_0.001_2/best_model.ckpt-374"
+    elif step['step'] == "event":
+        model_path = "./ckpt/piano_midi/quant/event_0.001/best_model.ckpt-284"
+    elif step['step'] == "time":
+        model_path = "./ckpt/piano_midi/quant/unquant_0.001/best_model.ckpt-463"
+        
+    sess,_ = model.load(model_path, model_path=model_path)
 
     # Get weight_model data
     if gt:
-        with open("weight_models/data/gt.all.quant.pkl", "rb") as file:
+        with open("weight_models/data/gt.all." + step['step'] + ".pkl", "rb") as file:
             pkl = pickle.load(file)
     else:
-        with open("weight_models/data/beam.all.quant.pkl", "rb") as file:
+        with open("weight_models/data/beam.all." + step['step'] + ".pkl", "rb") as file:
             pkl = pickle.load(file)
             
     X = pkl['X']
@@ -102,7 +114,7 @@ def weight_search(params, verbose=False):
     if features:
         weight_model_name += "_f"
     weight_model_name += "_weight" if is_weight else "_prior"
-    weight_model_name += ".quant.pkl"
+    weight_model_name += "." + step['step'] + ".pkl"
     
     # Write out weight model
     with open("weight_models/models/" + weight_model_name, "wb") as file:
@@ -120,7 +132,7 @@ def weight_search(params, verbose=False):
         sys.stdout.flush()
         
         data = DataMaps()
-        data.make_from_file(filename,"quant",section)
+        data.make_from_file(filename,step['step'],section)
 
         # Decode
         pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=50,
@@ -128,7 +140,8 @@ def weight_search(params, verbose=False):
                             out=None, hash_length=12, history=history, weight_model=weight_model,
                             verbose=verbose, features=features, is_weight=is_weight)
 
-        pr = convert_note_to_time(pr,data.corresp,max_len=max_len)
+        if step['step'] is not "time":
+            pr = convert_note_to_time(pr,data.corresp,max_len=max_len)
 
         data = DataMaps()
         data.make_from_file(filename, "time", section=section)
