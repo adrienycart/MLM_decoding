@@ -25,6 +25,8 @@ if __name__ == "__main__":
     sys.stdout.flush()
     
     weight_search.set_step(args.step)
+    weight_search.load_data()
+    weight_search.load_model()
     
     domain = [{'name' : 'gt', 'type' : 'categorical', 'domain' : (True, False)},
               {'name' : 'min_diff', 'type' : 'continuous', 'domain' : (0, 1)},

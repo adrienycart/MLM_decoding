@@ -1,6 +1,7 @@
 import argparse
 import numpy as np
 import pickle
+import gzip
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.neural_network import MLPClassifier
@@ -98,7 +99,7 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     
-    with open(args.data, "rb") as file:
+    with gzip.open(args.data, "rb") as file:
         model_dict = pickle.load(file)
         
     X = model_dict['X']

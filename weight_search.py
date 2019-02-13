@@ -11,16 +11,48 @@ import glob
 import pickle
 import warnings
 import sys
+import gzip
 
 import tensorflow as tf
 import pretty_midi as pm
 import numpy as np
 
 
-step = {'step' : 'quant'}
+step = {'step' : None}
 
 def set_step(new_step):
     step['step'] = new_step
+    
+data_dict = {'gt'   : None,
+             'beam' : None}
+    
+def load_data():
+    with gzip.open("weight_models/data/gt.all." + step['step'] + ".pkl.gz", "rb") as file:
+        data_dict['gt'] = pickle.load(file)
+    with gzip.open("weight_models/data/beam.all." + step['step'] + ".pkl.gz", "rb") as file:
+        data_dict['beam'] = pickle.load(file)
+    
+model_dict = {'model' : None,
+              'sess'  : None}
+    
+def load_model():
+    n_hidden = 256
+    
+    model_param = make_model_param()
+    model_param['n_hidden'] = n_hidden
+    model_param['n_steps'] = 1 # To generate 1 step at a time
+
+    # Build model object
+    model_dict['model'] = Model(model_param)
+    if step['step'] == "quant":
+        model_path = "./ckpt/piano_midi/quant/quant_0.001_2/best_model.ckpt-374"
+    elif step['step'] == "event":
+        model_path = "./ckpt/piano_midi/event_0.001/best_model.ckpt-284"
+    elif step['step'] == "time":
+        model_path = "./ckpt/piano_midi/unquant_0.001/best_model.ckpt-263"
+        
+    model_dict['sess'],_ = model_dict['model'].load(model_path, model_path=model_path)
+    
     
 def weight_search(params, verbose=False):
     gt = params[0][0]
@@ -43,31 +75,12 @@ def weight_search(params, verbose=False):
     note_min = note_range[0]
     note_max = note_range[1]
 
-    n_hidden = 256
-
     # Load model
-    model_param = make_model_param()
-    model_param['n_hidden'] = n_hidden
-    model_param['n_steps'] = 1 # To generate 1 step at a time
-
-    # Build model object
-    model = Model(model_param)
-    if step['step'] == "quant":
-        model_path = "./ckpt/piano_midi/quant/quant_0.001_2/best_model.ckpt-374"
-    elif step['step'] == "event":
-        model_path = "./ckpt/piano_midi/quant/event_0.001/best_model.ckpt-284"
-    elif step['step'] == "time":
-        model_path = "./ckpt/piano_midi/quant/unquant_0.001/best_model.ckpt-463"
-        
-    sess,_ = model.load(model_path, model_path=model_path)
+    model = model_dict['model']
+    sess = model_dict['sess']
 
     # Get weight_model data
-    if gt:
-        with open("weight_models/data/gt.all." + step['step'] + ".pkl", "rb") as file:
-            pkl = pickle.load(file)
-    else:
-        with open("weight_models/data/beam.all." + step['step'] + ".pkl", "rb") as file:
-            pkl = pickle.load(file)
+    pkl = data_dict['gt' if gt else 'beam']
             
     X = pkl['X']
     Y = pkl['Y']

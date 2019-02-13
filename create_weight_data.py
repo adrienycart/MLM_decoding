@@ -6,6 +6,7 @@ import os
 import pickle
 import itertools
 import glob
+import gzip
 
 from beam import Beam
 from mlm_training.model import Model, make_model_param
@@ -289,10 +290,10 @@ if __name__ == '__main__':
     print(D.shape)
     
     # Save data
-    with open(args.out, "wb") as file:
-              pickle.dump({'X' : X,
-                           'Y' : Y,
-                           'D' : D,
-                           'history' : args.history,
-                           'features' : args.features}, file)
+    with gzip.open(args.out, "wb") as file:
+        pickle.dump({'X' : X,
+                     'Y' : Y,
+                     'D' : D,
+                     'history' : args.history,
+                     'features' : args.features}, file)
     
