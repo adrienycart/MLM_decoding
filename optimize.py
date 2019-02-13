@@ -15,6 +15,8 @@ if __name__ == "__main__":
                         default="optim")
     parser.add_argument("--iters", help="The number of iterations to run optimization for. Defaults to 200.",
                         type=int, default=200)
+    parser.add_argument("--procs", help="The number of processes to use during calculation. Defaults to 4.",
+                        type=int, default=200)
     args = parser.parse_args()
     
     print("Running for " + str(args.iters) + " iterations.")
@@ -32,7 +34,7 @@ if __name__ == "__main__":
               {'name' : 'features', 'type' : 'categorical', 'domain' : (True, False)}]
 
     myBopt = GPyOpt.methods.BayesianOptimization(f=weight_search.weight_search, domain=domain, maximize=True,
-                                                 verbosity=True, num_cores=4)
+                                                 verbosity=True, num_cores=args.procs)
 
     myBopt.run_optimization(max_iter=args.iters, verbosity=True, report_file=args.output + "/Report.txt",
                             evaluations_file=args.output + "/Evaluations.txt", epsilon=0)
