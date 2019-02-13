@@ -72,6 +72,7 @@ def weight_search(params, verbose=False):
     X = pkl['X']
     Y = pkl['Y']
     D = pkl['D']
+    max_history = pkl['history']
     
     if np.max(D) < min_diff:
         print("No training data generated")
@@ -82,10 +83,10 @@ def weight_search(params, verbose=False):
     data_features = []
     
     if history > 0:
-        data_features.extend(range(10 - history, 10))
+        data_features.extend(range(max_history - history, max_history))
         
     if features:
-        data_features.extend(range(10, len(X[0]) - 2))
+        data_features.extend(range(max_history, len(X[0]) - 2))
             
     data_features.append(-2)
     data_features.append(-1)
