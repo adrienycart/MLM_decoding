@@ -4,6 +4,7 @@ import GPyOpt
 import dill
 import argparse
 import sys
+import os
 
 
 if __name__ == "__main__":
@@ -17,12 +18,16 @@ if __name__ == "__main__":
                         type=int, default=200)
     parser.add_argument("--procs", help="The number of processes to use during calculation. Defaults to 4.",
                         type=int, default=200)
+    parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
     args = parser.parse_args()
     
     print("Running for " + str(args.iters) + " iterations.")
     print("step type: " + args.step)
     print("saving output to " + args.output)
+    print("using GPU " + args.gpu)
     sys.stdout.flush()
+    
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     
     weight_search.set_step(args.step)
     weight_search.load_data()
