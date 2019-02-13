@@ -17,7 +17,7 @@ if __name__ == "__main__":
     parser.add_argument("--iters", help="The number of iterations to run optimization for. Defaults to 200.",
                         type=int, default=200)
     parser.add_argument("--procs", help="The number of processes to use during calculation. Defaults to 4.",
-                        type=int, default=200)
+                        type=int, default=4)
     parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
     args = parser.parse_args()
     
@@ -27,6 +27,7 @@ if __name__ == "__main__":
     print("using GPU " + args.gpu)
     sys.stdout.flush()
     
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     
     weight_search.set_step(args.step)
@@ -44,7 +45,7 @@ if __name__ == "__main__":
                                                  verbosity=True, num_cores=args.procs)
 
     myBopt.run_optimization(max_iter=args.iters, verbosity=True, report_file=args.output + "/Report.txt",
-                            evaluations_file=args.output + "/Evaluations.txt", epsilon=0)
+                            evaluations_file=args.output + "/Evaluations.txt", eps=0)
 
     print(myBopt.x_opt)
     print(myBopt.fx_opt)
