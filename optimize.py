@@ -43,6 +43,7 @@ if __name__ == "__main__":
 
     myBopt = GPyOpt.methods.BayesianOptimization(f=weight_search.weight_search, domain=domain, maximize=True,
                                                  verbosity=True, num_cores=args.procs)
+    myBopt.acquisition.jitter = 0.1
 
     myBopt.run_optimization(max_iter=args.iters, verbosity=True, report_file=args.output + "/Report.txt",
                             evaluations_file=args.output + "/Evaluations.txt", eps=0)

@@ -154,7 +154,7 @@ def weight_search(params, verbose=False):
                             out=None, hash_length=12, history=history, weight_model=weight_model,
                             verbose=verbose, features=features, is_weight=is_weight)
 
-        if step['step'] is not "time":
+        if step['step'] != "time":
             pr = convert_note_to_time(pr,data.corresp,max_len=max_len)
 
         data = DataMaps()
