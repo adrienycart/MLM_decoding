@@ -183,6 +183,11 @@ def weight_search(params, num=0, verbose=False):
 
         frames = np.vstack((frames, [P_f, R_f, F_f]))
         notes = np.vstack((notes, [P_n, R_n, F_n]))
+        
+        if F_n < 0.25:
+            print("Early stopping, F-measure too low.")
+            sys.stdout.flush()
+            return 0.0
 
     P_f, R_f, F_f = np.mean(frames, axis=0)
     P_n, R_n, F_n = np.mean(notes, axis=0)
