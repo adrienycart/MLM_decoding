@@ -478,6 +478,7 @@ if __name__ == '__main__':
     parser.add_argument("--hash", help="The hash length to use. Defaults to 10.",
                         type=int, default=10)
     parser.add_argument("-v", "--verbose", help="Print frame status updates.", action="store_true")
+    parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
 
     args = parser.parse_args()
 
@@ -494,6 +495,9 @@ if __name__ == '__main__':
         max_len = None
         section = None
 
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+        
     # Load data
     data = dataMaps.DataMaps()
     data.make_from_file(args.MIDI, args.step, section=section)
@@ -526,6 +530,9 @@ if __name__ == '__main__':
             else:
                 is_weight = True
 
+    if args.output is not None:
+        os.makedirs(args.output, exist_ok=True)
+                
     # Decode
     pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
                          beam_size=args.beam, union=args.union, weight=[[args.weight], [1 - args.weight]],
@@ -533,10 +540,11 @@ if __name__ == '__main__':
                          is_weight=is_weight, features=features, verbose=args.verbose)
 
     # Evaluate
-    np.save("pr", pr)
-    np.save("priors", priors)
-    np.save("weights", weights)
-    np.save("combined_priors", combined_priors)
+    if args.output is not None:
+        np.save(os.path.join(args.output, "pr"), pr)
+        np.save(os.path.join(args.output, "priors"), priors)
+        np.save(os.path.join(args.output, "weights"), weights)
+        np.save(os.path.join(args.output, "combined_priors"), combined_priors)
     if args.step in ['quant','event']:
         pr = dataMaps.convert_note_to_time(pr, data.corresp, max_len=max_len)
 

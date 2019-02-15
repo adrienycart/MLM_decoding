@@ -26,6 +26,9 @@ if __name__ == "__main__":
     print("using GPU " + args.gpu)
     sys.stdout.flush()
     
+    if args.output is not None:
+        os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     
