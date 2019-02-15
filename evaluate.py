@@ -38,6 +38,7 @@ weight.add_argument("-wm", "--weight_model", help="Load the given sklearn model 
                     default=None)
 parser.add_argument("--hash", help="The hash length to use. Defaults to 10.", type=int, default=10)
 parser.add_argument("-v", "--verbose", help="Use verbose printing.", action="store_true")
+parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
 
 
 
@@ -70,7 +71,8 @@ print(f"Sampling union: {args.union}")
 
 print('####################################')
 
-
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
 warnings.filterwarnings("ignore", message="tick should be an int.")
 

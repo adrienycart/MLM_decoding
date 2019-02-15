@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0, '../..')
+
 from dataMaps import DataMaps,convert_note_to_time, align_matrix
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 from mlm_training.model import Model, make_model_param
@@ -10,7 +13,6 @@ import os
 import glob
 import pickle
 import warnings
-import sys
 import gzip
 
 import tensorflow as tf
@@ -141,7 +143,7 @@ def weight_search(params, num=0, verbose=False):
     if features:
         weight_model_name += "_f"
     weight_model_name += "_weight" if is_weight else "_prior"
-    weight_model_name += "." + step['step'] + str(num) + ".pkl"
+    weight_model_name += "." + step['step'] + "." + str(num) + ".pkl"
     
     # Write out weight model
     with open("weight_models/models/" + weight_model_name, "wb") as file:

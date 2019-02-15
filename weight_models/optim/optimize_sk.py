@@ -33,12 +33,12 @@ if __name__ == "__main__":
     weight_search.load_data()
     weight_search.load_model()
     
-    dimensions = [[True, False], # GT
-                  (0.0, 1.0), # min_diff
+    dimensions = [[False], # GT
+                  (0.0, 0.8), # min_diff
                   (0, 50) if args.step == "time" else (0, 10), # history
-                  (0, 3), # num_layers
-                  [True, False], # is_weight
-                  [True, False]] # features
+                  (1, 3), # num_layers
+                  [False], # is_weight
+                  [False]] # features
 
     opt = skopt.gp_minimize(weight_search.weight_search, dimensions, n_calls=10+args.iters, kappa=args.kappa, noise=0.0004, verbose=True, n_points=10)
     
