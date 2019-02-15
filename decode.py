@@ -17,7 +17,7 @@ from mlm_training.model import Model, make_model_param
 
 def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.8], [0.2]],
            hash_length=10, out=None, history=5, weight_model=None, features=False, verbose=True,
-           is_weight=True):
+           is_weight=True, history_context=0, prior_context=0):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
 
@@ -71,6 +71,13 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     is_weight : bool
         True if the given weight_model outputs weights. False if it outputs weighted priors. Unused
         if weight_model is None. Defaults to False.
+        
+    history_context : int
+        The pitch window to include around the history of samples, unrolled, and 0 padded.
+        Defaults to 0.
+        
+    prior_context : int
+        The window of priors to include around the current priors. Defaults to 0.
 
 
     Returns
@@ -105,7 +112,8 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         p = None
 
         if weight_model:
-            X = np.vstack([create_weight_x(state, acoustic, frame_num, history, features=features) for state in beam])
+            X = np.vstack([create_weight_x(state, acoustic, frame_num, history, features=features,
+                                           history_context=history_context, prior_context=prior_context) for state in beam])
             # 2 x len(X) matrix
             weights_all = np.transpose(weight_model.predict_proba(X)) if is_weight else np.zeros((2, len(X)))
             # len(X) array
@@ -186,7 +194,8 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
 
 
 
-def create_weight_x(state, acoustic, frame_num, history, pitch_range=0, pitches=range(88), features=False):
+def create_weight_x(state, acoustic, frame_num, history, pitches=range(88), features=False,
+                    history_context=0, prior_context=0):
     """
     Get the x input for the dynamic weighting model.
 
@@ -203,16 +212,19 @@ def create_weight_x(state, acoustic, frame_num, history, pitch_range=0, pitches=
 
     history : int
         How many frames to save in the x data point. Defaults to 5.
-        
-    pitch_range : int
-        How many pitches above and below the given pitches should be saved in the data point.
-        Defaults to 0.
 
     pitches : list
         The pitches we want data points for. Defaults to [0:88] (all pitches).
         
     features : boolean
         True to calculate features. False otherwise.
+        
+    history_context : int
+        The pitch window to include around the history of samples, unrolled, and 0 padded.
+        Defaults to 0.
+        
+    prior_context : int
+        The window of priors to include around the current priors. Defaults to 0.
 
     Returns
     =======
@@ -220,14 +232,61 @@ def create_weight_x(state, acoustic, frame_num, history, pitch_range=0, pitches=
         The x data points for the given input for the dynamic weighting model.
     """
     frame = acoustic[frame_num, :]
+    pr = state.get_piano_roll(min_length=history, max_length=history)
     if features:
-        return np.hstack((state.get_piano_roll(min_length=history, max_length=history),
-                          get_features(acoustic, frame_num, state.get_priors()), np.reshape(frame, (88, -1)),
-                          np.reshape(state.prior, (88, -1))))[pitches]
+        
+        x = np.hstack((pr,
+                       get_features(acoustic, frame_num, state.get_priors()), np.reshape(frame, (88, -1)),
+                       np.reshape(state.prior, (88, -1))))
         
     else:
-        return np.hstack((state.get_piano_roll(min_length=history, max_length=history),
-                          np.reshape(frame, (88, -1)), np.reshape(state.prior, (88, -1))))[pitches]
+        x = np.hstack((pr,
+                       np.reshape(frame, (88, -1)), np.reshape(state.prior, (88, -1))))
+    
+    # Add prior and history contexts
+    x_new = pad_x(x, acoustic, language, pr, history, history_context, prior_context)
+    
+    return x_new[pitches]
+
+
+
+def pad_x(x, acoustic, language, pr, history, history_context, prior_context):
+    x_new = np.zeros((x.shape[0], x.shape[1] + prior_context * 4 + 2 * history_context * history))
+    x_new[:, :x.shape[1]] = x
+    
+    extra_start = x.shape[1]
+    
+    if prior_context != 0:
+        acoustic_padded = np.zeros(88 + prior_context * 2)
+        acoustic_padded[prior_context:-prior_context] = acoustic
+        
+        language_padded = np.zeros(88 + prior_context * 2)
+        language_padded[prior_context:-prior_context] = language
+        
+        for i in range(prior_context):
+            x_new[:, extra_start + i] = acoustic_padded[i:-2 * prior_context + i]
+            x_new[:, extra_start + prior_context + i] = language_padded[i:-2 * prior_context + i]
+            if i == 0:
+                x_new[:, extra_start + 2 * prior_context + i] = acoustic_padded[2 * prior_context - i:]
+                x_new[:, extra_start + 3 * prior_context + i] = language_padded[2 * prior_context - i:]
+            else:
+                x_new[:, extra_start + 2 * prior_context + i] = acoustic_padded[2 * prior_context - i:-i]
+                x_new[:, extra_start + 3 * prior_context + i] = language_padded[2 * prior_context - i:-i]
+            
+    extra_start += 4 * prior_context
+    
+    if history_context != 0 and history != 0:
+        pr_padded = np.zeros((88 + history_context * 2, history))
+        pr_padded[history_context:-history_context, :] = pr
+        
+        for i in range(history_context):
+            x_new[:, extra_start + i * history: extra_start + (i + 1) * history] = pr_padded[i:-2 * history_context + i,:]
+            if i == 0:
+                x_new[:, extra_start + history_context * history + i * history: extra_start + history_context * history + (i + 1) * history] = pr_padded[2 * history_context - i:,:]
+            else:
+                x_new[:, extra_start + history_context * history + i * history: extra_start + history_context * history + (i + 1) * history] = pr_padded[2 * history_context - i:-i,:]
+    
+    return x_new
 
 
     
@@ -516,19 +575,17 @@ if __name__ == '__main__':
     history = None
     features = None
     is_weight = None
+    history_context = None
+    prior_context = None
     if args.weight_model:
         with open(args.weight_model, "rb") as file:
             weight_model_dict = pickle.load(file)
             weight_model = weight_model_dict['model']
             history = weight_model_dict['history']
-            if 'features' in weight_model_dict:
-                features = weight_model_dict['features']
-            else:
-                features = False
-            if 'weight' in weight_model_dict:
-                is_weight = weight_model_dict['weight']
-            else:
-                is_weight = True
+            features = weight_model_dict['features'] if 'features' in weight_model_dict else False
+            is_weight = weight_model_dict['weight'] if 'weight' in weight_model_dict else True
+            history_context = weight_model_dict['history_context'] if 'history_context' in weight_model_dict else 0
+            prior_context = weight_model_dict['prior_context'] if 'prior_context' in weight_model_dict else 0
 
     if args.output is not None:
         os.makedirs(args.output, exist_ok=True)
@@ -537,7 +594,8 @@ if __name__ == '__main__':
     pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
                          beam_size=args.beam, union=args.union, weight=[[args.weight], [1 - args.weight]],
                          out=args.output, hash_length=args.hash, history=history, weight_model=weight_model,
-                         is_weight=is_weight, features=features, verbose=args.verbose)
+                         is_weight=is_weight, features=features, verbose=args.verbose, prior_context=prior_context,
+                         history_context=history_context)
 
     # Evaluate
     if args.output is not None:

@@ -6,7 +6,7 @@ from dataMaps import DataMaps,convert_note_to_time, align_matrix
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
-from decode import decode
+from decode import decode, pad_x
 from create_weight_data import get_weight_data
 from train_weight_model import train_model
 
@@ -74,6 +74,13 @@ def weight_search(params, num=0, verbose=False):
     is_weight = params[4]
     features = params[5]
     
+    history_context = 0
+    prior_context = 0
+    
+    if len(params) > 6:
+        history_context = params[6]
+        prior_context = params[7]
+    
     warnings.filterwarnings("ignore", message="tick should be an int.")
     folder = "data/outputs/valid"
 
@@ -113,8 +120,17 @@ def weight_search(params, num=0, verbose=False):
     data_features.append(-2)
     data_features.append(-1)
     
-    X = X[data_points]
     X = X[:, data_features]
+    
+    if prior_context + history_context > 0:
+        X_new = np.zeros((X.shape[0], X.shape[1] + prior_context * 4 + 2 * history_context * history))
+        
+        for i in range(int(X.shape[0] / 88)):
+            x_frame = X[88 * i : 88 * (i + 1), :]
+            
+            X_new[88 * i : 88 * (i + 1), :] = pad_x(x_frame, x_frame[:, -2], x_frame[:, -1], x_frame[:, :history], history, history_context, prior_context)
+            
+    X = X_new[data_points]
     Y = Y[data_points]
     
     if len(X) == 0:
@@ -123,9 +139,11 @@ def weight_search(params, num=0, verbose=False):
         return 0.0
     
     # Train weight model
+    print("Training weight model")
+    sys.stdout.flush()
     layers = []
     for i in range(num_layers):
-        layers.append(5)
+        layers.append(10)
 
     weight_model = train_model(X, Y, layers=layers, weight=is_weight)
     
@@ -133,7 +151,9 @@ def weight_search(params, num=0, verbose=False):
     most_recent_model = {'model' : weight_model,
                          'history' : history,
                          'features' : features,
-                         'weight' : is_weight}
+                         'weight' : is_weight,
+                         'history_context' : history_context,
+                         'prior_context' : prior_context}
     
     weight_model_name = "weight_model."
     weight_model_name += "gt" if gt else "b10"
@@ -142,6 +162,8 @@ def weight_search(params, num=0, verbose=False):
     weight_model_name += "_l" + str(num_layers)
     if features:
         weight_model_name += "_f"
+    weight_model_name += "_hc" + str(history_context)
+    weight_model_name += "_pc" + str(prior_context)
     weight_model_name += "_weight" if is_weight else "_prior"
     weight_model_name += "." + step['step'] + "." + str(num) + ".pkl"
     

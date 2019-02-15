@@ -39,9 +39,11 @@ if __name__ == "__main__":
     dimensions = [[False], # GT
                   (0.0, 0.8), # min_diff
                   (0, 50) if args.step == "time" else (0, 10), # history
-                  (1, 3), # num_layers
+                  (1, 4), # num_layers
                   [False], # is_weight
-                  [False]] # features
+                  [False], # features
+                  (0, 3), # history pitch context
+                  (0, 3)] # prior context
 
     opt = skopt.gp_minimize(weight_search.weight_search, dimensions, n_calls=10+args.iters, kappa=args.kappa, noise=0.0004, verbose=True, n_points=10)
     
