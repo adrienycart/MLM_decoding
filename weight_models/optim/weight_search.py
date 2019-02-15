@@ -189,7 +189,8 @@ def weight_search(params, num=0, verbose=False):
         pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=5,
                             beam_size=50, union=False, weight=[[0.8], [0.2]],
                             out=None, hash_length=12, history=history, weight_model=weight_model,
-                            verbose=verbose, features=features, is_weight=is_weight)
+                            verbose=verbose, features=features, is_weight=is_weight, history_context=history_context,
+                            prior_context=prior_context)
 
         if step['step'] != "time":
             pr = convert_note_to_time(pr,data.corresp,max_len=max_len)

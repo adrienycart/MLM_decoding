@@ -244,7 +244,7 @@ def create_weight_x(state, acoustic, frame_num, history, pitches=range(88), feat
                        np.reshape(frame, (88, -1)), np.reshape(state.prior, (88, -1))))
     
     # Add prior and history contexts
-    x_new = pad_x(x, acoustic, language, pr, history, history_context, prior_context)
+    x_new = pad_x(x, frame, state.prior, pr, history, history_context, prior_context)
     
     return x_new[pitches]
 
