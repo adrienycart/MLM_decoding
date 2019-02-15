@@ -1,5 +1,6 @@
+import os
 import sys
-sys.path.insert(0, '../..')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/../..')
 
 from dataMaps import DataMaps,convert_note_to_time, align_matrix
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
@@ -9,7 +10,6 @@ from decode import decode
 from create_weight_data import get_weight_data
 from train_weight_model import train_model
 
-import os
 import glob
 import pickle
 import warnings
@@ -164,8 +164,8 @@ def weight_search(params, num=0, verbose=False):
         data.make_from_file(filename,step['step'],section)
 
         # Decode
-        pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=50,
-                            beam_size=200, union=False, weight=[[0.8], [0.2]],
+        pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=5,
+                            beam_size=50, union=False, weight=[[0.8], [0.2]],
                             out=None, hash_length=12, history=history, weight_model=weight_model,
                             verbose=verbose, features=features, is_weight=is_weight)
 
