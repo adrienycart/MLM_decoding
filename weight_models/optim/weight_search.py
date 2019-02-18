@@ -130,7 +130,9 @@ def weight_search(params, num=0, verbose=False):
             
             X_new[88 * i : 88 * (i + 1), :] = pad_x(x_frame, x_frame[:, -2], x_frame[:, -1], x_frame[:, :history], history, history_context, prior_context)
             
-    X = X_new[data_points]
+        X = X_new[data_points]
+        
+    X = X[data_points]
     Y = Y[data_points]
     
     if len(X) == 0:
