@@ -124,6 +124,7 @@ for fn in os.listdir(folder):
     if fn.endswith('.mid') and not fn.startswith('.'):
         filename = os.path.join(folder,fn)
         print(filename)
+        sys.stdout.flush()
 
         data = DataMaps()
         data.make_from_file(filename,args.step,section)
@@ -155,12 +156,14 @@ for fn in os.listdir(folder):
         notes = np.vstack((notes, [P_n, R_n, F_n]))
 
         print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
+        sys.stdout.flush()
 
         results[fn] = [[P_f,R_f,F_f],[P_n,R_n,F_n]]
 
 P_f, R_f, F_f = np.mean(frames, axis=0)
 P_n, R_n, F_n = np.mean(notes, axis=0)
 print(f"Averages: Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
+sys.stdout.flush()
 
 if not args.save is None:
     pickle.dump(results,open(os.path.join(args.save,'results.p'), "wb"))
