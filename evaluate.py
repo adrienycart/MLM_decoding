@@ -138,6 +138,10 @@ for fn in os.listdir(folder):
 
         # Save output
         if not args.save is None:
+            np.save(os.path.join(args.save,fn.replace('.mid','_pr')), pr)
+            np.save(os.path.join(args.save,fn.replace('.mid','_priors')), priors)
+            np.save(os.path.join(args.save,fn.replace('.mid','_weights')), weights)
+            np.save(os.path.join(args.save,fn.replace('.mid','_combined_priors')), combined_priors)
             np.savetxt(os.path.join(args.save,fn.replace('.mid','_pr.csv')), pr)
             np.savetxt(os.path.join(args.save,fn.replace('.mid','_priors.csv')), priors)
 
