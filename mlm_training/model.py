@@ -749,6 +749,7 @@ class Model:
                 break
 
             # Save the variables to disk.
+            # When using scheduled sampling: Only start early stopping once schedule is finished.
             if train_param['early_stop'] and (sched_sampl is None or (sched_sampl is not None and i>train_param['schedule_duration'])):
                 if cross<best_cross:
                         saved = saver_best.save(sess, os.path.join(ckpt_save_path,"best_model.ckpt"),global_step=i)
