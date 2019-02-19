@@ -9,9 +9,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/..')
 
 from dataMaps import DataMaps, convert_note_to_time
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
+    
 
 
-def decode(observed, prior, trans):
+
+def decode(observed, prior, trans, order=None):
     """
     Get the most likely state sequence given the parameters.
     
@@ -24,7 +26,10 @@ def decode(observed, prior, trans):
         The prior for each state.
         
     trans : np.ndarray
-        A 2x2 matrix representing the transition probabilities as trans[from, to].
+        A (2 ** order)x2 matrix representing the transition probabilities as trans[from, to].
+        
+    order : int
+        The order of the hmm to decode. None to calculate it from trans's dimensionality.
         
     Returns
     =======
@@ -40,28 +45,40 @@ def decode(observed, prior, trans):
     prior = np.log(prior)
     trans = np.log(trans)
     
+    if order is None:
+        order = 0
+        power = len(trans)
+        while power != 1:
+            power /= 2
+            order += 1
+            
+    order_mask = 2 ** order - 1
+    
     # Set up save lists
-    state_probs = np.zeros((len(observed), 2))
-    state_paths = np.zeros(state_probs.shape)
+    state_probs = np.zeros((len(observed), len(trans)))
+    state_paths = np.zeros((len(observed), len(trans)))
     
     state_probs[0, :] = prior + observed[0, :]
-    state_paths[0, :] = [None, None]
+    state_paths[0, :] = np.zeros(len(trans))
     
     # Decode
     for frame in range(1, len(observed)):
-        for to_state in range(2):
-            max_prob = -np.inf
-            max_path = None
+        
+        max_probs = np.ones(len(trans)) * -np.inf
+        max_paths = np.zeros(len(trans))
             
-            for from_state in range(2):
-                prob = state_probs[frame-1, from_state] + trans[from_state, to_state] + observed[frame, to_state]
-                
-                if prob > max_prob:
-                    max_prob = prob
-                    max_path = from_state
-                    
-            state_probs[frame, to_state] = max_prob
-            state_paths[frame, to_state] = max_path
+        for from_state in range(len(trans)):
+            for to_index in range(2):
+                prob = state_probs[frame-1, from_state] + trans[from_state, to_index] + observed[frame, to_index]
+
+                to_state = ((from_state << 1) | to_index) & order_mask
+
+                if prob > max_probs[to_state]:
+                    max_probs[to_state] = prob
+                    max_paths[to_state] = from_state
+
+        state_probs[frame, :] = max_probs
+        state_paths[frame, :] = max_paths
     
     # Get most likely decoded sequence
     decoded = np.zeros(len(observed), dtype=int)

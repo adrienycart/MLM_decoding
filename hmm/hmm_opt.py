@@ -13,16 +13,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/..')
 from dataMaps import DataMaps, convert_note_to_time
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 
-
+order = None
 priors = None
 step = None
 
 def test(params):
     global priors
     global step
+    global order
     print(params)
     
-    transitions = np.zeros((88, 2, 2))
+    transitions = np.zeros((88, 2 ** order, 2))
     for i in range(88):
         transitions[i, :, 0] = params
         transitions[i, :, 1] = 1 - transitions[i, :, 0]
@@ -64,7 +65,7 @@ def test(params):
     print(str(F_n) + ": " + str(params))
     sys.stdout.flush()
     
-    out = "hmm/models/" + step + "." + str(F_n)
+    out = "hmm/models/" + step + "." + str(order) + "." + str(F_n) + ".pkl"
     with open(out, "wb") as file:
         pickle.dump({"priors" : priors,
                      "transitions" : transitions}, file)
@@ -84,22 +85,25 @@ if __name__ == "__main__":
                         default="optim.sko")
     parser.add_argument("--iters", help="The number of iterations to run optimization for (after the initial 10 " +
                         "random points). Defaults to 200.", type=int, default=200)
+    parser.add_argument("--order", help="The order of the HMM to train (unigram, bigram, etc)", type=int, default=1)
     args = parser.parse_args()
     
     with open(args.priors, "rb") as file:
         priors = pickle.load(file)["priors"]
         
     step = args.step
+    order = args.order
     
     print("Running for " + str(args.iters) + " iterations.")
     print("step type: " + args.step)
+    print("order: " + str(args.order))
     print("saving output to " + args.output)
     sys.stdout.flush()
     
     if args.output is not None:
         os.makedirs(os.path.dirname(args.output), exist_ok=True)
     
-    dimensions = [(0.0, 1.0) for i in range(2)] # probability of transition into state 0 for all states of all pitches
+    dimensions = [(0.0, 1.0) for i in range(2 ** order)] # probability of transition into state 0 for all states of all pitches
 
     opt = skopt.gp_minimize(test, dimensions, n_calls=10+args.iters, verbose=True)
     
