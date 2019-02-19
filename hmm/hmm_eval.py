@@ -54,18 +54,26 @@ def decode(observed, prior, trans, order=None):
             
     order_mask = 2 ** order - 1
     
+    if order != 1:
+        new_prior = np.zeros(len(trans))
+        new_prior[:2] = prior
+        prior = new_prior
+    
     # Set up save lists
     state_probs = np.zeros((len(observed), len(trans)))
     state_paths = np.zeros((len(observed), len(trans)))
     
-    state_probs[0, :] = prior + observed[0, :]
-    state_paths[0, :] = np.zeros(len(trans))
+    initial_observed = np.zeros(len(trans))
+    initial_observed[:2] = observed[0, :]
+    
+    state_probs[0, :] = prior + initial_observed
+    state_paths[0, :] = np.zeros(len(trans), dtype=int)
     
     # Decode
     for frame in range(1, len(observed)):
         
         max_probs = np.ones(len(trans)) * -np.inf
-        max_paths = np.zeros(len(trans))
+        max_paths = np.zeros(len(trans), dtype=int)
             
         for from_state in range(len(trans)):
             for to_index in range(2):
@@ -88,7 +96,7 @@ def decode(observed, prior, trans, order=None):
     for frame in range(len(observed) - 1, 0, -1):
         decoded[frame-1] = state_paths[frame, decoded[frame]]
         
-    return decoded, np.max(state_probs[-1, :])
+    return decoded & 1, np.max(state_probs[-1, :])
     
 
 
