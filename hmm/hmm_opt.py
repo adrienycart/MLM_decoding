@@ -20,10 +20,12 @@ step = None
 def test(params):
     global priors
     global step
+    print(params)
     
     transitions = np.zeros((88, 2, 2))
-    transitions[:, :, 0] = np.reshape(params, (88, 2))
-    transitions[:, :, 1] = 1 - transitions[:, :, 0]
+    for i in range(88):
+        transitions[i, :, 0] = params
+        transitions[i, :, 1] = 1 - transitions[i, :, 0]
     
     frames = np.zeros((0, 3))
     notes = np.zeros((0, 3))
@@ -59,6 +61,7 @@ def test(params):
     P_n, R_n, F_n = np.mean(notes, axis=0)
     
     print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
+    print(str(F_n) + ": " + str(params))
     sys.stdout.flush()
     
     out = "hmm/models/" + step + "." + str(F_n)
@@ -96,7 +99,7 @@ if __name__ == "__main__":
     if args.output is not None:
         os.makedirs(os.path.dirname(args.output), exist_ok=True)
     
-    dimensions = [(0.0, 1.0) for i in range(2*88)] # probability of transition into state 0 for all states of all pitches
+    dimensions = [(0.0, 1.0) for i in range(2)] # probability of transition into state 0 for all states of all pitches
 
     opt = skopt.gp_minimize(test, dimensions, n_calls=10+args.iters, verbose=True)
     
