@@ -3,16 +3,80 @@ import argparse
 import pickle
 import glob
 import os
-import hmmlearn
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/..')
 
-from dataMaps import DataMaps
+from dataMaps import DataMaps, convert_note_to_time
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 
 
-def decode(pr, priors, transitions):
+def decode(observed, prior, trans):
+    """
+    Get the most likely state sequence given the parameters.
+    
+    Parameters
+    ==========
+    observed : np.array
+        The observed sequence of floats.
+        
+    prior : np.array
+        The prior for each state.
+        
+    trans : np.ndarray
+        A 2x2 matrix representing the transition probabilities as trans[from, to].
+        
+    Returns
+    =======
+    decoded : np.array
+        A binarized sequence of the same length as the observed sequence representing
+        the most likely state at each observed data point.
+        
+    prob : float
+        The log probability of the returned sequence.
+    """
+    # Convert all to log probabilities to avoid underflow
+    observed = np.log(np.stack((1 - observed, observed), axis=1))
+    prior = np.log(prior)
+    trans = np.log(trans)
+    
+    # Set up save lists
+    state_probs = np.zeros((len(observed), 2))
+    state_paths = np.zeros(state_probs.shape)
+    
+    state_probs[0, :] = prior + observed[0, :]
+    state_paths[0, :] = [None, None]
+    
+    # Decode
+    for frame in range(1, len(observed)):
+        for to_state in range(2):
+            max_prob = -np.inf
+            max_path = None
+            
+            for from_state in range(2):
+                prob = state_probs[frame-1, from_state] + trans[from_state, to_state] + observed[frame, to_state]
+                
+                if prob > max_prob:
+                    max_prob = prob
+                    max_path = from_state
+                    
+            state_probs[frame, to_state] = max_prob
+            state_paths[frame, to_state] = max_path
+    
+    # Get most likely decoded sequence
+    decoded = np.zeros(len(observed), dtype=int)
+    decoded[-1] = np.argmax(state_probs[-1, :])
+    
+    # Walk backwards
+    for frame in range(len(observed) - 1, 0, -1):
+        decoded[frame-1] = state_paths[frame, decoded[frame]]
+        
+    return decoded, np.max(state_probs[-1, :])
+    
+
+
+
+def decode_all_pitches(pr, priors, transitions):
     """
     Get the decoded piano roll given a trained HMM.
     
@@ -36,16 +100,22 @@ def decode(pr, priors, transitions):
     """
     decoded_pr = np.zeros(pr.shape)
     
-    # TODO with hmmlearn, pitch by pitch
+    for pitch in range(88):
+        observed = np.squeeze(pr[pitch])
+        prior = [1 - priors[pitch], priors[pitch]]
+        trans = np.squeeze(transitions[pitch, :, :])
+        
+        decoded_pr[pitch, :], _ = decode(observed, prior, trans)
     
     return decoded_pr
+
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument('data_path',type=str, help="folder containing the split dataset")
-    parser.add_argument('hmm_probs', type=str, help="Location to load the HMM probabilites from.")
+    parser.add_argument('hmm', type=str, help="Location to load the HMM probabilites from.")
     
     parser.add_argument("--step", type=str, choices=["time", "quant", "event"],
                         help="Change the step type for frame timing. Either time (default), " +
@@ -66,8 +136,8 @@ if __name__ == "__main__":
         max_len = None
         section = None
     
-    with open(args.output, "rb") as file:
-        pkl = pickle.load(args.hmm_probs)
+    with open(args.hmm, "rb") as file:
+        pkl = pickle.load(file)
         
     priors = pkl["priors"]
     transitions = pkl["transitions"]
@@ -77,24 +147,25 @@ if __name__ == "__main__":
     notes = np.zeros((0, 3))
     
     for file in glob.glob(os.path.join(args.data_path, "*.mid")):
-        print(file)
+        base = os.path.basename(file)
+        print(base)
         sys.stdout.flush()
         
         data = DataMaps()
         data.make_from_file(file, args.step, section)
         
-        pr = decode(data.input, priors, transitions)
+        pr = decode_all_pitches(data.input, priors, transitions)
         
         # Save output
         if not args.save is None:
-            np.save(os.path.join(args.save, file.replace('.mid','_pr')), pr)
-            np.savetxt(os.path.join(args.save, file.replace('.mid','_pr.csv')), pr)
+            np.save(os.path.join(args.save, base.replace('.mid','_pr')), pr)
+            np.savetxt(os.path.join(args.save, base.replace('.mid','_pr.csv')), pr)
         
         if args.step in ['quant','event']:
             pr = convert_note_to_time(pr, data.corresp, max_len=max_len)
 
         data = DataMaps()
-        data.make_from_file(filename, "time", section=section)
+        data.make_from_file(file, "time", section=section)
         target = data.target
 
         #Evaluate
@@ -107,7 +178,7 @@ if __name__ == "__main__":
         print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
         sys.stdout.flush()
 
-        results[fn] = [[P_f,R_f,F_f],[P_n,R_n,F_n]]
+        results[base] = [[P_f,R_f,F_f],[P_n,R_n,F_n]]
         
     P_f, R_f, F_f = np.mean(frames, axis=0)
     P_n, R_n, F_n = np.mean(notes, axis=0)
