@@ -42,7 +42,7 @@ if __name__ == "__main__":
     
     for gt in [False]:
         for min_diff in [0]:
-            for history in range(10, 41, 5) if args.step == "time" else range(5,11):
+            for history in range(5, 41, 5) if args.step == "time" else range(5,11):
                 for num_layers in range(1, 4):
                     for is_weight in [False]:
                         for features in [False]:
