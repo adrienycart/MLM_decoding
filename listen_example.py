@@ -14,10 +14,12 @@ def get_name_from_maps(filename):
 
 
 
-result_folder = "results/quant/autoweight_k40_b100_h20"
+result_folder = "results/quant/save-quant"
+result_folder_old = "results/quant/autoweight_k40_b100_h20"
 baseline_folder = "results/baseline/quant"
+hmm_folder = "results/save-hmm/save-quant-hmm"
 input_folder = "data/outputs_default_config_split/test"
-filename  = "MAPS_MUS-chpn-p14_ENSTDkAm.mid"
+# filename  = "MAPS_MUS-chpn_op35_1_ENSTDkAm.mid"
 
 output = 'results/midi_outputs/'
 
@@ -43,16 +45,28 @@ for filename in os.listdir(input_folder):
         roll_time = convert_note_to_time(roll,data.corresp,max_len=30)
         midi_data = make_midi_from_roll(roll_time,25)
 
+        csv_path_old = os.path.join(result_folder_old,filename.replace('.mid','_pr.csv'))
+        roll_old = np.loadtxt(csv_path_old)
+        roll_time_old = convert_note_to_time(roll_old,data.corresp,max_len=30)
+        midi_data_old = make_midi_from_roll(roll_time_old,25)
+
 
         csv_path_baseline = os.path.join(baseline_folder,filename.replace('.mid','_pr.csv'))
         roll_baseline = np.loadtxt(csv_path_baseline)
         roll_time_baseline = convert_note_to_time(roll_baseline,data.corresp,max_len=30)
         midi_data_baseline = make_midi_from_roll(roll_time_baseline,25)
 
+        csv_path_hmm = os.path.join(hmm_folder,filename.replace('.mid','_pr.csv'))
+        roll_hmm = np.loadtxt(csv_path_hmm)
+        roll_time_hmm = convert_note_to_time(roll_hmm,data.corresp,max_len=30)
+        midi_data_hmm = make_midi_from_roll(roll_time_hmm,25)
+
         data_GT = DataMaps()
         data_GT.make_from_file(os.path.join(input_folder,filename),'time',[0,30])
         midi_data_GT = make_midi_from_roll(data_GT.target,25)
 
         save_midi(midi_data,output_filename+'.mid')
+        save_midi(midi_data_old,output_filename+'_old.mid')
         save_midi(midi_data_baseline,output_filename+'_baseline.mid')
+        save_midi(midi_data_hmm,output_filename+'_hmm.mid')
         save_midi(midi_data_GT,output_filename+'_GT.mid')

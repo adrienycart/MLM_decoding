@@ -5,8 +5,9 @@ import os
 
 
 
-folder_1 = 'results/quant/autoweight_k40_b100_h20'
-folder_2 = 'results/baseline/quant'
+folder_1 = 'results/quant/save-quant'
+# folder_2 = 'results/baseline/quant'
+folder_2 = "results/save-hmm/save-quant-hmm"
 
 
 
