@@ -42,8 +42,9 @@ if __name__ == "__main__":
                   (1, 4), # num_layers
                   [False], # is_weight
                   [False], # features
-                  (0, 3), # history pitch context
-                  (0, 3)] # prior context
+                  [0], # history pitch context
+                  [0], # prior context
+                  [False]] # use LSTM
 
     opt = skopt.gp_minimize(weight_search.weight_search, dimensions, n_calls=10+args.iters, kappa=args.kappa, noise=0.0004, verbose=True, n_points=10)
     

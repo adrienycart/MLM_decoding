@@ -3,6 +3,7 @@ import weight_search
 import argparse
 import os
 import sys
+import pickle
 
 
 
@@ -40,23 +41,27 @@ if __name__ == "__main__":
     best_model = None
     
     for gt in [False]:
-        for min_diff in [0, 0.2, 0.4, 0.6]:
-            for history in range(0, 41, 10) if args.step == "time" else range(0, 11, 3):
+        for min_diff in [0]:
+            for history in range(10, 41, 5) if args.step == "time" else range(5,11):
                 for num_layers in range(1, 4):
                     for is_weight in [False]:
                         for features in [False]:
-                            for num in range(args.num):
-                                data = [[gt, min_diff, history, num_layers, is_weight, features]]
-                                f_n = -weight_search.weight_search(data, num=num)
-                                
-                                if f_n > best_f_n:
-                                    best_data = data
-                                    best_f_n = f_n
-                                    best_num = num
-                                    best_model = weight_search.get_most_recent_model()
-                                    
-                                    with open(args.output + "/best_model.pkl", "wb") as file:
-                                        pickle.dump(best_model, file)
+                            for prior_context in [0]:
+                                for history_context in [0]:
+                                    for use_lstm in [False]:
+                                        for num in range(args.num):
+                                            data = [gt, min_diff, history, num_layers, is_weight, features,
+                                                    history_context, prior_context, use_lstm]
+                                            f_n = -weight_search.weight_search(data, num=num)
+
+                                            if f_n > best_f_n:
+                                                best_data = data
+                                                best_f_n = f_n
+                                                best_num = num
+                                                best_model = weight_search.get_most_recent_model()
+
+                                                with open(args.output + "/best_model.pkl", "wb") as file:
+                                                    pickle.dump(best_model, file)
 
     print("Best data: " + str(best_data))
     print("Best f_n: " + str(best_f_n))

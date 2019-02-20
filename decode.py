@@ -17,7 +17,7 @@ from mlm_training.model import Model, make_model_param
 
 def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.8], [0.2]],
            hash_length=10, out=None, history=5, weight_model=None, features=False, verbose=True,
-           is_weight=True, history_context=0, prior_context=0):
+           is_weight=True, history_context=0, prior_context=0, use_lstm=True):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
 
@@ -78,6 +78,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         
     prior_context : int
         The window of priors to include around the current priors. Defaults to 0.
+        
+    use_lstm : boolean
+        Whether to use the LSTM prior in the weight_model results. Defaults to True.
 
 
     Returns
@@ -112,7 +115,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         p = None
 
         if weight_model:
-            X = np.vstack([create_weight_x(state, acoustic, frame_num, history, features=features,
+            X = np.vstack([create_weight_x(state, acoustic, frame_num, history, features=features, use_lstm=use_lstm,
                                            history_context=history_context, prior_context=prior_context) for state in beam])
             # 2 x len(X) matrix
             weights_all = np.transpose(weight_model.predict_proba(X)) if is_weight else np.zeros((2, len(X)))
@@ -195,7 +198,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
 
 
 def create_weight_x(state, acoustic, frame_num, history, pitches=range(88), features=False,
-                    history_context=0, prior_context=0):
+                    history_context=0, prior_context=0, use_lstm=True):
     """
     Get the x input for the dynamic weighting model.
 
@@ -225,6 +228,9 @@ def create_weight_x(state, acoustic, frame_num, history, pitches=range(88), feat
         
     prior_context : int
         The window of priors to include around the current priors. Defaults to 0.
+        
+    use_lstm : boolean
+        Whether to use the LSTM prior in the weight_model results. Defaults to True.
 
     Returns
     =======
@@ -236,12 +242,14 @@ def create_weight_x(state, acoustic, frame_num, history, pitches=range(88), feat
     if features:
         
         x = np.hstack((pr,
-                       get_features(acoustic, frame_num, state.get_priors()), np.reshape(frame, (88, -1)),
-                       np.reshape(state.prior, (88, -1))))
+                       get_features(acoustic, frame_num, state.get_priors()), np.reshape(frame, (88, -1))))
         
     else:
         x = np.hstack((pr,
-                       np.reshape(frame, (88, -1)), np.reshape(state.prior, (88, -1))))
+                       np.reshape(frame, (88, -1))))
+        
+    if use_lstm:
+        x = np.hstack((x, np.reshape(state.prior, (88, -1))))
     
     # Add prior and history contexts
     x_new = pad_x(x, frame, state.prior, pr, history, history_context, prior_context)
@@ -577,6 +585,7 @@ if __name__ == '__main__':
     is_weight = None
     history_context = None
     prior_context = None
+    use_lstm = None
     if args.weight_model:
         with open(args.weight_model, "rb") as file:
             weight_model_dict = pickle.load(file)
@@ -586,6 +595,7 @@ if __name__ == '__main__':
             is_weight = weight_model_dict['weight'] if 'weight' in weight_model_dict else True
             history_context = weight_model_dict['history_context'] if 'history_context' in weight_model_dict else 0
             prior_context = weight_model_dict['prior_context'] if 'prior_context' in weight_model_dict else 0
+            use_lstm = weight_model_dict['use_lstm'] if 'use_lstm' in weight_model_dict else True
 
     if args.output is not None:
         os.makedirs(args.output, exist_ok=True)
@@ -595,7 +605,7 @@ if __name__ == '__main__':
                          beam_size=args.beam, union=args.union, weight=[[args.weight], [1 - args.weight]],
                          out=args.output, hash_length=args.hash, history=history, weight_model=weight_model,
                          is_weight=is_weight, features=features, verbose=args.verbose, prior_context=prior_context,
-                         history_context=history_context)
+                         history_context=history_context, use_lstm=use_lstm)
 
     # Evaluate
     if args.output is not None:

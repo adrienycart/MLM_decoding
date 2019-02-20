@@ -80,6 +80,10 @@ def weight_search(params, num=0, verbose=False):
     if len(params) > 6:
         history_context = params[6]
         prior_context = params[7]
+        
+    use_lstm = True
+    if len(params) > 8:
+        use_lstm = params[8]
     
     warnings.filterwarnings("ignore", message="tick should be an int.")
     folder = "data/outputs/valid"
@@ -116,9 +120,11 @@ def weight_search(params, num=0, verbose=False):
         
     if features:
         data_features.extend(range(max_history, len(X[0]) - 2))
-            
+    
     data_features.append(-2)
-    data_features.append(-1)
+    
+    if use_lstm:
+        data_features.append(-1)
     
     X = X[:, data_features]
     
@@ -145,7 +151,7 @@ def weight_search(params, num=0, verbose=False):
     sys.stdout.flush()
     layers = []
     for i in range(num_layers):
-        layers.append(10)
+        layers.append(5)
 
     weight_model = train_model(X, Y, layers=layers, weight=is_weight)
     
@@ -155,7 +161,8 @@ def weight_search(params, num=0, verbose=False):
                          'features' : features,
                          'weight' : is_weight,
                          'history_context' : history_context,
-                         'prior_context' : prior_context}
+                         'prior_context' : prior_context,
+                         'use_lstm' : use_lstm}
     
     weight_model_name = "weight_model."
     weight_model_name += "gt" if gt else "b10"
@@ -166,15 +173,14 @@ def weight_search(params, num=0, verbose=False):
         weight_model_name += "_f"
     weight_model_name += "_hc" + str(history_context)
     weight_model_name += "_pc" + str(prior_context)
+    if not use_lstm:
+        weight_model_name += "_noLSTM"
     weight_model_name += "_weight" if is_weight else "_prior"
     weight_model_name += "." + step['step'] + "." + str(num) + ".pkl"
     
     # Write out weight model
     with open("weight_models/models/" + weight_model_name, "wb") as file:
-        pickle.dump({'model' : weight_model,
-                     'history' : history,
-                     'features' : features,
-                     'weight' : is_weight}, file)
+        pickle.dump(most_recent_model, file)
 
     results = {}
     frames = np.zeros((0, 3))
@@ -192,7 +198,7 @@ def weight_search(params, num=0, verbose=False):
                             beam_size=50, union=False, weight=[[0.8], [0.2]],
                             out=None, hash_length=12, history=history, weight_model=weight_model,
                             verbose=verbose, features=features, is_weight=is_weight, history_context=history_context,
-                            prior_context=prior_context)
+                            prior_context=prior_context, use_lstm=use_lstm)
 
         if step['step'] != "time":
             pr = convert_note_to_time(pr,data.corresp,max_len=max_len)

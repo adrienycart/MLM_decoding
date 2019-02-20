@@ -98,19 +98,19 @@ weight_model = None
 history = None
 features = None
 is_weight = None
+history_context = None
+prior_context = None
+use_lstm = None
 if args.weight_model:
     with open(args.weight_model, "rb") as file:
         weight_model_dict = pickle.load(file)
         weight_model = weight_model_dict['model']
         history = weight_model_dict['history']
-        if 'features' in weight_model_dict:
-            features = weight_model_dict['features']
-        else:
-            features = False
-        if 'weight' in weight_model_dict:
-            is_weight = weight_model_dict['weight']
-        else:
-            is_weight = True
+        features = weight_model_dict['features'] if 'features' in weight_model_dict else False
+        is_weight = weight_model_dict['weight'] if 'weight' in weight_model_dict else True
+        history_context = weight_model_dict['history_context'] if 'history_context' in weight_model_dict else 0
+        prior_context = weight_model_dict['prior_context'] if 'prior_context' in weight_model_dict else 0
+        use_lstm = weight_model_dict['use_lstm'] if 'use_lstm' in weight_model_dict else True
 
 if not args.save is None:
     safe_mkdir(args.save)
@@ -133,7 +133,8 @@ for fn in os.listdir(folder):
         pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                             union=args.union, weight=[[args.weight], [1 - args.weight]], out=None,
                             hash_length=args.hash, history=history, weight_model=weight_model, verbose=args.verbose,
-                            features=features, is_weight=is_weight)
+                            features=features, is_weight=is_weight, use_lstm=use_lstm, prior_context=prior_context,
+                            history_context=history_context)
         #pr = (data.input>0.5).astype(int)
 
         # Save output
