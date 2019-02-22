@@ -17,7 +17,7 @@ from mlm_training.model import Model, make_model_param
 
 def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.8], [0.2]],
            hash_length=10, out=None, history=5, weight_model=None, features=False, verbose=True,
-           is_weight=True, history_context=0, prior_context=0, use_lstm=True):
+           is_weight=True, history_context=0, prior_context=0, use_lstm=True, gt=None):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
 
@@ -81,6 +81,10 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         
     use_lstm : boolean
         Whether to use the LSTM prior in the weight_model results. Defaults to True.
+        
+    gt : matrix
+        The ground truth piano roll, 88 x T. If given, this will be used to always use the optimum
+        weight for each frame. Defaults to None.
 
 
     Returns
@@ -96,6 +100,10 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     weights : np.ndarray
         An 88 X T matrix, giving the acoustic weights for each pitch at each frame.
     """
+    if gt is not None:
+        weight_model = True
+        is_weight = True
+        
     if union:
         branch_factor = int(branch_factor / 2)
 
@@ -107,14 +115,18 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     for frame_num, frame in enumerate(acoustic):
         if verbose and frame_num % 20 == 0:
             print(str(frame_num) + " / " + str(acoustic.shape[0]))
-
+            
         states = []
         samples = []
         weights = []
         priors = []
         p = None
 
-        if weight_model:
+        if gt is not None:
+            weights_all = np.transpose(np.vstack([get_best_weights(state.prior, frame, gt[:, frame_num]) for state in beam]))
+            priors_all = np.zeros(weights_all.shape[1])
+            
+        elif weight_model:
             X = np.vstack([create_weight_x(state, acoustic, frame_num, history, features=features, use_lstm=use_lstm,
                                            history_context=history_context, prior_context=prior_context) for state in beam])
             # 2 x len(X) matrix
@@ -194,6 +206,41 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     top_state = beam.get_top_state()
     return top_state.get_piano_roll(), top_state.get_priors(), top_state.get_weights(), top_state.get_combined_priors()
 
+
+
+
+def get_best_weights(language, acoustic, gt):
+    """
+    Get the best weights for the given priors and ground truth.
+    
+    Parameters
+    ==========
+    language : np.array
+        The language model priors, of length N.
+        
+    acoustic : np.array
+        The acoustic model priors, of length N.
+        
+    gt : np.array
+        The ground truth outputs, a binrazed array of length N.
+        
+    Returns
+    =======
+    weights : np.ndarray
+        An N x 2 array with the best weights for each sample, on the range [0.0, 1.0].
+        The 1st column is the acoustic weight, and the 2nd column is the language weight.
+    """
+    language = np.squeeze(language)
+    
+    weights = np.zeros((len(language), 2))
+    
+    language_diffs = np.abs(language - gt)
+    acoustic_diffs = np.abs(acoustic - gt)
+    
+    weights[:, 0] = np.where(acoustic_diffs < language_diffs, 1, 0)
+    weights[:, 1] = 1 - weights[:, 0]
+    
+    return weights
 
 
 
@@ -546,6 +593,8 @@ if __name__ == '__main__':
                         type=int, default=10)
     parser.add_argument("-v", "--verbose", help="Print frame status updates.", action="store_true")
     parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
+    
+    parser.add_argument("--gt", help="Use the gt to use the best possible weight_model results.", action="store_true")
 
     args = parser.parse_args()
 
@@ -605,7 +654,7 @@ if __name__ == '__main__':
                          beam_size=args.beam, union=args.union, weight=[[args.weight], [1 - args.weight]],
                          out=args.output, hash_length=args.hash, history=history, weight_model=weight_model,
                          is_weight=is_weight, features=features, verbose=args.verbose, prior_context=prior_context,
-                         history_context=history_context, use_lstm=use_lstm)
+                         history_context=history_context, use_lstm=use_lstm, gt=data.target if args.gt else None)
 
     # Evaluate
     if args.output is not None:

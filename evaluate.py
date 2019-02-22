@@ -39,6 +39,7 @@ weight.add_argument("-wm", "--weight_model", help="Load the given sklearn model 
 parser.add_argument("--hash", help="The hash length to use. Defaults to 10.", type=int, default=10)
 parser.add_argument("-v", "--verbose", help="Use verbose printing.", action="store_true")
 parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
+parser.add_argument("--gt", help="Use the gt to use the best possible weight_model results.", action="store_true")
 
 
 
@@ -134,7 +135,7 @@ for fn in os.listdir(folder):
                             union=args.union, weight=[[args.weight], [1 - args.weight]], out=None,
                             hash_length=args.hash, history=history, weight_model=weight_model, verbose=args.verbose,
                             features=features, is_weight=is_weight, use_lstm=use_lstm, prior_context=prior_context,
-                            history_context=history_context)
+                            history_context=history_context, gt=data.target if args.gt else None)
         #pr = (data.input>0.5).astype(int)
 
         # Save output
