@@ -209,7 +209,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
 
 
 
-def get_best_weights(language, acoustic, gt):
+def get_best_weights(language, acoustic, gt, width=0.25):
     """
     Get the best weights for the given priors and ground truth.
     
@@ -237,7 +237,9 @@ def get_best_weights(language, acoustic, gt):
     language_diffs = np.abs(language - gt)
     acoustic_diffs = np.abs(acoustic - gt)
     
-    weights[:, 0] = np.where(acoustic_diffs < language_diffs, 1, 0)
+    weights[:, 0] = np.where(acoustic_diffs < language_diffs,
+                             np.random.uniform(low=1.0-width, high=1.0, size=(len(weights),)),
+                             np.random.uniform(low=0.0, high=0.0+width, size=(len(weights),)))
     weights[:, 1] = 1 - weights[:, 0]
     
     return weights
