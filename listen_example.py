@@ -1,5 +1,6 @@
 from eval_utils import make_midi_from_roll,play_audio,save_midi
 from dataMaps import DataMaps, convert_note_to_time
+from mlm_training.utils import safe_mkdir
 
 import os
 import numpy as np
@@ -14,12 +15,17 @@ def get_name_from_maps(filename):
 
 
 
-result_folder = "results/quant/save-quant"
-result_folder_old = "results/quant/autoweight_k40_b100_h20"
-baseline_folder = "results/baseline/quant"
-hmm_folder = "results/save-hmm/save-quant-hmm"
-input_folder = "data/outputs_default_config_split/test"
+
+data_folders = {}
+data_folders[''] = "results/quant/save-quant"
+data_folders['gtweight'] = "results/save-gtweight/save-quant-gtweight"
+data_folders['old'] = "results/quant/autoweight_k40_b100_h20"
+data_folders['baseline'] = "results/baseline/quant"
+data_folders['hmm'] = "results/save-hmm/save-quant-hmm"
+GT_folder = "data/outputs_default_config_split/test"
+
 # filename  = "MAPS_MUS-chpn_op35_1_ENSTDkAm.mid"
+
 
 output = 'results/midi_outputs/'
 
@@ -30,43 +36,30 @@ output = 'results/midi_outputs/'
 
 
 ###### WHOLE FOLDER
-for filename in os.listdir(input_folder):
+for filename in os.listdir(GT_folder):
 ######
 
     if filename.endswith('.mid') and not filename.startswith('.') and not 'chpn-e01' in filename:
-        output_filename = os.path.join(output,get_name_from_maps(filename)+'_'+filename[-6:-4])
+
+        example_name = get_name_from_maps(filename)+'_'+filename[-6:-4]
+        example_folder = os.path.join(output,example_name)
+        safe_mkdir(example_folder)
+
+
+        output_filename = os.path.join(example_folder,example_name)
 
         data = DataMaps()
-        data.make_from_file(os.path.join(input_folder,filename),'quant',[0,30])
+        data.make_from_file(os.path.join(GT_folder,filename),'quant',[0,30])
 
+        for suffix, folder in data_folders.items():
+            csv_path = os.path.join(folder,filename.replace('.mid','_pr.csv'))
+            roll = np.loadtxt(csv_path)
+            roll_time = convert_note_to_time(roll,data.corresp,max_len=30)
+            midi_data = make_midi_from_roll(roll_time,25)
+            save_midi(midi_data,output_filename+"_"+suffix+'.mid')
 
-        csv_path = os.path.join(result_folder,filename.replace('.mid','_pr.csv'))
-        roll = np.loadtxt(csv_path)
-        roll_time = convert_note_to_time(roll,data.corresp,max_len=30)
-        midi_data = make_midi_from_roll(roll_time,25)
-
-        csv_path_old = os.path.join(result_folder_old,filename.replace('.mid','_pr.csv'))
-        roll_old = np.loadtxt(csv_path_old)
-        roll_time_old = convert_note_to_time(roll_old,data.corresp,max_len=30)
-        midi_data_old = make_midi_from_roll(roll_time_old,25)
-
-
-        csv_path_baseline = os.path.join(baseline_folder,filename.replace('.mid','_pr.csv'))
-        roll_baseline = np.loadtxt(csv_path_baseline)
-        roll_time_baseline = convert_note_to_time(roll_baseline,data.corresp,max_len=30)
-        midi_data_baseline = make_midi_from_roll(roll_time_baseline,25)
-
-        csv_path_hmm = os.path.join(hmm_folder,filename.replace('.mid','_pr.csv'))
-        roll_hmm = np.loadtxt(csv_path_hmm)
-        roll_time_hmm = convert_note_to_time(roll_hmm,data.corresp,max_len=30)
-        midi_data_hmm = make_midi_from_roll(roll_time_hmm,25)
 
         data_GT = DataMaps()
-        data_GT.make_from_file(os.path.join(input_folder,filename),'time',[0,30])
+        data_GT.make_from_file(os.path.join(GT_folder,filename),'time',[0,30])
         midi_data_GT = make_midi_from_roll(data_GT.target,25)
-
-        save_midi(midi_data,output_filename+'.mid')
-        save_midi(midi_data_old,output_filename+'_old.mid')
-        save_midi(midi_data_baseline,output_filename+'_baseline.mid')
-        save_midi(midi_data_hmm,output_filename+'_hmm.mid')
         save_midi(midi_data_GT,output_filename+'_GT.mid')
