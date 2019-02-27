@@ -642,12 +642,13 @@ class Model:
         valid_data, valid_target, valid_lengths = self.extract_data(data,'valid')
 
         ## scheduled sampling strategy
-        if sched_sampl == 'linear':
-            schedule = np.linspace(1.0,0.0,train_param['schedule_duration'])
-        elif sched_sampl == 'sigmoid':
-            schedule = 1 / (1 + np.exp(np.linspace(-5.0,5.0,train_param['schedule_duration'])))
-        else:
-            raise ValueError('Schedule not understood: '+sched_sampl)
+        if sched_sampl is not None:
+            if sched_sampl == 'linear':
+                schedule = np.linspace(1.0,0.0,train_param['schedule_duration'])
+            elif sched_sampl == 'sigmoid':
+                schedule = 1 / (1 + np.exp(np.linspace(-5.0,5.0,train_param['schedule_duration'])))
+            else:
+                raise ValueError('Schedule not understood: '+sched_sampl)
 
 
 
