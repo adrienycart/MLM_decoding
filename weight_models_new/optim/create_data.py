@@ -16,6 +16,78 @@ from mlm_training.model import Model, make_model_param
 
 
 
+def load_data_from_pkl_file(pkl_file, min_diff, history, pitch_window, features, is_weight):
+    """
+    Load data points from the given gzipped pickle file with the given settings.
+    
+    Parameters
+    ==========
+    pkl_file : string
+        The filename of the gzipped pickle file containing the data to load. The pickle file
+        should contain a dictionary with the following fields:
+        
+            history: an integer, the history length that is saved with each data point.
+            beam: an integer, the beam size used to create the data points in X.
+            features: boolean, whether features are included with each data point.
+            A: num_pieces x 88 x num_frames array containing the acoustic prior for each frame
+                and pitch. Note that num_frames is different for each piece.
+            X: (88 * num_frames_total * beam) x (num_features + history + 1) array,
+                where N is the number of data points, and each data point contains the history
+                of samples, followed by features (if features is True), followed by the
+                language model's prior for the corresponding frame. The data points are ordered
+                by piece, frame, beam, and then pitch.
+            Y: (88 * num_frames_total * beam)-length array, containing the ground truth
+                piano roll for the corresponding frame.
+            D: (88 * num_frames_total * beam)-length array, containing the difference
+                between the language prior and the acoustic prior for each data point.
+            
+    min_diff : float
+        The minimum difference to load and use a data point. This will be compared to D from
+        the pickle dictionary.
+        
+    history : int
+        The history length to use in each loaded data point. If it is greater than the history
+        value from the pickle dictionary, that one is used instead.
+        
+    pitch_window : int
+        The window around each pitch to use, for both its acoustic and its sample histories.
+        
+    features : boolean
+        Whether to use features (True) or not (False). If this is True, but the value of features
+        in the given pickle dictionary is False, False is used instead.
+        
+    is_weight : boolean
+        Whether to create targets for priors (False, 1 for acoustic, 0 for language), or for
+        weights directly (True).
+        
+    Returns
+    =======
+    X : np.ndarray
+        The requested X data points.
+        
+    Y : np.array
+        The requested Y data points.
+    """
+    with gzip.open(pkl_file, "rb") as file:
+        pkl = pickle.load(file)
+        
+    history = min(history, pkl['history'])
+    features = features and pkl['features']
+        
+    # Doing it in loops because it's easier. If it takes a prohibitavely long time this could be vectorized.
+    frame_num_total = -1
+    for piece_num, acoustic in enumerate(pkl['A']):
+        for frame_num, frame in enumerate(np.transpose(acoustic)):
+            frame_num_total += 1
+            for beam in range(pkl['beam']):
+                for pitch in range(88):
+                    index = frame_num_total * (pkl['beam'] * 88) + beam * 88 + pitch
+                    
+                    if pkl['D'] < min_diff:
+                        continue
+
+
+
 
 def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.5], [0.5]],
            hash_length=10, gt_only=False, history=5, min_diff=0.01, features=False, verbose=False):
@@ -222,6 +294,9 @@ if __name__ == '__main__':
     parser.add_argument("--history", help="The history length to use. Defaults to 5.",
                         type=int, default=5)
     
+    parser.add_argument("--pitch", help="The pitch window to save on each side of the given pitch.",
+                        type=int, default=12)
+    
     parser.add_argument("--min_diff", help="The minimum difference (between language and acoustic) to " +
                         "save a data point.", type=float, default=0.01)
     
@@ -258,6 +333,8 @@ if __name__ == '__main__':
         data = dataMaps.DataMaps()
         data.make_from_file(args.MIDI, args.step, section=section)
     
+        A = data.input
+    
         # Decode
         X, Y, D = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
                                union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash,
@@ -267,6 +344,7 @@ if __name__ == '__main__':
         X = np.zeros((0, 0))
         Y = np.zeros(0)
         D = np.zeros(0)
+        A = np.zeros((88, 0))
         
         for file in glob.glob(os.path.join(args.MIDI, "*.mid")):
             if args.verbose:
@@ -285,6 +363,7 @@ if __name__ == '__main__':
             else:
                 X = x
                 
+            A = np.hstack((A, data.input))
             Y = np.append(Y, y)
             D = np.append(D, d)
     
@@ -297,6 +376,7 @@ if __name__ == '__main__':
         pickle.dump({'X' : X,
                      'Y' : Y,
                      'D' : D,
+                     'A' : A,
+                     'beam' : 1 if args.gt else args.beam,
                      'history' : args.history,
                      'features' : args.features}, file)
-    
