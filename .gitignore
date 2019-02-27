@@ -4,6 +4,7 @@ data/
 summ/
 ckpt/
 venv/
+hmm/
 framewise_2016/
 tests.py
 example_stepwise_prediction.py

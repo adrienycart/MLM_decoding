@@ -3,6 +3,7 @@ from dataMaps import DataMaps, convert_note_to_time
 
 import os
 import numpy as np
+import argparse
 
 
 def get_name_from_maps(filename):
@@ -13,60 +14,100 @@ def get_name_from_maps(filename):
     return name
 
 
+def create_midi_file(gt_midi, model_output_dir, midi_output_dir, filename, step='time', max_len=30):
+    """
+    Convert csv piano rolls into MIDI files, for a single given MIDI file.
+    
+    Parameters
+    ==========
+    gt_midi : string
+        The directory containing all of the ground truth MIDI files there are csv files for.
+        
+    model_output_dir : string
+        The directory containing the output csv files to convert.
+        
+    midi_output_dir : string
+        The directory to write the resulting MIDI files to.
+        
+    filename : string
+        The MAPS filename of the MIDI file to convert.
+        
+    step : string
+        The frame step type to use for conversion. Either "time" (default), "quant", or "event".
+        
+    max_len : int
+        The number of seconds of each file to convert. Defaults to 30.
+    """
+    data = DataMaps()
+    data.make_from_file(os.path.join(gt_midi, filename), step, [0, max_len])
 
-result_folder = "results/quant/save-quant"
-result_folder_old = "results/quant/autoweight_k40_b100_h20"
-baseline_folder = "results/baseline/quant"
-hmm_folder = "results/save-hmm/save-quant-hmm"
-input_folder = "data/outputs_default_config_split/test"
-# filename  = "MAPS_MUS-chpn_op35_1_ENSTDkAm.mid"
+    csv_path = os.path.join(model_output_dir, filename.replace('.mid', '_pr.csv'))
+    roll = np.loadtxt(csv_path)
+    roll_time = convert_note_to_time(roll, data.corresp, max_len=max_len)
+    midi_data = make_midi_from_roll(roll_time, 25)
 
-output = 'results/midi_outputs/'
+    output_filename = os.path.join(midi_output_dir, get_name_from_maps(filename) + '_' + filename[-6:-4])
+    save_midi(midi_data, output_filename + '.mid')
 
+    
+    
+def create_all_midi_files(gt_midi, model_output_dir, midi_output_dir, step='time', max_len=30):
+    """
+    Convert csv piano rolls into MIDI files, for each MIDI file in the given directory.
+    
+    Parameters
+    ==========
+    gt_midi : string
+        The directory containing all of the ground truth MIDI files there are csv files for.
+        
+    model_output_dir : string
+        The directory containing the output csv files to convert.
+        
+    midi_output_dir : string
+        The directory to write the resulting MIDI files to.
+        
+    step : string
+        The frame step type to use for conversion. Either "time" (default), "quant", or "event".
+        
+    max_len : int
+        The number of seconds of each file to convert. Defaults to 30.
+    """
+    for filename in os.listdir(gt_midi):
+        if filename.endswith('.mid') and not filename.startswith('.') and not 'chpn-e01' in filename:
+            create_midi_file(gt_midi, model_output_dir, midi_output_dir, filename, step=step, max_len=max_len)
 
-###### ONE FILE ONLY
-# for filename in [filename]:
-######
-
-
-###### WHOLE FOLDER
-for filename in os.listdir(input_folder):
-######
-
-    if filename.endswith('.mid') and not filename.startswith('.') and not 'chpn-e01' in filename:
-        output_filename = os.path.join(output,get_name_from_maps(filename)+'_'+filename[-6:-4])
-
-        data = DataMaps()
-        data.make_from_file(os.path.join(input_folder,filename),'quant',[0,30])
-
-
-        csv_path = os.path.join(result_folder,filename.replace('.mid','_pr.csv'))
-        roll = np.loadtxt(csv_path)
-        roll_time = convert_note_to_time(roll,data.corresp,max_len=30)
-        midi_data = make_midi_from_roll(roll_time,25)
-
-        csv_path_old = os.path.join(result_folder_old,filename.replace('.mid','_pr.csv'))
-        roll_old = np.loadtxt(csv_path_old)
-        roll_time_old = convert_note_to_time(roll_old,data.corresp,max_len=30)
-        midi_data_old = make_midi_from_roll(roll_time_old,25)
-
-
-        csv_path_baseline = os.path.join(baseline_folder,filename.replace('.mid','_pr.csv'))
-        roll_baseline = np.loadtxt(csv_path_baseline)
-        roll_time_baseline = convert_note_to_time(roll_baseline,data.corresp,max_len=30)
-        midi_data_baseline = make_midi_from_roll(roll_time_baseline,25)
-
-        csv_path_hmm = os.path.join(hmm_folder,filename.replace('.mid','_pr.csv'))
-        roll_hmm = np.loadtxt(csv_path_hmm)
-        roll_time_hmm = convert_note_to_time(roll_hmm,data.corresp,max_len=30)
-        midi_data_hmm = make_midi_from_roll(roll_time_hmm,25)
-
-        data_GT = DataMaps()
-        data_GT.make_from_file(os.path.join(input_folder,filename),'time',[0,30])
-        midi_data_GT = make_midi_from_roll(data_GT.target,25)
-
-        save_midi(midi_data,output_filename+'.mid')
-        save_midi(midi_data_old,output_filename+'_old.mid')
-        save_midi(midi_data_baseline,output_filename+'_baseline.mid')
-        save_midi(midi_data_hmm,output_filename+'_hmm.mid')
-        save_midi(midi_data_GT,output_filename+'_GT.mid')
+            
+        
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument('gt_midi', help="Folder containing the split dataset, or a single GT MIDI file " +
+                        "to convert (if --file is given).")
+    
+    parser.add_argument("--file", help="Given to indicate that gt_midi is only a single file to convert.",
+                        action="store_true")
+    
+    parser.add_argument('-i', '--input', help="Directory containing the model's output csv files which we will" +
+                        " convert into MIDI.", required=True)
+    parser.add_argument('-o', '--output', help="Directory to write out the generated MIDI files.", required=True)
+    
+    parser.add_argument("--step", type=str, choices=["time", "quant", "event"], help="Change the step type " +
+                        "for frame timing. Either time (default), quant (for 16th notes), or event (for onsets).",
+                        default="time")
+    
+    parser.add_argument("--max_len", type=str, help="test on the first max_len seconds of each text file. " +
+                        "Anything other than a number will evaluate on whole files. Default is 30s.",
+                        default=30)
+    
+    args = parser.parse_args()
+    
+    try:
+        max_len = float(args.max_len)
+    except:
+        max_len = None
+        
+    if args.file:
+        create_midi_file(os.path.dirname(args.gt_midi), args.input, args.output, os.path.basename(args.gt_midi),
+                              step=args.step, max_len=max_len)
+    else:
+        create_all_midi_files(args.gt_midi, args.input, args.output, step=args.step, max_len=max_len)
