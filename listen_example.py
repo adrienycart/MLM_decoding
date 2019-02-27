@@ -107,6 +107,8 @@ if __name__ == '__main__':
     except:
         max_len = None
         
+    safe_mkdir(args.output)
+        
     if args.file:
         create_midi_file(os.path.dirname(args.gt_midi), args.input, args.output, os.path.basename(args.gt_midi),
                               step=args.step, max_len=max_len)
