@@ -31,7 +31,7 @@ def load_data_from_pkl_file(pkl_file, min_diff, history, pitch_window, features,
             features: boolean, whether features are included with each data point.
             A: num_pieces x 88 x num_frames array containing the acoustic prior for each frame
                 and pitch. Note that num_frames is different for each piece.
-            X: (88 * num_frames_total * beam) x (num_features + history + 1) array,
+            X: (88 * num_frames_total * beam) x (history + num_features + 1) array,
                 where N is the number of data points, and each data point contains the history
                 of samples, followed by features (if features is True), followed by the
                 language model's prior for the corresponding frame. The data points are ordered
@@ -49,8 +49,8 @@ def load_data_from_pkl_file(pkl_file, min_diff, history, pitch_window, features,
         The history length to use in each loaded data point. If it is greater than the history
         value from the pickle dictionary, that one is used instead.
         
-    pitch_window : int
-        The window around each pitch to use, for both its acoustic and its sample histories.
+    pitch_window : list(int)
+        The pitches around each data point to use, for both its acoustic and its sample histories.
         
     features : boolean
         Whether to use features (True) or not (False). If this is True, but the value of features
@@ -73,18 +73,41 @@ def load_data_from_pkl_file(pkl_file, min_diff, history, pitch_window, features,
         
     history = min(history, pkl['history'])
     features = features and pkl['features']
+    pitch_window_np = np.array(pitch_window)
+    
+    X = []
+    Y = pkl['Y'][np.where(D >= min_diff)]
         
     # Doing it in loops because it's easier. If it takes a prohibitavely long time this could be vectorized.
     frame_num_total = -1
     for piece_num, acoustic in enumerate(pkl['A']):
-        for frame_num, frame in enumerate(np.transpose(acoustic)):
+        acoustic = np.transpose(acoustic)
+        for frame_num, frame in enumerate(acoustic):
             frame_num_total += 1
             for beam in range(pkl['beam']):
                 for pitch in range(88):
-                    index = frame_num_total * (pkl['beam'] * 88) + beam * 88 + pitch
+                    x_index = frame_num_total * (pkl['beam'] * 88) + beam * 88 + pitch
                     
                     if pkl['D'] < min_diff:
                         continue
+                    
+                    this_pitch_window = pitch_window[np.where(0 <= pitch + pitch_window_np < 88)]
+                    this_pitch_window_index = pitch_window.index(this_pitch_window[0])
+                    this_pitch_window_indices = range(this_pitch_window_index,
+                                                      this_pitch_window_index + len(this_pitch_window))
+                    
+                    this_history = min(history, frame_num + 1)
+                    this_history_index = history - this_history
+                    
+                    a = np.zeros((len(pitch_window), history))
+                    a[this_pitch_window_indices, this_history_index:] = acoustic[this_pitch_window,
+                                                                                 frame_num - this_history + 1:
+                                                                                 frame_num + 1]
+                    f = pkl['X'][x_index, history:-1] if features else []
+                    
+                    X.append(np.append(a.reshape(-1), np.squeeze(f)))
+          
+    return np.array(X), Y
 
 
 
@@ -294,8 +317,8 @@ if __name__ == '__main__':
     parser.add_argument("--history", help="The history length to use. Defaults to 5.",
                         type=int, default=5)
     
-    parser.add_argument("--pitch", help="The pitch window to save on each side of the given pitch.",
-                        type=int, default=12)
+    parser.add_argument("--pitches", nargs='+', type=int, help="The pitches to save data from, relative " +
+                        "to the current pitch. 0 will automatically be appended to this list.", default=[])
     
     parser.add_argument("--min_diff", help="The minimum difference (between language and acoustic) to " +
                         "save a data point.", type=float, default=0.01)
@@ -311,6 +334,10 @@ if __name__ == '__main__':
     if not (0 <= args.weight <= 1):
         print("Weight must be between 0 and 1.", file=sys.stderr)
         sys.exit(1)
+        
+    pitches = args.pitches
+    pitches.append(0)
+    pitches = sorted(list(set(pitches)))
         
     try:
         max_len = float(args.max_len)
