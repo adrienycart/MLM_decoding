@@ -16,101 +16,6 @@ from mlm_training.model import Model, make_model_param
 
 
 
-def load_data_from_pkl_file(pkl_file, min_diff, history, pitch_window, features, is_weight):
-    """
-    Load data points from the given gzipped pickle file with the given settings.
-    
-    Parameters
-    ==========
-    pkl_file : string
-        The filename of the gzipped pickle file containing the data to load. The pickle file
-        should contain a dictionary with the following fields:
-        
-            history: an integer, the history length that is saved with each data point.
-            beam: an integer, the beam size used to create the data points in X.
-            features: boolean, whether features are included with each data point.
-            A: num_pieces x 88 x num_frames array containing the acoustic prior for each frame
-                and pitch. Note that num_frames is different for each piece.
-            X: (88 * num_frames_total * beam) x (history + num_features + 1) array,
-                where N is the number of data points, and each data point contains the history
-                of samples, followed by features (if features is True), followed by the
-                language model's prior for the corresponding frame. The data points are ordered
-                by piece, frame, beam, and then pitch.
-            Y: (88 * num_frames_total * beam)-length array, containing the ground truth
-                piano roll for the corresponding frame.
-            D: (88 * num_frames_total * beam)-length array, containing the difference
-                between the language prior and the acoustic prior for each data point.
-            
-    min_diff : float
-        The minimum difference to load and use a data point. This will be compared to D from
-        the pickle dictionary.
-        
-    history : int
-        The history length to use in each loaded data point. If it is greater than the history
-        value from the pickle dictionary, that one is used instead.
-        
-    pitch_window : list(int)
-        The pitches around each data point to use, for both its acoustic and its sample histories.
-        
-    features : boolean
-        Whether to use features (True) or not (False). If this is True, but the value of features
-        in the given pickle dictionary is False, False is used instead.
-        
-    is_weight : boolean
-        Whether to create targets for priors (False, 1 for acoustic, 0 for language), or for
-        weights directly (True).
-        
-    Returns
-    =======
-    X : np.ndarray
-        The requested X data points.
-        
-    Y : np.array
-        The requested Y data points.
-    """
-    with gzip.open(pkl_file, "rb") as file:
-        pkl = pickle.load(file)
-        
-    history = min(history, pkl['history'])
-    features = features and pkl['features']
-    pitch_window_np = np.array(pitch_window)
-    
-    X = []
-    Y = pkl['Y'][np.where(D >= min_diff)]
-        
-    # Doing it in loops because it's easier. If it takes a prohibitavely long time this could be vectorized.
-    frame_num_total = -1
-    for piece_num, acoustic in enumerate(pkl['A']):
-        acoustic = np.transpose(acoustic)
-        for frame_num, frame in enumerate(acoustic):
-            frame_num_total += 1
-            for beam in range(pkl['beam']):
-                for pitch in range(88):
-                    x_index = frame_num_total * (pkl['beam'] * 88) + beam * 88 + pitch
-                    
-                    if pkl['D'] < min_diff:
-                        continue
-                    
-                    this_pitch_window = pitch_window[np.where(0 <= pitch + pitch_window_np < 88)]
-                    this_pitch_window_index = pitch_window.index(this_pitch_window[0])
-                    this_pitch_window_indices = range(this_pitch_window_index,
-                                                      this_pitch_window_index + len(this_pitch_window))
-                    
-                    this_history = min(history, frame_num + 1)
-                    this_history_index = history - this_history
-                    
-                    a = np.zeros((len(pitch_window), history))
-                    a[this_pitch_window_indices, this_history_index:] = acoustic[this_pitch_window,
-                                                                                 frame_num - this_history + 1:
-                                                                                 frame_num + 1]
-                    f = pkl['X'][x_index, history:-1] if features else []
-                    
-                    X.append(np.append(a.reshape(-1), np.squeeze(f)))
-          
-    return np.array(X), Y
-
-
-
 
 def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.5], [0.5]],
            hash_length=10, gt_only=False, history=5, min_diff=0.01, features=False, verbose=False):
@@ -286,7 +191,7 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("MIDI", help="The MIDI file to load, or a directory containing MIDI files. " +
+    parser.add_argument("MIDI", help="A directory containing MIDI files. " +
                         "They should be in the same location as the " +
                         "corresponding acoustic csvs, and have the same name (except the extension).")
     
@@ -317,9 +222,6 @@ if __name__ == '__main__':
     parser.add_argument("--history", help="The history length to use. Defaults to 5.",
                         type=int, default=5)
     
-    parser.add_argument("--pitches", nargs='+', type=int, help="The pitches to save data from, relative " +
-                        "to the current pitch. 0 will automatically be appended to this list.", default=[])
-    
     parser.add_argument("--min_diff", help="The minimum difference (between language and acoustic) to " +
                         "save a data point.", type=float, default=0.01)
     
@@ -334,10 +236,6 @@ if __name__ == '__main__':
     if not (0 <= args.weight <= 1):
         print("Weight must be between 0 and 1.", file=sys.stderr)
         sys.exit(1)
-        
-    pitches = args.pitches
-    pitches.append(0)
-    pitches = sorted(list(set(pitches)))
         
     try:
         max_len = float(args.max_len)
@@ -356,43 +254,31 @@ if __name__ == '__main__':
     sess,_ = model.load(args.model, model_path=args.model)
     
     # Load data
-    if args.MIDI.endswith(".mid"):
+    X = np.zeros((0, 0))
+    Y = np.zeros(0)
+    D = np.zeros(0)
+    A = []
+
+    for file in glob.glob(os.path.join(args.MIDI, "*.mid")):
+        if args.verbose:
+            print(file)
         data = dataMaps.DataMaps()
-        data.make_from_file(args.MIDI, args.step, section=section)
-    
-        A = data.input
-    
+        data.make_from_file(file, args.step, section=section)
+
         # Decode
-        X, Y, D = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                               union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash,
+        x, y, d = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
+                               union=args.union, weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
                                gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
                                verbose=args.verbose)
-    else:
-        X = np.zeros((0, 0))
-        Y = np.zeros(0)
-        D = np.zeros(0)
-        A = np.zeros((88, 0))
-        
-        for file in glob.glob(os.path.join(args.MIDI, "*.mid")):
-            if args.verbose:
-                print(file)
-            data = dataMaps.DataMaps()
-            data.make_from_file(file, args.step, section=section)
 
-            # Decode
-            x, y, d = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                                   union=args.union, weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
-                                   gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
-                                   verbose=args.verbose)
-            
-            if len(X) > 0:
-                X = np.vstack((X, x))
-            else:
-                X = x
-                
-            A = np.hstack((A, data.input))
-            Y = np.append(Y, y)
-            D = np.append(D, d)
+        if len(X) > 0:
+            X = np.vstack((X, x))
+        else:
+            X = x
+
+        A.append(np.transpose(data.input))
+        Y = np.append(Y, y)
+        D = np.append(D, d)
     
     print(X.shape)
     print(Y.shape)
