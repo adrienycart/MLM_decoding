@@ -127,9 +127,9 @@ def load_data_from_pkl_file(pkl_file, min_diff, history, ac_pitch_window, la_pit
                     
                     l[this_pitch_window_indices] = language[this_pitch_window, pkl['history'] - history:pkl['history']]
                     
-                    f = pkl['X'][x_index, history:-1] if features else []
+                    f = pkl['X'][x_index, pkl['history']:-2] if features else []
                     
-                    X.append(np.hstack((a.reshape(-1), l.reshape(-1), np.squeeze(f), pkl['X'][x_index, -1])))
+                    X.append(np.hstack((a.reshape(-1), l.reshape(-1), np.squeeze(f), pkl['X'][x_index, -2:])))
           
     X = np.array(X)
     
@@ -297,8 +297,6 @@ def train_model(model, X, Y, optimizer='adam', epochs=100, checkpoints=[]):
     checkpoints : list(keras.callbacks.ModelCheckpoint)
         A list of checkpoints which will save the model.
     """
-    
-
     model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['accuracy'])
 
     model.fit(X, Y, epochs=epochs, batch_size=32, callbacks=checkpoints)
@@ -308,7 +306,7 @@ def train_model(model, X, Y, optimizer='adam', epochs=100, checkpoints=[]):
     
 def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19],
                      la_pitch_window=list(range(-12, 13)), min_diff=0.0, features=True,
-                     out="ckpt", is_weight=True):
+                     out="ckpt", is_weight=True, epochs=100):
     """
     Train a model fully given some data and parameters.
     
@@ -339,6 +337,9 @@ def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19]
         Whether to create targets for priors (False, 1 for acoustic, 0 for language), or for
         weights directly (True). Defaults to True.
         
+    epochs : int
+        The number of epochs to train the model for. Defaults to 100.
+        
     out : string
         The directory to save the checkpoints to. Defaults to ckpt.
     """
@@ -354,21 +355,24 @@ def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19]
     language_in = X[:, len(ac_pitch_window) * history:history * (len(ac_pitch_window) + len(la_pitch_window))]
     features_in = X[:, history * (len(ac_pitch_window) + len(la_pitch_window)):]
     
-    print("Loaded " + str(X.shape[0]) + " data points.")
+    print("Loaded " + str(X.shape[0]) + " data points of size " + str(X.shape[1]) + ".")
     print("Training model...")
     
     model = make_model(history, ac_pitch_window_size, la_pitch_window_size, num_features,
                        ac_num_pitch_convs=5, ac_num_history_convs=10, la_num_convs=5)
     
-    checkpoint = keras.callbacks.ModelCheckpoint(os.path.join(out, 'model.{epoch:03d}-{loss:.4f}.hdf5'))
-    checkpoint_best = keras.callbacks.ModelCheckpoint(os.path.join(out, 'best_loss.hdf5'), monitor='loss',
+    checkpoint = keras.callbacks.ModelCheckpoint(os.path.join(out, 'model.{epoch:03d}-{loss:.4f}.ckpt'))
+    checkpoint_best = keras.callbacks.ModelCheckpoint(os.path.join(out, 'best_loss.ckpt'), monitor='loss',
                                                       save_best_only=True)
     checkpoints = [checkpoint_best, checkpoint]
     
-    train_model(model, [acoustic_in, language_in, features_in], Y, checkpoints=checkpoints)
+    train_model(model, [acoustic_in, language_in, features_in], Y, epochs=epochs, checkpoints=checkpoints)
     
-    with open(out, "wb") as file:
-        pickle.dump({'model_path' : os.path.join(out, 'best_loss.hdf5'),
+    model.load_weights(os.path.join(out, 'best_loss.ckpt'))
+    model.save('best.h5')
+    
+    with open(os.path.join(out, 'dict.pkl'), "wb") as file:
+        pickle.dump({'model_path' : os.path.join(out, 'best_loss.ckpt'),
                      'history' : history,
                      'ac_pitch_window' : ac_pitch_window,
                      'la_pitch_window' : la_pitch_window,
@@ -401,6 +405,8 @@ if __name__ == '__main__':
     
     parser.add_argument("--weight", help="This model will output weights directly.", action="store_true")
     
+    parser.add_argument("--epochs", help="The number of epochs to train for. Defaults to 100.", type=int, default=100)
+    
     parser.add_argument("--out", help="The directory to save the model to. Defaults to '.' (current directory)",
                         default=".")
     
@@ -416,4 +422,4 @@ if __name__ == '__main__':
     
     train_model_full(args.data, history=args.history, ac_pitch_window=ac_pitches,
                      la_pitch_window=la_pitches, min_diff=args.min_diff, features=args.features,
-                     out=args.out, is_weight=args.weight)
+                     out=args.out, is_weight=args.weight, epochs=args.epochs)

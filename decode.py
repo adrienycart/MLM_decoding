@@ -7,6 +7,7 @@ import sys
 import pickle
 import os
 import warnings
+from tensorflow import keras
 
 import dataMaps
 import eval_utils
@@ -16,8 +17,7 @@ from mlm_training.model import Model, make_model_param
 
 
 def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.8], [0.2]],
-           hash_length=10, out=None, history=5, weight_model=None, features=False, verbose=True,
-           is_weight=True, history_context=0, prior_context=0, use_lstm=True, gt=None):
+           hash_length=10, out=None, weight_model_dict=None, weight_model=None, verbose=False, gt=None):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
 
@@ -55,32 +55,15 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     out : string
         The directory in which to save the outputs, or None to not save anything. Defaults to None.
 
-    history : int
-        This history length to use for the weight_model. Defaults to 5.
-
-    weight_model : sklearn.model
-        The sklearn model to use to set dynamic weights for the models. Defaults to None, which uses
-        the static weight of the weight parameter.
+    weight_model_dict : dict
+        A dictionary containing information about the weight model to use, if any. Defaults to None,
+        which uses the static weight of the weight parameter.
         
-    features : boolean
-        Whether to use features in the weight_model's data points. Defaults to False.
+    weight_model : sklearn.model or tf.keras.Model
+        The model to be used as a weight_model, or None to use static weighting.
 
     verbose : bool
-        Print progress in number of frames.
-        
-    is_weight : bool
-        True if the given weight_model outputs weights. False if it outputs weighted priors. Unused
-        if weight_model is None. Defaults to False.
-        
-    history_context : int
-        The pitch window to include around the history of samples, unrolled, and 0 padded.
-        Defaults to 0.
-        
-    prior_context : int
-        The window of priors to include around the current priors. Defaults to 0.
-        
-    use_lstm : boolean
-        Whether to use the LSTM prior in the weight_model results. Defaults to True.
+        Print progress in number of frames. Defaults to False (no printing).
         
     gt : matrix
         The ground truth piano roll, 88 x T. If given, this will be used to always use the optimum
@@ -103,6 +86,24 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     if gt is not None:
         weight_model = True
         is_weight = True
+        
+    # Load the weight_model properties
+    if weight_model_dict is not None:
+        if 'model' in weight_model_dict:
+            sklearn = True
+            history = weight_model_dict['history']
+            features = weight_model_dict['features'] if 'features' in weight_model_dict else False
+            is_weight = weight_model_dict['weight'] if 'weight' in weight_model_dict else True
+            history_context = weight_model_dict['history_context'] if 'history_context' in weight_model_dict else 0
+            prior_context = weight_model_dict['prior_context'] if 'prior_context' in weight_model_dict else 0
+            use_lstm = weight_model_dict['use_lstm'] if 'use_lstm' in weight_model_dict else True
+        else:
+            sklearn = False
+            history = weight_model_dict['history']
+            ac_pitch_window = weight_model_dict['ac_pitch_window']
+            la_pitch_window = weight_model_dict['la_pitch_window']
+            features = weight_model_dict['features']
+            is_weight = weight_model_dict['is_weight']
         
     if union:
         branch_factor = int(branch_factor / 2)
@@ -127,14 +128,36 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
             priors_all = np.zeros(weights_all.shape[1])
             
         elif weight_model:
-            X = np.vstack([create_weight_x(state, acoustic, frame_num, history, features=features, use_lstm=use_lstm,
-                                           history_context=history_context, prior_context=prior_context) for state in beam])
-            # 2 x len(X) matrix
-            weights_all = np.transpose(weight_model.predict_proba(X)) if is_weight else np.zeros((2, len(X)))
-            # len(X) array
-            priors_all = np.squeeze(weight_model.predict_proba(X)[:, 1]) if not is_weight else np.zeros(len(X))
-            if not is_weight:
-                p = []
+            if sklearn:
+                X = np.vstack([create_weight_x_sk(state, acoustic, frame_num, history, features=features,
+                                                  use_lstm=use_lstm, history_context=history_context,
+                                                  prior_context=prior_context) for state in beam])
+                # 2 x len(X) matrix
+                weights_all = np.transpose(weight_model.predict_proba(X)) if is_weight else np.zeros((2, len(X)))
+                # len(X) array
+                priors_all = np.squeeze(weight_model.predict_proba(X)[:, 1]) if not is_weight else np.zeros(len(X))
+                if not is_weight:
+                    p = []
+            else: # tensorflow
+                X = np.vstack([create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window,
+                                                  la_pitch_window, features) for state in beam])
+                
+                acoustic_in = X[:, :len(ac_pitch_window) * history]
+                language_in = X[:, len(ac_pitch_window) * history:history * (len(ac_pitch_window) + len(la_pitch_window))]
+                features_in = X[:, history * (len(ac_pitch_window) + len(la_pitch_window)):]
+                X_split = [acoustic_in, language_in, features_in]
+                
+                result = np.squeeze(weight_model.predict(X_split))
+                
+                # 2 x len(X) matrix
+                weights_all = np.zeros((2, len(X)))
+                if is_weight:
+                    weights_all[0, :] = result
+                    weights_all[1, :] = 1 - result
+                # len(X) array
+                priors_all = np.squeeze(result) if not is_weight else np.zeros(len(X))
+                if not is_weight:
+                    p = []
 
         # Used for union sampling
         unique_samples = []
@@ -246,10 +269,94 @@ def get_best_weights(language, acoustic, gt, width=0.25):
 
 
 
-def create_weight_x(state, acoustic, frame_num, history, pitches=range(88), features=False,
+
+def create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window, la_pitch_window, features):
+    """
+    Get the x input for the tf.keras dynamic weighting model.
+    
+    Parameters
+    ==========
+    state : State
+        The state to examine for its piano roll and prior.
+
+    acoustic : np.ndarray
+        The acoustic prior for the entire piece.
+        
+    frame_num : int
+        The current frame number.
+
+    ac_pitch_window : list(int)
+        The pitches around each data point to use, for its acoustic history.
+        
+    la_pitch_window : list(int)
+        The pitches around each data point to use, for its sample history.
+        
+    features : boolean
+        True to calculate features. False otherwise.
+        
+    Return
+    ======
+    x : np.ndarray
+        The x data points for the given input for the dynamic weighting model.
+    """
+    frame = acoustic[frame_num, :]
+    ac_t = np.transpose(acoustic)
+    pr = state.get_piano_roll(min_length=history, max_length=history)
+    
+    ac_pitch_window_np = np.array(ac_pitch_window)
+    la_pitch_window_np = np.array(la_pitch_window)
+    
+    x = []
+    
+    for pitch in range(88):
+        # Usable acoustic pitch window
+        this_pitch_window = ac_pitch_window_np[np.where(np.logical_and(0 <= (pitch + ac_pitch_window_np),
+                                                                      (pitch + ac_pitch_window_np) < 88))]
+        this_pitch_window_index = ac_pitch_window.index(this_pitch_window[0])
+        this_pitch_window_indices = np.array(range(this_pitch_window_index,
+                                          this_pitch_window_index + len(this_pitch_window)))
+
+        # Usable history length
+        this_history = min(history, frame_num + 1)
+        this_history_index = history - this_history
+
+        # Acoustic history
+        a = np.zeros((len(ac_pitch_window), history))
+        a[this_pitch_window_indices, this_history_index:] = ac_t[this_pitch_window,
+                                                                 frame_num - this_history + 1:
+                                                                 frame_num + 1]
+
+        # Usable language pitch window
+        this_pitch_window = la_pitch_window_np[np.where(np.logical_and(0 <= (pitch + la_pitch_window_np),
+                                                                      (pitch + la_pitch_window_np) < 88))]
+        this_pitch_window_index = la_pitch_window.index(this_pitch_window[0])
+        this_pitch_window_indices = np.array(range(this_pitch_window_index,
+                                          this_pitch_window_index + len(this_pitch_window)))
+
+
+        # Sample history
+        l = np.zeros((len(la_pitch_window), history))
+
+        l[this_pitch_window_indices] = pr[this_pitch_window]
+
+        x.append(np.hstack((a.reshape(-1), l.reshape(-1))))
+        
+    x = np.array(x)
+    
+    if features:
+        x = np.hstack((x, get_features(acoustic, frame_num, state.get_priors()), np.reshape(frame, (88, -1)),
+                       np.reshape(state.prior, (88, -1))))
+    else:
+        x = np.hstack((x, np.reshape(frame, (88, -1)), np.reshape(state.prior, (88, -1))))
+        
+    return x
+
+
+
+def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), features=False,
                     history_context=0, prior_context=0, use_lstm=True):
     """
-    Get the x input for the dynamic weighting model.
+    Get the x input for the sk-learn dynamic weighting model.
 
     Parameters
     ==========
@@ -263,7 +370,7 @@ def create_weight_x(state, acoustic, frame_num, history, pitches=range(88), feat
         The current frame number.
 
     history : int
-        How many frames to save in the x data point. Defaults to 5.
+        How many frames to save in the x data point.
 
     pitches : list
         The pitches we want data points for. Defaults to [0:88] (all pitches).
@@ -288,8 +395,8 @@ def create_weight_x(state, acoustic, frame_num, history, pitches=range(88), feat
     """
     frame = acoustic[frame_num, :]
     pr = state.get_piano_roll(min_length=history, max_length=history)
+    
     if features:
-        
         x = np.hstack((pr,
                        get_features(acoustic, frame_num, state.get_priors()), np.reshape(frame, (88, -1))))
         
@@ -630,23 +737,15 @@ if __name__ == '__main__':
     sess,_ = model.load(args.model, model_path=args.model)
 
     # Load weight model
+    weight_model_dict = None
     weight_model = None
-    history = None
-    features = None
-    is_weight = None
-    history_context = None
-    prior_context = None
-    use_lstm = None
     if args.weight_model:
         with open(args.weight_model, "rb") as file:
             weight_model_dict = pickle.load(file)
+        if 'model' in weight_model_dict:
             weight_model = weight_model_dict['model']
-            history = weight_model_dict['history']
-            features = weight_model_dict['features'] if 'features' in weight_model_dict else False
-            is_weight = weight_model_dict['weight'] if 'weight' in weight_model_dict else True
-            history_context = weight_model_dict['history_context'] if 'history_context' in weight_model_dict else 0
-            prior_context = weight_model_dict['prior_context'] if 'prior_context' in weight_model_dict else 0
-            use_lstm = weight_model_dict['use_lstm'] if 'use_lstm' in weight_model_dict else True
+        else:
+            weight_model = keras.models.load_model(weight_model_dict['model_path'])
 
     if args.output is not None:
         os.makedirs(args.output, exist_ok=True)
@@ -654,9 +753,8 @@ if __name__ == '__main__':
     # Decode
     pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
                          beam_size=args.beam, union=args.union, weight=[[args.weight], [1 - args.weight]],
-                         out=args.output, hash_length=args.hash, history=history, weight_model=weight_model,
-                         is_weight=is_weight, features=features, verbose=args.verbose, prior_context=prior_context,
-                         history_context=history_context, use_lstm=use_lstm, gt=data.target if args.gt else None)
+                         out=args.output, hash_length=args.hash, weight_model_dict=weight_model_dict,
+                         verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
 
     # Evaluate
     if args.output is not None:

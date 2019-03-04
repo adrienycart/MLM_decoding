@@ -115,10 +115,11 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
                                                  rtol=0.0, atol=min_diff))[:,0] if min_diff > 0 else np.arange(88)
             if len(pitches) > 0:
                 if len(x) > 0:
-                    x = np.vstack((x, decode.create_weight_x(state, acoustic, frame_num, history, pitches=pitches,
-                                                             features=features)))
+                    x = np.vstack((x, decode.create_weight_x_sk(state, acoustic, frame_num, history,
+                                                                pitches=pitches, features=features)))
                 else:
-                    x = decode.create_weight_x(state, acoustic, frame_num, history, pitches=pitches, features=features)
+                    x = decode.create_weight_x_sk(state, acoustic, frame_num, history, pitches=pitches,
+                                                  features=features)
                 y = np.append(y, gt_frame[pitches])
                 diffs = np.append(diffs, np.abs(np.squeeze(frame)[pitches] - np.squeeze(state.prior)[pitches]))
         
