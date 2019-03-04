@@ -240,8 +240,8 @@ def safe_mkdir(dir,clean=False):
                 os.rename(full_path,os.path.join(old_path,fn))
 
 
-data = DatasetMaps()
-data.load_data('data/outputs_default_config','event',max_len=30,note_range=[21,109])
+# data = DatasetMaps()
+# data.load_data('data/outputs_default_config','event',max_len=30,note_range=[21,109])
 
 
 #######

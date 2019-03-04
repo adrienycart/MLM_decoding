@@ -6,6 +6,7 @@ import pickle as pickle
 from datetime import datetime
 import copy
 from mlm_training.pianoroll import Pianoroll
+# from pianoroll import Pianoroll
 from tqdm import tqdm
 
 from queue import Queue
@@ -133,7 +134,7 @@ class Dataset:
                 while end < end_file:
                     end = min(end_file,end+length_of_chunks)
                     piano_roll = Pianoroll()
-                    piano_roll.make_from_pm(midi_data,fs,[begin,end],note_range,quant,key_method)
+                    piano_roll.make_from_pm(midi_data,timestep_type,[begin,end],note_range,key_method)
                     piano_roll.name = os.path.splitext(os.path.basename(filename))[0]+"_"+str(i)
                     pr_list += [piano_roll]
                     begin = end
@@ -242,7 +243,7 @@ class Dataset:
             if self.rand_transp:
                 transp = np.random.randint(-7,6)
                 piano_roll = piano_roll.transpose(transp)
-            chunks, chunks_len = piano_roll.cut(len_chunk,keep_padding=False)
+            chunks, chunks_len = piano_roll.cut(piano_roll.roll,len_chunk,keep_padding=False)
             dataset += list(chunks)
             lengths += list(chunks_len)
             i += 1
@@ -273,20 +274,66 @@ class Dataset:
                     seq_buff.append(roll)
                     len_buff.append(length)
                 else:
-                    chunks, chunks_len = piano_roll.cut(len_chunk,keep_padding=False,as_list=True)
+                    chunks, chunks_len = piano_roll.cut(piano_roll.roll,len_chunk,keep_padding=False,as_list=True)
                     seq_buff.extend(chunks)
                     len_buff.extend(chunks_len)
             else:
                 if len_chunk is None:
-                    output_roll = np.zeros([batch_size,n_notes,self.max_len])
+                    output_roll = np.zeros([batch_size,n_notes,self.max_len-1])
                     for i,seq in enumerate(seq_buff[:batch_size]):
-                        output_roll[i,:,seq.shape[1]]=seq
-                    output = (output_roll,np.array(len_buff[:batch_size]))
+                        output_roll[i,:,:seq.shape[1]]=seq
+                    output = (output_roll[:,:,:-1],output_roll[:,:,1:],np.array(len_buff[:batch_size]))
                 else:
-                    output = (np.array(seq_buff[:batch_size]),np.array(len_buff[:batch_size]))
+                    output_roll = np.array(seq_buff[:batch_size])
+                    output = (output_roll[:,:,:-1],output_roll[:,:,1:],np.array(len_buff[:batch_size]))
                 del seq_buff[:batch_size]
                 del len_buff[:batch_size]
                 yield output
+
+    def get_pitchwise_dataset_generator(self,subset,batch_size,window_size,len_chunk=None):
+        seq_buff = []
+        targ_buff = []
+        len_buff = []
+        pr_list = getattr(self,subset)
+        files_left = list(range(len(pr_list)))
+
+        if self.max_len is None:
+            self.set_max_len()
+
+        while files_left != [] or len(seq_buff)>=batch_size:
+            if len(seq_buff)<batch_size:
+                file_index = files_left.pop()
+                piano_roll = pr_list[file_index]
+
+                inputs, targets = piano_roll.split_pitchwise(window_size)
+
+                if len_chunk is None:
+                    seq_buff.extend(inputs)
+                    targ_buff.extend(targets)
+                    len_buff.extend([piano_roll.length]*len(inputs))
+                else:
+                    for input,target in zip(inputs,targets):
+                        chunks_input, chunks_len = piano_roll.cut(input,len_chunk,keep_padding=False,as_list=True)
+                        chunks_target, chunks_len = piano_roll.cut(target,len_chunk,keep_padding=False,as_list=True)
+                        seq_buff.extend(chunks_input)
+                        targ_buff.extend(chunks_target)
+                        len_buff.extend(chunks_len)
+            else:
+                if len_chunk is None:
+                    output_roll = np.zeros([batch_size,window_size+1,self.max_len-1])
+                    output_targets = np.zeros([batch_size,1,self.max_len-1])
+                    for i,(seq,targ) in enumerate(zip(seq_buff[:batch_size],targ_buff[:batch_size])):
+                        output_roll[i,:,:seq.shape[1]]=seq
+                        output_targets[i,:,:targ.shape[1]]=targ
+                    output = (output_roll,output_targets,np.array(len_buff[:batch_size]))
+                else:
+                    np.array(seq_buff[:batch_size])
+                    output = (np.array(seq_buff[:batch_size]),np.array(targ_buff[:batch_size]),np.array(len_buff[:batch_size]))
+                del seq_buff[:batch_size]
+                del targ_buff[:batch_size]
+                del len_buff[:batch_size]
+                yield output
+
 
 
     def shuffle_one(self,subset):
@@ -366,15 +413,18 @@ def ground_truth(data):
 # data = Dataset()
 # data.load_data('data/test_dataset/',
 #         timestep_type='quant',max_len=None,note_range=[21,109])
+# #
+# # # for pr in data.test:
+# #     # print pr.name
+# #
+# # data_gen = data.get_dataset_generator('test',2,len_chunk = None)
+# data_gen = data.get_dataset_generator('test',4,len_chunk = 300)
 #
-# # for pr in data.test:
-#     # print pr.name
 #
-# data_gen = data.get_dataset_generator('test',2,len_chunk = None)
-#
-#
-# for batch,lens in data_gen:
-#     print lens
+# for batch,target,lens in data_gen:
+#     # pass
+#     print(batch.shape, target.shape)
+#     print(lens)
 # for pr in data.test:
 #     print pr.name
 #

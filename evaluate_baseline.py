@@ -34,6 +34,9 @@ for fn in os.listdir(baseline_folder):
         note   += [[P_n,R_n,F_n]]
 
         results[fn] = [[P_f,R_f,F_f],[P_n,R_n,F_n]]
+        # print([[P_f,R_f,F_f],[P_n,R_n,F_n]])
+
+
 
 
 print(np.mean(np.array(frame),axis=0))

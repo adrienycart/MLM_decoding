@@ -24,6 +24,7 @@ parser.add_argument('-resume',action='store_true',help="resume training from lat
 parser.add_argument('-sched_sampl',type=str,help="type of schedule for scheduled sampling. If not specified, no scheduled sampling")
 parser.add_argument('-sched_dur',type=int,default=1000,help="duration in epochs of the schedule (if lower than epochs, sampling will always be applied after the end of schedule)")
 parser.add_argument('-sched_valid',type=str,help='validate on sampled inputs')
+parser.add_argument('-pitchwise',type=int,help='to train a pitch-wise model; value gives width of pitch window.')
 
 
 args = parser.parse_args()
@@ -60,6 +61,7 @@ train_param['scheduled_sampling']=args.sched_sampl
 train_param['schedule_duration']=args.sched_dur
 train_param['sched_valid']=args.sched_valid
 
+
 print("Computation start : "+str(datetime.now()))
 
 data = Dataset(rand_transp=True)
@@ -72,6 +74,12 @@ model_param['n_hidden']=n_hidden
 model_param['learning_rate']=learning_rate
 model_param['chunks']=max_len
 model_param['use_focal_loss']=args.use_focal_loss
+if args.pitchwise is None:
+    model_param['pitchwise']=False
+else:
+    model_param['pitchwise']=True
+    model_param['n_notes'] = args.pitchwise
+    train_param['batch_size']=500
 
 
 save_path = args.save_path

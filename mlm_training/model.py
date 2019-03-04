@@ -22,7 +22,13 @@ class Model:
 
         #Unpack parameters
         for key,value in model_param.items():
+            print(key,value)
             setattr(self,key,value)
+
+        if self.pitchwise:
+            self.n_classes = 1
+        else:
+            self.n_classes = self.n_notes
 
         self._batch_size = None
         self._inputs = None
@@ -242,7 +248,7 @@ class Model:
         if self._prediction is None:
             with tf.device(self.device_name):
                 n_notes = self.n_notes
-                n_classes = n_notes
+                n_classes = self.n_classes
                 n_steps = self.n_steps
                 n_hidden = self.n_hidden
                 suffix = self.suffix
@@ -269,7 +275,7 @@ class Model:
                 outputs = tf.reshape(outputs,[-1,n_hidden])
                 pred = tf.matmul(outputs,W) + b
 
-                pred = tf.reshape(pred,[-1,n_steps,n_notes])
+                pred = tf.reshape(pred,[-1,n_steps,n_classes])
 
                 self._prediction = pred
         return self._prediction
@@ -332,11 +338,11 @@ class Model:
         Placeholder for targets (shifted version of inputs in the case of prediction)
         """
         if self._labels is None:
-            n_notes = self.n_notes
+            n_classes = self.n_classes
             n_steps = self.n_steps
             suffix = self.suffix
 
-            y = tf.placeholder("float", [None,n_steps,n_notes],name="y"+suffix)
+            y = tf.placeholder("float", [None,n_steps,n_classes],name="y"+suffix)
 
             self._labels = y
         return self._labels
@@ -366,7 +372,6 @@ class Model:
         """
         if self._cross_entropy2 is None:
             with tf.device(self.device_name):
-                n_notes = self.n_notes
                 n_steps = self.n_steps
                 suffix = self.suffix
                 y = self.labels
@@ -529,16 +534,31 @@ class Model:
         Get NumPy tensors for input, target and sequence lengths from Dataset object
         in the right format to be given as values to placeholders.
         """
+        if self.pitchwise:
+            data = []
+            targets = []
+            lengths = []
 
-        chunks = self.chunks
+            generator = dataset.get_pitchwise_dataset_generator('valid',50,self.n_classes,self.chunks)
+            for input, target, len in generator:
+                data+=input
+                targets += target
+                lengths += len
 
-        if chunks:
-            data_raw, lengths = dataset.get_dataset_chunks_no_pad(subset,chunks)
-        else :
-            data_raw, lengths = dataset.get_dataset(subset)
+            data = np.array(data)
+            targets = np.array(targets)
+            lengths = np.array(lengths)
 
-        data = self._transpose_data(data_raw[:,:,:-1]) #Drop last sample
-        target = self._transpose_data(data_raw[:,:,1:]) #Drop first sample
+        else:
+            chunks = self.chunks
+
+            if chunks:
+                data_raw, lengths = dataset.get_dataset_chunks_no_pad(subset,chunks)
+            else :
+                data_raw, lengths = dataset.get_dataset(subset)
+
+            data = self._transpose_data(data_raw[:,:,:-1]) #Drop last sample
+            target = self._transpose_data(data_raw[:,:,1:]) #Drop first sample
 
         return data, target, lengths
 
@@ -657,7 +677,10 @@ class Model:
             ptr = 0
 
             # training_data, training_target, training_lengths = self.extract_data(data,'train')
-            train_data_generator = data.get_dataset_generator('train',batch_size,self.chunks)
+            if self.pitchwise:
+                train_data_generator = data.get_pitchwise_dataset_generator('train',batch_size,self.n_notes,self.chunks)
+            else:
+                train_data_generator = data.get_dataset_generator('train',batch_size,self.chunks)
             display_step = None
 
 
@@ -675,10 +698,9 @@ class Model:
             #
             #     ptr += batch_size
 
-            for sequences, batch_lens in train_data_generator:
-                sequences_trans = np.transpose(sequences,[0,2,1])
-                batch_x = sequences_trans[:,:-1,:]
-                batch_y = sequences_trans[:,1:,:]
+            for batch_x,batch_y, batch_lens in train_data_generator:
+                batch_x = np.transpose(batch_x,[0,2,1])
+                batch_y = np.transpose(batch_y,[0,2,1])
 
                 ## Simple scheduled sampling
                 if sched_sampl is not None:
@@ -1044,7 +1066,8 @@ def make_model_from_dataset(dataset,model_param):
     else:
         n_steps = dataset.get_len_files()-1
 
-    model_param['n_notes']=n_notes
+    if not model_param['pitchwise']:
+        model_param['n_notes']=n_notes
     model_param['n_steps']=n_steps
 
     return Model(model_param)
@@ -1087,6 +1110,7 @@ def make_model_param():
     model_param['n_notes']=88
     model_param['n_steps']=300
     model_param['use_focal_loss']=False
+    model_param['pitchwise']=False
 
     model_param['chunks']=None
     model_param['device_name']="/gpu:0"

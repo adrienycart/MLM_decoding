@@ -40,7 +40,7 @@ class Pianoroll:
             else:
                 self.roll = piano_roll
 
-        self.length = self.roll.shape[1]
+        self.length = self.roll.shape[1]-1
         self.crop(note_range)
         self.binarize()
 
@@ -89,23 +89,23 @@ class Pianoroll:
         return
 
 
-    def cut(self,len_chunk,keep_padding=True,as_list=False):
+    def cut(self,roll,len_chunk,keep_padding=True,as_list=False):
         #Returns the roll cut in chunks of len_chunk elements, as well as
         #the list of lengths of the chunks
         #The last element is zero-padded to have len_chunk elements
 
-        roll = self.roll
+
         if keep_padding:
             size = roll.shape[1]
         else:
             size = self.length
-        N_notes = roll.shape[0]
+
         if as_list:
             roll_cut = []
             lengths = []
         else:
             n_chunks = int(np.ceil(float(size)/len_chunk))
-            roll_cut = np.zeros([n_chunks,N_notes,len_chunk])
+            roll_cut = np.zeros([n_chunks,roll.shape[0],len_chunk])
             lengths = np.zeros([n_chunks])
 
         j = 0
@@ -159,6 +159,20 @@ class Pianoroll:
         pr_stretch.roll = np.matmul(roll,a)
         pr_stretch.length = 2*self.length
         return pr_stretch
+
+    def split_pitchwise(self,window):
+        seqs = []
+        targets = []
+        n_notes = self.note_range[1]-self.note_range[0]
+        roll = self.roll
+        roll_pad = np.pad(roll,((window,window),(0,0)),'constant')
+        for i in range(window,window+n_notes):
+            seq = np.zeros([2*window+1,self.roll.shape[1]-1])
+            seq[:,:] = roll_pad[i-window:i+window+1,:-1]
+            seqs += [seq]
+            targets += [roll_pad[i:i+1,1:]]
+        return seqs,targets
+
 
     def get_roll(self):
         return self.roll, self.length
@@ -257,6 +271,7 @@ def scale_template(scale,note_range=[21,109]):
 
 
 # pr = Pianoroll()
-# pr.roll = np.array([[1,1,2,2,3,3],[1,1,2,2,3,3],[1,1,2,2,3,3]])
+# pr.roll = np.array([[1,1,2,2,3,3],[4,4,5,5,6,6],[1,1,2,2,3,3]])
 # pr.length = 6
-# print(pr)
+# pr.note_range=[3,6]
+# print pr.split_pitchwise(1)[0]
