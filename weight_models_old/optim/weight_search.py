@@ -29,9 +29,9 @@ data_dict = {'gt'   : None,
              'beam' : None}
     
 def load_data():
-    with gzip.open("weight_models/data/gt.all." + step['step'] + ".pkl.gz", "rb") as file:
+    with gzip.open("weight_models_old/data-20/gt.all." + step['step'] + ".pkl.gz", "rb") as file:
         data_dict['gt'] = pickle.load(file)
-    with gzip.open("weight_models/data/beam.all." + step['step'] + ".pkl.gz", "rb") as file:
+    with gzip.open("weight_models_old/data-20/beam.all." + step['step'] + ".pkl.gz", "rb") as file:
         data_dict['beam'] = pickle.load(file)
     
 model_dict = {'model' : None,
@@ -47,9 +47,9 @@ def load_model():
     # Build model object
     model_dict['model'] = Model(model_param)
     if step['step'] == "quant":
-        model_path = "./ckpt/piano_midi/quant/quant_0.001_2/best_model.ckpt-374"
+        model_path = "./lstm-20/quant_0.001/best_model.ckpt-758"
     elif step['step'] == "event":
-        model_path = "./ckpt/piano_midi/event_0.001/best_model.ckpt-284"
+        model_path = "./lstm-20/event_0.001/best_model.ckpt-394"
     elif step['step'] == "time":
         model_path = "./ckpt/piano_midi/unquant_0.001/best_model.ckpt-263"
         
@@ -86,7 +86,7 @@ def weight_search(params, num=0, verbose=False):
         use_lstm = params[8]
     
     warnings.filterwarnings("ignore", message="tick should be an int.")
-    folder = "data/outputs/valid"
+    folder = "data/outputs-20/valid"
 
     max_len = 30
     section = [0, max_len]
@@ -179,7 +179,7 @@ def weight_search(params, num=0, verbose=False):
     weight_model_name += "." + step['step'] + "." + str(num) + ".pkl"
     
     # Write out weight model
-    with open("weight_models/models/" + weight_model_name, "wb") as file:
+    with open("weight_models_old/models/" + weight_model_name, "wb") as file:
         pickle.dump(most_recent_model, file)
 
     results = {}

@@ -283,6 +283,7 @@ if __name__ == '__main__':
     print(X.shape)
     print(Y.shape)
     print(D.shape)
+    print(len(A))
     
     # Save data
     with gzip.open(args.out, "wb") as file:

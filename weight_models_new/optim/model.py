@@ -5,6 +5,7 @@ import pickle
 import argparse
 import datetime
 import gzip
+import os
 
 
 def load_data_from_pkl_file(pkl_file, min_diff, history, ac_pitch_window, la_pitch_window,
@@ -76,17 +77,18 @@ def load_data_from_pkl_file(pkl_file, min_diff, history, ac_pitch_window, la_pit
     
     X = []
     Y = pkl['Y'][np.where(pkl['D'] >= min_diff)]
-    pkl['A'] = [pkl['A']]
         
     # Doing it in loops because it's easier. If it takes a prohibitavely long time this could be vectorized.
     frame_num_total = -1
+    base_index = -88
     for piece_num, acoustic in enumerate(pkl['A']):
+        acoustic = np.transpose(acoustic)
         
-        for frame_num, frame in enumerate(acoustic):
+        for frame_num, frame in enumerate(np.transpose(acoustic)):
             frame_num_total += 1
             
-            for beam in range(pkl['beam']):
-                base_index = frame_num_total * (pkl['beam'] * 88) + beam * 88
+            for beam in range(1 if frame_num == 0 else pkl['beam']):
+                base_index += 88
                 language = pkl['X'][base_index:base_index + 88, 0:pkl['history']]
                 
                 for pitch in range(88):
@@ -108,7 +110,6 @@ def load_data_from_pkl_file(pkl_file, min_diff, history, ac_pitch_window, la_pit
                     
                     # Acoustic history
                     a = np.zeros((len(ac_pitch_window), history))
-                    
                     a[this_pitch_window_indices, this_history_index:] = acoustic[this_pitch_window,
                                                                                  frame_num - this_history + 1:
                                                                                  frame_num + 1]
@@ -129,7 +130,6 @@ def load_data_from_pkl_file(pkl_file, min_diff, history, ac_pitch_window, la_pit
                     f = pkl['X'][x_index, history:-1] if features else []
                     
                     X.append(np.hstack((a.reshape(-1), l.reshape(-1), np.squeeze(f), pkl['X'][x_index, -1])))
-                    Y.append(pkl['Y'][x_index])
           
     X = np.array(X)
     
@@ -273,7 +273,7 @@ def make_model(history, ac_pitch_window_size, la_pitch_window_size, num_features
 
 
 
-def train_model(model, X, Y, optimizer='adam', epochs=100):
+def train_model(model, X, Y, optimizer='adam', epochs=100, checkpoints=[]):
     """
     Train a keras model.
     
@@ -293,19 +293,22 @@ def train_model(model, X, Y, optimizer='adam', epochs=100):
         
     epochs : int
         The number of epochs to train for. Defaults to 100.
+        
+    checkpoints : list(keras.callbacks.ModelCheckpoint)
+        A list of checkpoints which will save the model.
     """
     
 
     model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['accuracy'])
 
-    model.fit(X, Y, epochs=epochs, batch_size=32)
+    model.fit(X, Y, epochs=epochs, batch_size=32, callbacks=checkpoints)
     
     
     
     
 def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19],
                      la_pitch_window=list(range(-12, 13)), min_diff=0.0, features=True,
-                     out="tmp.keras", is_weight=True):
+                     out="ckpt", is_weight=True):
     """
     Train a model fully given some data and parameters.
     
@@ -337,8 +340,9 @@ def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19]
         weights directly (True). Defaults to True.
         
     out : string
-        The file to save the keras model to. Defaults to tmp.keras.
+        The directory to save the checkpoints to. Defaults to ckpt.
     """
+    print("Loading data...")
     X, Y = load_data_from_pkl_file(data_file, min_diff, history, ac_pitch_window, la_pitch_window,
                                    features, is_weight)
     
@@ -350,16 +354,21 @@ def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19]
     language_in = X[:, len(ac_pitch_window) * history:history * (len(ac_pitch_window) + len(la_pitch_window))]
     features_in = X[:, history * (len(ac_pitch_window) + len(la_pitch_window)):]
     
-    print(X.shape)
-    print(Y.shape)
+    print("Loaded " + str(X.shape[0]) + " data points.")
+    print("Training model...")
     
     model = make_model(history, ac_pitch_window_size, la_pitch_window_size, num_features,
                        ac_num_pitch_convs=5, ac_num_history_convs=10, la_num_convs=5)
     
-    train_model(model, [acoustic_in, language_in, features_in], Y)
+    checkpoint = keras.callbacks.ModelCheckpoint(os.path.join(out, 'model.{epoch:03d}-{loss:.4f}.hdf5'))
+    checkpoint_best = keras.callbacks.ModelCheckpoint(os.path.join(out, 'best_loss.hdf5'), monitor='loss',
+                                                      save_best_only=True)
+    checkpoints = [checkpoint_best, checkpoint]
+    
+    train_model(model, [acoustic_in, language_in, features_in], Y, checkpoints=checkpoints)
     
     with open(out, "wb") as file:
-        pickle.dump({'model' : model,
+        pickle.dump({'model_path' : os.path.join(out, 'best_loss.hdf5'),
                      'history' : history,
                      'ac_pitch_window' : ac_pitch_window,
                      'la_pitch_window' : la_pitch_window,
@@ -392,8 +401,8 @@ if __name__ == '__main__':
     
     parser.add_argument("--weight", help="This model will output weights directly.", action="store_true")
     
-    parser.add_argument("--out", help="The file to save the model to. Defaults to wm.{current_time}.keras",
-                        default="wm."+str(datetime.datetime.now())+".keras")
+    parser.add_argument("--out", help="The directory to save the model to. Defaults to '.' (current directory)",
+                        default=".")
     
     args = parser.parse_args()
     

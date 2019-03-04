@@ -38,13 +38,13 @@ if __name__ == "__main__":
     
     dimensions = [[False], # GT
                   (0.0, 0.8), # min_diff
-                  (0, 50) if args.step == "time" else (0, 10), # history
+                  (5, 50) if args.step == "time" else (3, 10), # history
                   (1, 4), # num_layers
-                  [False], # is_weight
-                  [False], # features
+                  [True], # is_weight
+                  [True, False], # features
                   [0], # history pitch context
                   [0], # prior context
-                  [False]] # use LSTM
+                  [True]] # use LSTM
 
     opt = skopt.gp_minimize(weight_search.weight_search, dimensions, n_calls=10+args.iters, kappa=args.kappa, noise=0.0004, verbose=True, n_points=10)
     
