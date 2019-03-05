@@ -58,13 +58,13 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     weight_model_dict : dict
         A dictionary containing information about the weight model to use, if any. Defaults to None,
         which uses the static weight of the weight parameter.
-        
+
     weight_model : sklearn.model or tf.keras.Model
         The model to be used as a weight_model, or None to use static weighting.
 
     verbose : bool
         Print progress in number of frames. Defaults to False (no printing).
-        
+
     gt : matrix
         The ground truth piano roll, 88 x T. If given, this will be used to always use the optimum
         weight for each frame. Defaults to None.
@@ -79,14 +79,14 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     priors : np.ndarray
         An 88 x T matrix, giving the prior assigned to each pitch detection by the
         most probable language model state.
-        
+
     weights : np.ndarray
         An 88 X T matrix, giving the acoustic weights for each pitch at each frame.
     """
     if gt is not None:
         weight_model = True
         is_weight = True
-        
+
     # Load the weight_model properties
     if weight_model_dict is not None:
         if 'model' in weight_model_dict:
@@ -105,7 +105,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
             features = weight_model_dict['features']
             is_weight = weight_model_dict['is_weight']
             no_lstm = weight_model_dict['no_lstm'] if 'no_lstm' in weight_model_dict else False
-        
+
     if union:
         branch_factor = int(branch_factor / 2)
 
@@ -117,7 +117,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
     for frame_num, frame in enumerate(acoustic):
         if verbose and frame_num % 20 == 0:
             print(str(frame_num) + " / " + str(acoustic.shape[0]))
-            
+
         states = []
         samples = []
         weights = []
@@ -127,7 +127,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         if gt is not None:
             weights_all = np.transpose(np.vstack([get_best_weights(state.prior, frame, gt[:, frame_num]) for state in beam]))
             priors_all = np.zeros(weights_all.shape[1])
-            
+
         elif weight_model:
             if sklearn:
                 X = np.vstack([create_weight_x_sk(state, acoustic, frame_num, history, features=features,
@@ -136,22 +136,22 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
                 # Remove LSTM sample
                 if not use_lstm:
                     X = X[:, :-1]
-                    
+
                 # 2 x len(X) matrix
                 weights_all = np.transpose(weight_model.predict_proba(X)) if is_weight else np.zeros((2, len(X)))
-                
+
                 # len(X) array
                 priors_all = np.squeeze(weight_model.predict_proba(X)[:, 1]) if not is_weight else np.zeros(len(X))
                 if not is_weight:
                     p = []
-                    
+
             else: # tensorflow
                 X = np.vstack([create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window,
                                                   la_pitch_window, features) for state in beam])
                 # Remove LSTM sample
                 if no_lstm:
                     X = X[:, :-1]
-                
+
                 # Split X data into its parts
                 acoustic_in = X[:, :len(ac_pitch_window) * history].reshape(-1, len(ac_pitch_window), history)
                 language_in = X[:, len(ac_pitch_window) * history:
@@ -159,15 +159,15 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
                                ].reshape(-1, len(la_pitch_window), history)
                 features_in = X[:, history * (len(ac_pitch_window) + len(la_pitch_window)):]
                 X_split = [acoustic_in, language_in, features_in]
-                
+
                 result = np.squeeze(weight_model.predict(X_split))
-                
+
                 # 2 x len(X) matrix
                 weights_all = np.zeros((2, len(X)))
                 if is_weight:
                     weights_all[1, :] = result
                     weights_all[0, :] = 1 - result
-                    
+
                 # len(X) array
                 priors_all = np.squeeze(result) if not is_weight else np.zeros(len(X))
                 if not is_weight:
@@ -200,9 +200,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
             for i, state in enumerate(beam):
                 weight_this = weights_all[:, i * 88 : (i + 1) * 88] if weight_model and is_weight else weight
                 sample_weight = [[0.0], [1.0]] if union else weight_this
-                
-                prior_this = priors_all[i * 88 : (i + 1) * 88] if (not is_weight) and weight_model else None
-                
+
+                prior_this = priors_all[i * 88 : (i + 1) * 88] if weight_model and (not is_weight) else None
+
                 for _, sample in itertools.islice(enumerate_samples(frame, state.prior, weight=sample_weight,
                                                   p=prior_this), branch_factor):
 
@@ -221,12 +221,30 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         log_probs, combined_priors = get_log_prob(np.array(samples), np.array(frame), np.array(priors),
                                                   np.array(weights), p=None if p is None else np.array(p))
 
-        np_samples = np.zeros((len(samples), 1, 88))
-        for i, sample in enumerate(samples):
-            np_samples[i, 0, :] = sample
 
-        hidden_states, priors = model.run_one_step([s.hidden_state for s in states], np_samples, sess)
 
+        if model.pitchwise:
+            n_samples = len(samples)
+            #Get a flat list of all the hidden states for all pitches and for all states
+            hidden_states_in =  [c_h for s in states for c_h in s.hidden_state]
+            #Get all the pitchwise inputs.
+            window = int((model.n_notes-1)/2)
+            pw_samples = np.zeros([n_samples*88,1,model.n_notes])
+            for i,sample in enumerate(samples):
+                sample_pad = np.pad(sample,(window,window),'constant')
+                for j in range(window,window+88):
+                    pw_samples[i*88+j,0,:]=sample_pad[j-window:j+window+1]
+            #Compute next step
+            hidden_states_out, pw_priors = model.run_one_step(hidden_states_in, pw_samples, sess)
+            #Re-build the list of LSTM-hidden-states for all states
+            hidden_states = [ hidden_states_out[88*i:88*(i+1)] for i in range(n_samples)]
+            #Re-build the priors from pitchwise outputs
+            priors = np.reshape(pw_priors,[n_samples,1,88])
+        else:
+            np_samples = np.zeros((len(samples), 1, 88))
+            for i, sample in enumerate(samples):
+                np_samples[i, 0, :] = sample
+            hidden_states, priors = model.run_one_step([s.hidden_state for s in states], np_samples, sess)
         beam = Beam()
         for hidden_state, prior, log_prob, state, sample, w, combined_prior in zip(hidden_states, priors,
                                                                                    log_probs, states, samples,
@@ -249,18 +267,18 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
 def get_best_weights(language, acoustic, gt, width=0.25):
     """
     Get the best weights for the given priors and ground truth.
-    
+
     Parameters
     ==========
     language : np.array
         The language model priors, of length N.
-        
+
     acoustic : np.array
         The acoustic model priors, of length N.
-        
+
     gt : np.array
         The ground truth outputs, a binrazed array of length N.
-        
+
     Returns
     =======
     weights : np.ndarray
@@ -268,17 +286,17 @@ def get_best_weights(language, acoustic, gt, width=0.25):
         The 1st column is the acoustic weight, and the 2nd column is the language weight.
     """
     language = np.squeeze(language)
-    
+
     weights = np.zeros((len(language), 2))
-    
+
     language_diffs = np.abs(language - gt)
     acoustic_diffs = np.abs(acoustic - gt)
-    
+
     weights[:, 0] = np.where(acoustic_diffs < language_diffs,
                              np.random.uniform(low=1.0-width, high=1.0, size=(len(weights),)),
                              np.random.uniform(low=0.0, high=0.0+width, size=(len(weights),)))
     weights[:, 1] = 1 - weights[:, 0]
-    
+
     return weights
 
 
@@ -287,7 +305,7 @@ def get_best_weights(language, acoustic, gt, width=0.25):
 def create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window, la_pitch_window, features):
     """
     Get the x input for the tf.keras dynamic weighting model.
-    
+
     Parameters
     ==========
     state : State
@@ -295,22 +313,22 @@ def create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window, la_
 
     acoustic : np.ndarray
         The acoustic prior for the entire piece.
-        
+
     frame_num : int
         The current frame number.
-        
+
     history : int
         The number of frames to look back in time for both acoustic and language history.
 
     ac_pitch_window : list(int)
         The pitches around each data point to use, for its acoustic history.
-        
+
     la_pitch_window : list(int)
         The pitches around each data point to use, for its sample history.
-        
+
     features : boolean
         True to calculate features. False otherwise.
-        
+
     Return
     ======
     x : np.ndarray
@@ -318,10 +336,10 @@ def create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window, la_
     """
     frame = acoustic[frame_num, :]
     pr = state.get_piano_roll(min_length=history, max_length=history)
-    
+
     x = np.array(get_data_tf(history, ac_pitch_window, la_pitch_window, np.transpose(acoustic),
                              pr, frame_num, list(range(88))))
-    
+
     if features:
         x = np.hstack((x,
                        get_features(acoustic, frame_num, state.get_priors()),
@@ -331,7 +349,7 @@ def create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window, la_
         x = np.hstack((x,
                        np.reshape(frame, (88, -1)),
                        np.reshape(state.prior, (88, -1))))
-        
+
     return x
 
 
@@ -339,7 +357,7 @@ def create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window, la_
 def get_data_tf(history, ac_pitch_window, la_pitch_window, acoustic, pr, frame_num, pitches):
     """
     Get the history-based features for some tensor flow data points.
-    
+
     Parameters
     ==========
     history : int
@@ -347,34 +365,34 @@ def get_data_tf(history, ac_pitch_window, la_pitch_window, acoustic, pr, frame_n
 
     ac_pitch_window : list(int)
         The pitches around each data point to use, for its acoustic history.
-        
+
     la_pitch_window : list(int)
         The pitches around each data point to use, for its sample history.
-    
+
     acoustic : np.ndarray
         An 88xN array, representing the acoustic prior for this entire piece.
-        
+
     pr : np.ndarray
         An 88x(frame_num-1) array of the binary samples of this piece so far.
-        
+
     frame_num : int
         The frame number we are on.
-        
+
     pitches : list(int)
         The pitches we want data from.
-        
+
     Returns
     =======
     data : list
         A list of of the history-based features for the desired data points.
     """
     frame = acoustic[:, frame_num]
-    
+
     ac_pitch_window_np = np.array(ac_pitch_window)
     la_pitch_window_np = np.array(la_pitch_window)
-    
+
     x = []
-    
+
     for pitch in pitches:
         # Usable acoustic pitch window
         this_pitch_window = ac_pitch_window_np[np.where(np.logical_and(0 <= (pitch + ac_pitch_window_np),
@@ -406,7 +424,7 @@ def get_data_tf(history, ac_pitch_window, la_pitch_window, acoustic, pr, frame_n
         l[this_pitch_window_indices] = pr[this_pitch_window, -history:]
 
         x.append(np.hstack((a.reshape(-1), l.reshape(-1))))
-        
+
     return x
 
 
@@ -424,7 +442,7 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
 
     acoustic : np.ndarray
         The acoustic prior for the entire piece, as time X pitch.
-        
+
     frame_num : int
         The current frame number.
 
@@ -433,14 +451,14 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
 
     pitches : list
         The pitches we want data points for. Defaults to [0:88] (all pitches).
-        
+
     features : boolean
         True to calculate features. False otherwise.
-        
+
     history_context : int
         The pitch window to include around the history of samples, unrolled, and 0 padded.
         Defaults to 0.
-        
+
     prior_context : int
         The window of priors to include around the current priors. Defaults to 0.
 
@@ -451,21 +469,21 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
     """
     frame = acoustic[frame_num, :]
     pr = state.get_piano_roll(min_length=history, max_length=history)
-    
+
     if features:
         x = np.hstack((pr,
                        get_features(acoustic, frame_num, state.get_priors()),
                        np.reshape(frame, (88, -1)),
                        np.reshape(state.prior, (88, -1))))
-        
+
     else:
         x = np.hstack((pr,
                        np.reshape(frame, (88, -1)),
                        np.reshape(state.prior, (88, -1))))
-    
+
     # Add prior and history contexts
     x_new = pad_x(x, frame, state.prior, pr, history, history_context, prior_context)
-    
+
     return x_new[pitches]
 
 
@@ -473,27 +491,27 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
 def pad_x(x, acoustic, language, pr, history, history_context, prior_context):
     """
     Add a pitch and acoustic prior window around its given history to an sk-learn x data point.
-    
+
     Parameters
     ==========
     x : np.ndarray
         The original data points, num_data_points X num_features.
-        
+
     acoustic : np.ndarray
         The acoustic prior for the entire piece, as time X pitch.
-        
+
     language : np.ndarray
         The language model priors of the past steps, as an 88 X N array.
-        
+
     pr : np.ndarray
         The binary piano roll of the past steps, as an 88 X N array.
-        
+
     history_context : int
         The window radius around the samples to save.
-        
+
     prior_context : int
         The window radius around the acoustic priors to save.
-        
+
     Returns
     =======
     x_new : np.ndarray
@@ -501,16 +519,16 @@ def pad_x(x, acoustic, language, pr, history, history_context, prior_context):
     """
     x_new = np.zeros((x.shape[0], x.shape[1] + prior_context * 4 + 2 * history_context * history))
     x_new[:, :x.shape[1]] = x
-    
+
     extra_start = x.shape[1]
-    
+
     if prior_context != 0:
         acoustic_padded = np.zeros(88 + prior_context * 2)
         acoustic_padded[prior_context:-prior_context] = acoustic
-        
+
         language_padded = np.zeros(88 + prior_context * 2)
         language_padded[prior_context:-prior_context] = language
-        
+
         for i in range(prior_context):
             x_new[:, extra_start + i] = acoustic_padded[i:-2 * prior_context + i]
             x_new[:, extra_start + prior_context + i] = language_padded[i:-2 * prior_context + i]
@@ -520,13 +538,13 @@ def pad_x(x, acoustic, language, pr, history, history_context, prior_context):
             else:
                 x_new[:, extra_start + 2 * prior_context + i] = acoustic_padded[2 * prior_context - i:-i]
                 x_new[:, extra_start + 3 * prior_context + i] = language_padded[2 * prior_context - i:-i]
-            
+
     extra_start += 4 * prior_context
-    
+
     if history_context != 0 and history != 0:
         pr_padded = np.zeros((88 + history_context * 2, history))
         pr_padded[history_context:-history_context, :] = pr
-        
+
         for i in range(history_context):
             x_new[:, extra_start + i * history :
                   extra_start + (i + 1) * history] = pr_padded[i:-2 * history_context + i, :]
@@ -536,26 +554,26 @@ def pad_x(x, acoustic, language, pr, history, history_context, prior_context):
             else:
                 x_new[:, extra_start + history_context * history + i * history :
                       extra_start + history_context * history + (i + 1) * history] = pr_padded[2 * history_context - i:-i, :]
-    
+
     return x_new
 
 
-    
+
 def get_features(acoustic, frame_num, priors):
     """
     Get a features array from the given acoustic and language model priors.
-    
+
     Parameters
     ==========
     acoustic : np.ndarray
         The acoustic prior for the entire piece.
-        
+
     frame_num : int
         The current frame number.
-        
+
     language : np.ndarray
         The language priors from the entire piece.
-        
+
     Returns
     =======
     features : np.ndarray
@@ -564,12 +582,12 @@ def get_features(acoustic, frame_num, priors):
     def uncertainty(array):
         """
         Get the average squared error of each number in an array's distance from certainty (1 or 0).
-        
+
         Parameters
         ==========
         array : np.array
             Any data array.
-            
+
         Returns
         =======
         uncertainty : float
@@ -581,31 +599,31 @@ def get_features(acoustic, frame_num, priors):
     def entropy(array):
         """
         Get the entropy of the given array.
-        
+
         Parameters
         ==========
         array : np.array
             An data array.
-            
+
         Returns
         =======
         entropy : float
             The entropy of the given array. A measure of its flatness.
         """
         return np.sum(np.where(array == 0, 0, -array * np.log2(array))) / np.log2(len(array))
-    
+
     num_features = 9
     frame = acoustic[frame_num, :]
     language = np.squeeze(priors[:, -1])
     features = np.zeros((88, num_features))
-    
+
     features[:, 0] = uncertainty(acoustic)
     features[:, 1] = uncertainty(language)
     features[:, 2] = entropy(acoustic)
     features[:, 3] = entropy(language)
     features[:, 4] = np.mean(acoustic)
     features[:, 5] = np.mean(language)
-    
+
     # Flux
     if frame_num != 0:
         features[:, 6] = frame - acoustic[frame_num, :]
@@ -613,10 +631,10 @@ def get_features(acoustic, frame_num, priors):
     else:
         features[:, 6] = frame
         features[:, 7] = language
-        
+
     # Absolute pitch (0, 1) range
     features[:, 8] = np.arange(88) / 87
-    
+
     return features
 
 
@@ -644,7 +662,7 @@ def get_log_prob(sample, acoustic, language, weight, p=None):
         second index corresponds to the prior (index 0 for acoustic prior, index 1 for language prior),
         and whose third dimension is either length 1 (when each pitch has the same prior) or length
         88 (when each pitch has a different prior).
-        
+
     p : np.array
         A weighted probability prior for each pitch. This overrides all other arguments
         to be used as p if it is given. Defaults to None.
@@ -654,7 +672,7 @@ def get_log_prob(sample, acoustic, language, weight, p=None):
     log_prob : np.array
         The log probability of each given sample, as a weighted sum of p(. | acoustic) and p(. | language),
         in an N x 1 array.
-        
+
     combined_priors : np.ndarray
         The combined (NOT log) prior of each given sample, in an N x 88 nd-array.
     """
@@ -668,7 +686,7 @@ def get_log_prob(sample, acoustic, language, weight, p=None):
             p = weight_acoustic * acoustic + weight_language * language # N x 88
     else:
         p = np.squeeze(p)
-        
+
     not_p = 1 - p
 
     return np.sum(np.log(np.where(sample == 1, p, not_p)), axis=1), p
@@ -697,7 +715,7 @@ def enumerate_samples(acoustic, language, weight=[[0.8], [0.2]], p=None):
         A 2 x (1 or 88) matrix, whose first row is the weight for the acoustic model and whose 2nd
         row is the weight for the language model, either for each pitch (2x88) or across all pitches
         (2x1). Each column in the matrix should be normalized to sum to 1. Defaults to [[0.8], [0.2]].
-        
+
     p : np.array
         A weighted probability prior for each pitch. This overrides all other arguments
         to be used as p if it is given. Defaults to None.
@@ -741,13 +759,13 @@ def enumerate_samples(acoustic, language, weight=[[0.8], [0.2]], p=None):
             v.append(i + 1)
             q.put((l + L_sorted[i + 1], num, v))
             v = v.copy()
-            
+
             # XOR between v and [i]
             try:
                 v.remove(i)
             except:
                 v.append(i)
-                
+
             q.put((l + L_sorted[i + 1] - L_sorted[i], num+1, v))
             num += 2
 
@@ -789,7 +807,7 @@ if __name__ == '__main__':
                         type=int, default=10)
     parser.add_argument("-v", "--verbose", help="Print frame status updates.", action="store_true")
     parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
-    
+
     parser.add_argument("--gt", help="Use the gt to use the best possible weight_model results.", action="store_true")
 
     args = parser.parse_args()
@@ -809,7 +827,7 @@ if __name__ == '__main__':
 
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-        
+
     # Load data
     data = dataMaps.DataMaps()
     data.make_from_file(args.MIDI, args.step, section=section)
@@ -836,7 +854,7 @@ if __name__ == '__main__':
 
     if args.output is not None:
         os.makedirs(args.output, exist_ok=True)
-                
+
     # Decode
     pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
                          beam_size=args.beam, union=args.union, weight=[[args.weight], [1 - args.weight]],

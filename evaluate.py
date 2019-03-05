@@ -41,7 +41,7 @@ parser.add_argument("--hash", help="The hash length to use. Defaults to 10.", ty
 parser.add_argument("-v", "--verbose", help="Use verbose printing.", action="store_true")
 parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
 parser.add_argument("--gt", help="Use the gt to use the best possible weight_model results.", action="store_true")
-
+parser.add_argument("--pitchwise", type=int, help="use pitchwise language model. Value is the number of semitones above and below current pitch to take into account.")
 
 
 args = parser.parse_args()
@@ -70,6 +70,7 @@ if args.weight_model is None:
 else:
     print(f"Auto-weight: {args.weight_model}")
 print(f"Sampling union: {args.union}")
+print(f"Pitchwise window: {args.pitchwise}")
 
 print('####################################')
 
@@ -90,6 +91,11 @@ n_hidden = 256
 model_param = make_model_param()
 model_param['n_hidden'] = n_hidden
 model_param['n_steps'] = 1 # To generate 1 step at a time
+if args.pitchwise is None:
+    model_param['pitchwise']=False
+else:
+    model_param['pitchwise']=True
+    model_param['n_notes'] = 2*args.pitchwise+1
 
 # Build model object
 model = Model(model_param)
