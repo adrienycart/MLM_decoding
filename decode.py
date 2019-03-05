@@ -406,7 +406,7 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
         The state to examine for its piano roll and prior.
 
     acoustic : np.ndarray
-        The acoustic prior for the entire piece.
+        The acoustic prior for the entire piece, as time X pitch.
         
     frame_num : int
         The current frame number.
@@ -457,6 +457,34 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
 
 
 def pad_x(x, acoustic, language, pr, history, history_context, prior_context):
+    """
+    Add a pitch and acoustic prior window around its given history to an sk-learn x data point.
+    
+    Parameters
+    ==========
+    x : np.ndarray
+        The original data points, num_data_points X num_features.
+        
+    acoustic : np.ndarray
+        The acoustic prior for the entire piece, as time X pitch.
+        
+    language : np.ndarray
+        The language model priors of the past steps, as an 88 X N array.
+        
+    pr : np.ndarray
+        The binary piano roll of the past steps, as an 88 X N array.
+        
+    history_context : int
+        The window radius around the samples to save.
+        
+    prior_context : int
+        The window radius around the acoustic priors to save.
+        
+    Returns
+    =======
+    x_new : np.ndarray
+        The padded data points.
+    """
     x_new = np.zeros((x.shape[0], x.shape[1] + prior_context * 4 + 2 * history_context * history))
     x_new[:, :x.shape[1]] = x
     
