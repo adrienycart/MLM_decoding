@@ -66,6 +66,9 @@ def load_data_from_pkl_file(pkl_file, min_diff, history, ac_pitch_window, la_pit
         
     Y : np.array
         The requested Y data points.
+        
+    D : np.array
+        The difference associated with each returned data point.
     """
     with gzip.open(pkl_file, "rb") as file:
         pkl = pickle.load(file)
@@ -346,6 +349,7 @@ def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19]
     train_model(model, [acoustic_in, language_in, features_in], Y, sample_weight=D, epochs=epochs,
                 checkpoints=checkpoints, class_weight=class_weight)
     
+    # Reload to save model in easily-loadable format
     model.load_weights(os.path.join(out, 'best.ckpt'))
     model.save(os.path.join(out, 'best.h5'))
     

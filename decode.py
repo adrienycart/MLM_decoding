@@ -152,8 +152,8 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
                 # 2 x len(X) matrix
                 weights_all = np.zeros((2, len(X)))
                 if is_weight:
-                    weights_all[0, :] = result
-                    weights_all[1, :] = 1 - result
+                    weights_all[1, :] = result
+                    weights_all[0, :] = 1 - result
                 # len(X) array
                 priors_all = np.squeeze(result) if not is_weight else np.zeros(len(X))
                 if not is_weight:
