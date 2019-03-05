@@ -227,8 +227,8 @@ def get_event_roll(midi_data,section=None):
         begin = section[0]
         end = section[1]
         assert begin < end
-        begin_index = np.argmax(np.abs(begin-steps))
-        end_index = np.argmax(np.abs(end-steps))
+        begin_index = np.argmin(np.abs(begin-steps))
+        end_index = np.argmin(np.abs(end-steps))
         pr = pr[:,begin_index:end_index]
 
     return pr
