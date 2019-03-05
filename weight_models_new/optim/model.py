@@ -233,8 +233,7 @@ def make_model(history, ac_pitch_window_size, la_pitch_window_size, num_features
 
 
 
-def train_model(model, X, Y, sample_weight=None, optimizer='adam', epochs=100, checkpoints=[],
-                class_weight=None):
+def train_model(model, X, Y, sample_weight=None, optimizer='adam', epochs=100, checkpoints=[]):
     """
     Train a keras model.
     
@@ -260,14 +259,11 @@ def train_model(model, X, Y, sample_weight=None, optimizer='adam', epochs=100, c
         
     checkpoints : list(keras.callbacks.ModelCheckpoint)
         A list of checkpoints which will save the model.
-        
-    class_weight : dict
-        A class weighting for each class. Defaults to None.
     """
     model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['mse', 'accuracy'])
     
     model.fit(X, Y, sample_weight=sample_weight, validation_split=0.1, epochs=epochs, batch_size=32,
-              callbacks=checkpoints, class_weight=class_weight)
+              callbacks=checkpoints)
     
     
     
@@ -328,10 +324,6 @@ def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19]
     Y = Y[shuffle]
     D = D[shuffle]
     
-    # Reweight so model doesn't prefer 1 over 0 or vice versa
-    class_weight = {0 : np.sum(Y),
-                    1 : 1 - np.sum(Y)}
-    
     # Split into separate data sections
     ac_pitch_window_size = len(ac_pitch_window)
     la_pitch_window_size = len(la_pitch_window)
@@ -353,7 +345,7 @@ def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19]
     checkpoints = [checkpoint_best, checkpoint]
     
     train_model(model, [acoustic_in, language_in, features_in], Y, sample_weight=D, epochs=epochs,
-                checkpoints=checkpoints, class_weight=class_weight)
+                checkpoints=checkpoints)
     
     # Reload to save model in easily-loadable format
     model.load_weights(os.path.join(out, 'best.ckpt'))
