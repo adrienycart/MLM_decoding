@@ -541,13 +541,17 @@ class Model:
 
             generator = dataset.get_pitchwise_dataset_generator('valid',50,int((self.n_notes-1)/2.0),self.chunks)
             for input, target, len in generator:
-                data+=np.split(input,input.shape[0],axis=0)
-                targets += np.split(target,target.shape[0],axis=0)
-                lengths += np.split(len,len.shape[0],axis=0)
+                data+= [np.squeeze(a,axis=0) for a in np.split(input,input.shape[0],axis=0)]
+                targets += [np.squeeze(a,axis=0) for a in np.split(target,target.shape[0],axis=0)]
+                lengths += [np.squeeze(a,axis=0) for a in np.split(len,len.shape[0],axis=0)]
 
             data = np.array(data)
             targets = np.array(targets)
             lengths = np.array(lengths)
+
+            data = np.transpose(data,[0,2,1])
+
+            targets = np.transpose(targets,[0,2,1])
 
         else:
             chunks = self.chunks
@@ -558,9 +562,9 @@ class Model:
                 data_raw, lengths = dataset.get_dataset(subset)
 
             data = self._transpose_data(data_raw[:,:,:-1]) #Drop last sample
-            target = self._transpose_data(data_raw[:,:,1:]) #Drop first sample
+            targets = self._transpose_data(data_raw[:,:,1:]) #Drop first sample
 
-        return data, target, lengths
+        return data, targets, lengths
 
     def initialize_training(self,save_path,train_param,sess=None):
         """
