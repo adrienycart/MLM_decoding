@@ -78,7 +78,7 @@ if args.pitchwise is None:
     model_param['pitchwise']=False
 else:
     model_param['pitchwise']=True
-    model_param['n_notes'] = args.pitchwise
+    model_param['n_notes'] = 2*args.pitchwise+1
     train_param['batch_size']=500
 
 

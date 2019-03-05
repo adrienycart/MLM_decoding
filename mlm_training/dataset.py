@@ -313,14 +313,14 @@ class Dataset:
                     len_buff.extend([piano_roll.length]*len(inputs))
                 else:
                     for input,target in zip(inputs,targets):
-                        chunks_input, chunks_len = piano_roll.cut(input,len_chunk,keep_padding=False,as_list=True)
-                        chunks_target, chunks_len = piano_roll.cut(target,len_chunk,keep_padding=False,as_list=True)
+                        chunks_input, chunks_len = piano_roll.cut(input,len_chunk-1,keep_padding=False,as_list=True)
+                        chunks_target, chunks_len = piano_roll.cut(target,len_chunk-1,keep_padding=False,as_list=True)
                         seq_buff.extend(chunks_input)
                         targ_buff.extend(chunks_target)
                         len_buff.extend(chunks_len)
             else:
                 if len_chunk is None:
-                    output_roll = np.zeros([batch_size,window_size+1,self.max_len-1])
+                    output_roll = np.zeros([batch_size,2*window_size+1,self.max_len-1])
                     output_targets = np.zeros([batch_size,1,self.max_len-1])
                     for i,(seq,targ) in enumerate(zip(seq_buff[:batch_size],targ_buff[:batch_size])):
                         output_roll[i,:,:seq.shape[1]]=seq

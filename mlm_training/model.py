@@ -539,11 +539,11 @@ class Model:
             targets = []
             lengths = []
 
-            generator = dataset.get_pitchwise_dataset_generator('valid',50,self.n_classes,self.chunks)
+            generator = dataset.get_pitchwise_dataset_generator('valid',50,int((self.n_notes-1)/2.0),self.chunks)
             for input, target, len in generator:
-                data+=input
-                targets += target
-                lengths += len
+                data+=np.split(input,input.shape[0],axis=0)
+                targets += np.split(target,target.shape[0],axis=0)
+                lengths += np.split(len,len.shape[0],axis=0)
 
             data = np.array(data)
             targets = np.array(targets)
@@ -678,7 +678,7 @@ class Model:
 
             # training_data, training_target, training_lengths = self.extract_data(data,'train')
             if self.pitchwise:
-                train_data_generator = data.get_pitchwise_dataset_generator('train',batch_size,self.n_notes,self.chunks)
+                train_data_generator = data.get_pitchwise_dataset_generator('train',batch_size,int((self.n_notes-1)/2.0),self.chunks)
             else:
                 train_data_generator = data.get_dataset_generator('train',batch_size,self.chunks)
             display_step = None
