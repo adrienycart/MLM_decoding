@@ -5,6 +5,8 @@ summ/
 ckpt/
 venv/
 hmm/
+weight_models_old/
+weight_models_new/
 framewise_2016/
 tests.py
 example_stepwise_prediction.py
