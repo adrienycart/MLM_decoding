@@ -284,6 +284,9 @@ def create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window, la_
         
     frame_num : int
         The current frame number.
+        
+    history : int
+        The number of frames to look back in time for both acoustic and language history.
 
     ac_pitch_window : list(int)
         The pitches around each data point to use, for its acoustic history.
@@ -300,15 +303,61 @@ def create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window, la_
         The x data points for the given input for the dynamic weighting model.
     """
     frame = acoustic[frame_num, :]
-    ac_t = np.transpose(acoustic)
     pr = state.get_piano_roll(min_length=history, max_length=history)
+    
+    x = np.array(get_data_tf(history, ac_pitch_window, la_pitch_window, np.transpose(acoustic),
+                             pr, frame_num, list(range(88))))
+    
+    if features:
+        x = np.hstack((x, get_features(acoustic, frame_num, state.get_priors()), np.reshape(frame, (88, -1)),
+                       np.reshape(state.prior, (88, -1))))
+    else:
+        x = np.hstack((x, np.reshape(frame, (88, -1)), np.reshape(state.prior, (88, -1))))
+        
+    return x
+
+
+
+def get_data_tf(history, ac_pitch_window, la_pitch_window, acoustic, pr, frame_num, pitches):
+    """
+    Get the history-based features for some tensor flow data points.
+    
+    Parameters
+    ==========
+    history : int
+        The number of frames to look back in time for both acoustic and language history.
+
+    ac_pitch_window : list(int)
+        The pitches around each data point to use, for its acoustic history.
+        
+    la_pitch_window : list(int)
+        The pitches around each data point to use, for its sample history.
+    
+    acoustic : np.ndarray
+        An 88xN array, representing the acoustic prior for this entire piece.
+        
+    pr : np.ndarray
+        An 88x(frame_num-1) array of the binary samples of this piece so far.
+        
+    frame_num : int
+        The frame number we are on.
+        
+    pitches : list(int)
+        The pitches we want data from.
+        
+    Returns
+    =======
+    data : list
+        A list of of the history-based features for the desired data points.
+    """
+    frame = acoustic[:, frame_num]
     
     ac_pitch_window_np = np.array(ac_pitch_window)
     la_pitch_window_np = np.array(la_pitch_window)
     
     x = []
     
-    for pitch in range(88):
+    for pitch in pitches:
         # Usable acoustic pitch window
         this_pitch_window = ac_pitch_window_np[np.where(np.logical_and(0 <= (pitch + ac_pitch_window_np),
                                                                       (pitch + ac_pitch_window_np) < 88))]
@@ -322,7 +371,7 @@ def create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window, la_
 
         # Acoustic history
         a = np.zeros((len(ac_pitch_window), history))
-        a[this_pitch_window_indices, this_history_index:] = ac_t[this_pitch_window,
+        a[this_pitch_window_indices, this_history_index:] = acoustic[this_pitch_window,
                                                                  frame_num - this_history + 1:
                                                                  frame_num + 1]
 
@@ -337,19 +386,12 @@ def create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window, la_
         # Sample history
         l = np.zeros((len(la_pitch_window), history))
 
-        l[this_pitch_window_indices] = pr[this_pitch_window]
+        l[this_pitch_window_indices] = pr[this_pitch_window, -history:]
 
         x.append(np.hstack((a.reshape(-1), l.reshape(-1))))
         
-    x = np.array(x)
-    
-    if features:
-        x = np.hstack((x, get_features(acoustic, frame_num, state.get_priors()), np.reshape(frame, (88, -1)),
-                       np.reshape(state.prior, (88, -1))))
-    else:
-        x = np.hstack((x, np.reshape(frame, (88, -1)), np.reshape(state.prior, (88, -1))))
-        
     return x
+
 
 
 

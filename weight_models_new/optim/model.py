@@ -7,6 +7,11 @@ import datetime
 import gzip
 import os
 
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/../..')
+
+import decode
+
 
 def load_data_from_pkl_file(pkl_file, min_diff, history, ac_pitch_window, la_pitch_window,
                             features, is_weight):
@@ -72,11 +77,10 @@ def load_data_from_pkl_file(pkl_file, min_diff, history, ac_pitch_window, la_pit
     if features and not pkl['features']:
         raise Exception("Wanted to use features, but none are saved in data file.")
     
-    ac_pitch_window_np = np.array(ac_pitch_window)
-    la_pitch_window_np = np.array(la_pitch_window)
+    used_D = np.where(pkl['D'] >= min_diff)[0]
     
     X = []
-    Y = pkl['Y'][np.where(pkl['D'] >= min_diff)]
+    Y = pkl['Y'][used_D]
         
     # Doing it in loops because it's easier. If it takes a prohibitavely long time this could be vectorized.
     frame_num_total = -1
@@ -89,49 +93,12 @@ def load_data_from_pkl_file(pkl_file, min_diff, history, ac_pitch_window, la_pit
             
             for beam in range(1 if frame_num == 0 else pkl['beam']):
                 base_index += 88
-                language = pkl['X'][base_index:base_index + 88, 0:pkl['history']]
+                language = pkl['X'][base_index:base_index + 88, :pkl['history']]
                 
-                for pitch in range(88):
-                    x_index = base_index + pitch
-                    
-                    if pkl['D'][x_index] < min_diff:
-                        continue
-                    
-                    # Usable acoustic pitch window
-                    this_pitch_window = ac_pitch_window_np[np.where(np.logical_and(0 <= (pitch + ac_pitch_window_np),
-                                                                                  (pitch + ac_pitch_window_np) < 88))]
-                    this_pitch_window_index = ac_pitch_window.index(this_pitch_window[0])
-                    this_pitch_window_indices = np.array(range(this_pitch_window_index,
-                                                      this_pitch_window_index + len(this_pitch_window)))
-                    
-                    # Usable history length
-                    this_history = min(history, frame_num + 1)
-                    this_history_index = history - this_history
-                    
-                    # Acoustic history
-                    a = np.zeros((len(ac_pitch_window), history))
-                    a[this_pitch_window_indices, this_history_index:] = acoustic[this_pitch_window,
-                                                                                 frame_num - this_history + 1:
-                                                                                 frame_num + 1]
-                    
-                    # Usable language pitch window
-                    this_pitch_window = la_pitch_window_np[np.where(np.logical_and(0 <= (pitch + la_pitch_window_np),
-                                                                                  (pitch + la_pitch_window_np) < 88))]
-                    this_pitch_window_index = la_pitch_window.index(this_pitch_window[0])
-                    this_pitch_window_indices = np.array(range(this_pitch_window_index,
-                                                      this_pitch_window_index + len(this_pitch_window)))
-                    
-                    
-                    # Sample history
-                    l = np.zeros((len(la_pitch_window), history))
-                    
-                    l[this_pitch_window_indices] = language[this_pitch_window, pkl['history'] - history:pkl['history']]
-                    
-                    f = pkl['X'][x_index, pkl['history']:-2] if features else []
-                    
-                    X.append(np.hstack((a.reshape(-1), l.reshape(-1), np.squeeze(f), pkl['X'][x_index, -2:])))
-          
-    X = np.array(X)
+                X.extend(decode.get_data_tf(history, ac_pitch_window, la_pitch_window, acoustic, language,
+                                            frame_num, np.where(pkl['D'][base_index:base_index+88] >= min_diff)[0]))
+    
+    X = np.hstack((np.array(X), pkl['X'][used_D, (pkl['history'] if features else -2):]))
     
     if is_weight:
         convert_targets_to_weight(X, Y, history, len(ac_pitch_window))
@@ -153,24 +120,14 @@ def convert_targets_to_weight(X, Y, history, ac_pitch_window_size):
         
     Y : np.ndarray
         A length-N array, containing the targets for each data point. This will be edited in place.
-        
-    history : int
-        The history length (to find where the acoustic prior is).
-        
-    ac_pitch_window_size : int
-        The acoustic pitch window size (to find where the acoustic prior is).
     """
     la = -1
-    
-    test = np.zeros((ac_pitch_window_size, history))
-    test[int((ac_pitch_window_size - 1) / 2), history-1] = 1
-    test = np.squeeze(test.reshape(-1))
-    ac = np.where(test == 1)[0][0]
+    ac = -2
 
     for i, x in enumerate(X):
         if Y[i] == 0:
             if x[la] < x[ac]:
-                Y[i] = 1  #1 trains towards putting weight into the 2nd bin (which is the language weight
+                Y[i] = 1  #1 trains towards putting weight into the 2nd bin (which is the language weight)
         else:
             if x[la] < x[ac]:
                 Y[i] = 0
