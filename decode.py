@@ -142,8 +142,8 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
                 X = np.vstack([create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window,
                                                   la_pitch_window, features) for state in beam])
                 
-                acoustic_in = X[:, :len(ac_pitch_window) * history]
-                language_in = X[:, len(ac_pitch_window) * history:history * (len(ac_pitch_window) + len(la_pitch_window))]
+                acoustic_in = X[:, :len(ac_pitch_window) * history].reshape(-1, len(ac_pitch_window), history)
+                language_in = X[:, len(ac_pitch_window) * history:history * (len(ac_pitch_window) + len(la_pitch_window))].reshape(-1, len(la_pitch_window), history)
                 features_in = X[:, history * (len(ac_pitch_window) + len(la_pitch_window)):]
                 X_split = [acoustic_in, language_in, features_in]
                 
