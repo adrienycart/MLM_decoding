@@ -330,7 +330,9 @@ def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19]
     num_features = get_num_features(X.shape[1], history, ac_pitch_window_size, la_pitch_window_size)
     
     acoustic_in = X[:, :len(ac_pitch_window) * history].reshape(-1, len(ac_pitch_window), history)
-    language_in = X[:, len(ac_pitch_window) * history:history * (len(ac_pitch_window) + len(la_pitch_window))].reshape(-1, len(la_pitch_window), history)
+    language_in = X[:, len(ac_pitch_window) * history:
+                    history * (len(ac_pitch_window) + len(la_pitch_window))
+                   ].reshape(-1, len(la_pitch_window), history)
     features_in = X[:, history * (len(ac_pitch_window) + len(la_pitch_window)):]
     
     print("Loaded " + str(X.shape[0]) + " data points of size " + str(X.shape[1]) + ".")

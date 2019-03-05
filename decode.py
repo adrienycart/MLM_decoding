@@ -131,22 +131,32 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         elif weight_model:
             if sklearn:
                 X = np.vstack([create_weight_x_sk(state, acoustic, frame_num, history, features=features,
-                                                  use_lstm=use_lstm, history_context=history_context,
+                                                  history_context=history_context,
                                                   prior_context=prior_context) for state in beam])
-                if no_lstm:
+                # Remove LSTM sample
+                if not use_lstm:
                     X = X[:, :-1]
+                    
                 # 2 x len(X) matrix
                 weights_all = np.transpose(weight_model.predict_proba(X)) if is_weight else np.zeros((2, len(X)))
+                
                 # len(X) array
                 priors_all = np.squeeze(weight_model.predict_proba(X)[:, 1]) if not is_weight else np.zeros(len(X))
                 if not is_weight:
                     p = []
+                    
             else: # tensorflow
                 X = np.vstack([create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window,
                                                   la_pitch_window, features) for state in beam])
+                # Remove LSTM sample
+                if no_lstm:
+                    X = X[:, :-1]
                 
+                # Split X data into its parts
                 acoustic_in = X[:, :len(ac_pitch_window) * history].reshape(-1, len(ac_pitch_window), history)
-                language_in = X[:, len(ac_pitch_window) * history:history * (len(ac_pitch_window) + len(la_pitch_window))].reshape(-1, len(la_pitch_window), history)
+                language_in = X[:, len(ac_pitch_window) * history:
+                                history * (len(ac_pitch_window) + len(la_pitch_window))
+                               ].reshape(-1, len(la_pitch_window), history)
                 features_in = X[:, history * (len(ac_pitch_window) + len(la_pitch_window)):]
                 X_split = [acoustic_in, language_in, features_in]
                 
@@ -157,6 +167,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
                 if is_weight:
                     weights_all[1, :] = result
                     weights_all[0, :] = 1 - result
+                    
                 # len(X) array
                 priors_all = np.squeeze(result) if not is_weight else np.zeros(len(X))
                 if not is_weight:
@@ -312,10 +323,14 @@ def create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window, la_
                              pr, frame_num, list(range(88))))
     
     if features:
-        x = np.hstack((x, get_features(acoustic, frame_num, state.get_priors()), np.reshape(frame, (88, -1)),
+        x = np.hstack((x,
+                       get_features(acoustic, frame_num, state.get_priors()),
+                       np.reshape(frame, (88, -1)),
                        np.reshape(state.prior, (88, -1))))
     else:
-        x = np.hstack((x, np.reshape(frame, (88, -1)), np.reshape(state.prior, (88, -1))))
+        x = np.hstack((x,
+                       np.reshape(frame, (88, -1)),
+                       np.reshape(state.prior, (88, -1))))
         
     return x
 
@@ -388,7 +403,6 @@ def get_data_tf(history, ac_pitch_window, la_pitch_window, acoustic, pr, frame_n
 
         # Sample history
         l = np.zeros((len(la_pitch_window), history))
-
         l[this_pitch_window_indices] = pr[this_pitch_window, -history:]
 
         x.append(np.hstack((a.reshape(-1), l.reshape(-1))))
@@ -399,7 +413,7 @@ def get_data_tf(history, ac_pitch_window, la_pitch_window, acoustic, pr, frame_n
 
 
 def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), features=False,
-                    history_context=0, prior_context=0, use_lstm=True):
+                    history_context=0, prior_context=0):
     """
     Get the x input for the sk-learn dynamic weighting model.
 
@@ -429,9 +443,6 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
         
     prior_context : int
         The window of priors to include around the current priors. Defaults to 0.
-        
-    use_lstm : boolean
-        Whether to use the LSTM prior in the weight_model results. Defaults to True.
 
     Returns
     =======
@@ -443,14 +454,14 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
     
     if features:
         x = np.hstack((pr,
-                       get_features(acoustic, frame_num, state.get_priors()), np.reshape(frame, (88, -1))))
+                       get_features(acoustic, frame_num, state.get_priors()),
+                       np.reshape(frame, (88, -1)),
+                       np.reshape(state.prior, (88, -1))))
         
     else:
         x = np.hstack((pr,
-                       np.reshape(frame, (88, -1))))
-        
-    if use_lstm:
-        x = np.hstack((x, np.reshape(state.prior, (88, -1))))
+                       np.reshape(frame, (88, -1)),
+                       np.reshape(state.prior, (88, -1))))
     
     # Add prior and history contexts
     x_new = pad_x(x, frame, state.prior, pr, history, history_context, prior_context)
@@ -517,11 +528,14 @@ def pad_x(x, acoustic, language, pr, history, history_context, prior_context):
         pr_padded[history_context:-history_context, :] = pr
         
         for i in range(history_context):
-            x_new[:, extra_start + i * history: extra_start + (i + 1) * history] = pr_padded[i:-2 * history_context + i,:]
+            x_new[:, extra_start + i * history :
+                  extra_start + (i + 1) * history] = pr_padded[i:-2 * history_context + i, :]
             if i == 0:
-                x_new[:, extra_start + history_context * history + i * history: extra_start + history_context * history + (i + 1) * history] = pr_padded[2 * history_context - i:,:]
+                x_new[:, extra_start + history_context * history + i * history :
+                      extra_start + history_context * history + (i + 1) * history] = pr_padded[2 * history_context - i:, :]
             else:
-                x_new[:, extra_start + history_context * history + i * history: extra_start + history_context * history + (i + 1) * history] = pr_padded[2 * history_context - i:-i,:]
+                x_new[:, extra_start + history_context * history + i * history :
+                      extra_start + history_context * history + (i + 1) * history] = pr_padded[2 * history_context - i:-i, :]
     
     return x_new
 
