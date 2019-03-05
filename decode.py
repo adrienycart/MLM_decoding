@@ -104,6 +104,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
             la_pitch_window = weight_model_dict['la_pitch_window']
             features = weight_model_dict['features']
             is_weight = weight_model_dict['is_weight']
+            no_lstm = weight_model_dict['no_lstm'] if 'no_lstm' in weight_model_dict else False
         
     if union:
         branch_factor = int(branch_factor / 2)
@@ -132,6 +133,8 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
                 X = np.vstack([create_weight_x_sk(state, acoustic, frame_num, history, features=features,
                                                   use_lstm=use_lstm, history_context=history_context,
                                                   prior_context=prior_context) for state in beam])
+                if no_lstm:
+                    X = X[:, :-1]
                 # 2 x len(X) matrix
                 weights_all = np.transpose(weight_model.predict_proba(X)) if is_weight else np.zeros((2, len(X)))
                 # len(X) array

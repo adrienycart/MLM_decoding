@@ -274,7 +274,7 @@ def train_model(model, X, Y, sample_weight=None, optimizer='adam', epochs=100, c
     
 def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19],
                      la_pitch_window=list(range(-12, 13)), min_diff=0.0, features=True,
-                     out="ckpt", is_weight=True, epochs=100):
+                     out="ckpt", is_weight=True, epochs=100, no_lstm=False):
     """
     Train a model fully given some data and parameters.
     
@@ -310,10 +310,16 @@ def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19]
         
     out : string
         The directory to save the checkpoints to. Defaults to ckpt.
+        
+    no_lstm : boolean
+        Flage to include (False) or not include (True) the LSTM prior in the data points. Defaults to False.
     """
     print("Loading data...")
     X, Y, D = load_data_from_pkl_file(data_file, min_diff, history, ac_pitch_window, la_pitch_window,
                                       features, is_weight)
+    
+    if no_lstm:
+        X = X[:, :-1]
     
     # Shuffle so that validation set is random 10%
     shuffle = list(range(X.shape[0]))
@@ -359,7 +365,8 @@ def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19]
                      'ac_pitch_window' : ac_pitch_window,
                      'la_pitch_window' : la_pitch_window,
                      'features' : features,
-                     'is_weight' : is_weight},
+                     'is_weight' : is_weight,
+                     'no_lstm' : no_lstm},
                     file)
     
     
@@ -389,6 +396,8 @@ if __name__ == '__main__':
     
     parser.add_argument("--epochs", help="The number of epochs to train for. Defaults to 100.", type=int, default=100)
     
+    parser.add_argument("--no_lstm", help="Do not use the LSTM prior in the data.", action="store_true")
+    
     parser.add_argument("--out", help="The directory to save the model to. Defaults to '.' (current directory)",
                         default=".")
     
@@ -404,4 +413,4 @@ if __name__ == '__main__':
     
     train_model_full(args.data, history=args.history, ac_pitch_window=ac_pitches,
                      la_pitch_window=la_pitches, min_diff=args.min_diff, features=args.features,
-                     out=args.out, is_weight=args.weight, epochs=args.epochs)
+                     out=args.out, is_weight=args.weight, epochs=args.epochs, no_lstm=args.no_lstm)
