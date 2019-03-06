@@ -83,28 +83,27 @@ note_range = [21,109]
 note_min = note_range[0]
 note_max = note_range[1]
 
-n_hidden = 256
+if args.weight_model is not None or args.weight != 1.0:
+    n_hidden = 256
 
+    # Load model
+    model_param = make_model_param()
+    model_param['n_hidden'] = n_hidden
+    model_param['n_steps'] = 1 # To generate 1 step at a time
+    if args.pitchwise is None:
+        model_param['pitchwise']=False
+    else:
+        model_param['pitchwise']=True
+        model_param['n_notes'] = 2*args.pitchwise+1
 
-
-# Load model
-model_param = make_model_param()
-model_param['n_hidden'] = n_hidden
-model_param['n_steps'] = 1 # To generate 1 step at a time
-if args.pitchwise is None:
-    model_param['pitchwise']=False
-else:
-    model_param['pitchwise']=True
-    model_param['n_notes'] = 2*args.pitchwise+1
-
-# Build model object
-model = Model(model_param)
-sess,_ = model.load(args.model, model_path=args.model)
+    # Build model object
+    model = Model(model_param)
+    sess,_ = model.load(args.model, model_path=args.model)
 
 # Load weight model
 weight_model_dict=None
 weight_model=None
-if args.weight_model:
+if args.weight_model is not None:
     with open(args.weight_model, "rb") as file:
         weight_model_dict = pickle.load(file)
     if 'model' in weight_model_dict:
@@ -130,20 +129,23 @@ for fn in os.listdir(folder):
         data.make_from_file(filename,args.step,section)
 
         # Decode
-        pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                            union=args.union, weight=[[args.weight], [1 - args.weight]], out=None,
-                            hash_length=args.hash, weight_model_dict=weight_model_dict, verbose=args.verbose,
-                            gt=data.target if args.gt else None, weight_model=weight_model)
-        #pr = (data.input>0.5).astype(int)
+        if args.weight_model is not None or args.weight != 1.0:
+            pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
+                            beam_size=args.beam, union=args.union, weight=[[args.weight], [1 - args.weight]],
+                            out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
+                            verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
+        else:
+            pr = (data.input>0.5).astype(int)
 
         # Save output
         if not args.save is None:
             np.save(os.path.join(args.save,fn.replace('.mid','_pr')), pr)
-            np.save(os.path.join(args.save,fn.replace('.mid','_priors')), priors)
-            np.save(os.path.join(args.save,fn.replace('.mid','_weights')), weights)
-            np.save(os.path.join(args.save,fn.replace('.mid','_combined_priors')), combined_priors)
             np.savetxt(os.path.join(args.save,fn.replace('.mid','_pr.csv')), pr)
-            np.savetxt(os.path.join(args.save,fn.replace('.mid','_priors.csv')), priors)
+            if args.weight_model is not None or args.weight != 1.0:
+                np.save(os.path.join(args.save,fn.replace('.mid','_priors')), priors)
+                np.save(os.path.join(args.save,fn.replace('.mid','_weights')), weights)
+                np.save(os.path.join(args.save,fn.replace('.mid','_combined_priors')), combined_priors)
+                np.savetxt(os.path.join(args.save,fn.replace('.mid','_priors.csv')), priors)
 
         if args.step in ['quant','event']:
             pr = convert_note_to_time(pr,data.corresp,max_len=max_len)
