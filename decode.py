@@ -233,7 +233,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
             for i,sample in enumerate(samples):
                 sample_pad = np.pad(sample,(window,window),'constant')
                 for j in range(window,window+88):
-                    pw_samples[i*88+j,0,:]=sample_pad[j-window:j+window+1]
+                    pw_samples[i*88+j-window,0,:]=sample_pad[j-window:j+window+1]
             #Compute next step
             hidden_states_out, pw_priors = model.run_one_step(hidden_states_in, pw_samples, sess)
             #Re-build the list of LSTM-hidden-states for all states
