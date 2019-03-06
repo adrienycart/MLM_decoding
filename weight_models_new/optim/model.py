@@ -11,6 +11,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/../..')
 
 import decode
+from mlm_training.utils import safe_mkdir
 
 
 def load_data_from_pkl_file(pkl_file, min_diff, history, ac_pitch_window, la_pitch_window,
@@ -270,7 +271,7 @@ def train_model(model, X, Y, sample_weight=None, optimizer='adam', epochs=100, c
     
 def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19],
                      la_pitch_window=list(range(-12, 13)), min_diff=0.0, features=True,
-                     out="ckpt", is_weight=True, epochs=100, no_lstm=False):
+                     out="ckpt", is_weight=True, epochs=100, no_lstm=False, lr=0.001):
     """
     Train a model fully given some data and parameters.
     
@@ -308,7 +309,10 @@ def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19]
         The directory to save the checkpoints to. Defaults to ckpt.
         
     no_lstm : boolean
-        Flage to include (False) or not include (True) the LSTM prior in the data points. Defaults to False.
+        Flag to include (False) or not include (True) the LSTM prior in the data points. Defaults to False.
+        
+    lr : float
+        The learning rate to use for the adam optimizer. Defaults to 0.001.
     """
     print("Loading data...")
     X, Y, D = load_data_from_pkl_file(data_file, min_diff, history, ac_pitch_window, la_pitch_window,
@@ -341,13 +345,18 @@ def train_model_full(data_file, history=5, ac_pitch_window=[-19, -12, 0, 12, 19]
     model = make_model(history, ac_pitch_window_size, la_pitch_window_size, num_features,
                        ac_num_pitch_convs=5, ac_num_history_convs=10, la_num_convs=5)
     
+    print(model.summary())
+    
+    # Checkpoints for saving
     checkpoint = keras.callbacks.ModelCheckpoint(os.path.join(out, 'model.{epoch:03d}-{loss:.4f}.ckpt'))
     checkpoint_best = keras.callbacks.ModelCheckpoint(os.path.join(out, 'best.ckpt'), monitor='val_loss',
                                                       save_best_only=True)
     checkpoints = [checkpoint_best, checkpoint]
     
+    # Train model
+    optimizer = keras.optimizers.Adam(lr=lr)
     train_model(model, [acoustic_in, language_in, features_in], Y, sample_weight=D, epochs=epochs,
-                checkpoints=checkpoints)
+                checkpoints=checkpoints, optimizer=optimizer)
     
     # Reload to save model in easily-loadable format
     model.load_weights(os.path.join(out, 'best.ckpt'))
@@ -388,7 +397,11 @@ if __name__ == '__main__':
     
     parser.add_argument("--weight", help="This model will output weights directly.", action="store_true")
     
-    parser.add_argument("--epochs", help="The number of epochs to train for. Defaults to 100.", type=int, default=100)
+    parser.add_argument("--epochs", help="The number of epochs to train for. Defaults to 100.",
+                        type=int, default=100)
+    
+    parser.add_argument("--lr", help="The learning rate of the Adam optimizer. Defaults to 0.001.",
+                        type=float, default=0.001)
     
     parser.add_argument("--no_lstm", help="Do not use the LSTM prior in the data.", action="store_true")
     
@@ -405,6 +418,9 @@ if __name__ == '__main__':
     la_pitches.append(0)
     la_pitches = sorted(list(set(la_pitches)))
     
+    safe_mkdir(args.out)
+    
     train_model_full(args.data, history=args.history, ac_pitch_window=ac_pitches,
                      la_pitch_window=la_pitches, min_diff=args.min_diff, features=args.features,
-                     out=args.out, is_weight=args.weight, epochs=args.epochs, no_lstm=args.no_lstm)
+                     out=args.out, is_weight=args.weight, epochs=args.epochs, no_lstm=args.no_lstm,
+                     lr=args.lr)
