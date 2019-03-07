@@ -30,7 +30,6 @@ parser.add_argument("--max_len",type=str,help="test on the first max_len seconds
 parser.add_argument('--save',type=str,help="location to save the computed results. If not provided, results are not saved")
 parser.add_argument("-b", "--beam", type=int, help="The beam size. Defaults to 100.", default=100)
 parser.add_argument("-k", "--branch", type=int, help="The branching factor. Defaults to 20.", default=20)
-parser.add_argument("-u", "--union", help="Use the union sampling method.", action="store_true")
 weight = parser.add_mutually_exclusive_group()
 weight.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
                     "Defaults to 0.5", type=float, default=0.5)
@@ -69,7 +68,7 @@ if args.weight_model is None:
     print(f"Weight: {args.weight}")
 else:
     print(f"Auto-weight: {args.weight_model}")
-print(f"Sampling union: {args.union}")
+print(f"Sampling union: False")
 print(f"Pitchwise window: {args.pitchwise}")
 
 print('####################################')
@@ -131,7 +130,7 @@ for fn in os.listdir(folder):
         # Decode
         if args.weight_model is not None or args.weight != 1.0:
             pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
-                            beam_size=args.beam, union=args.union, weight=[[args.weight], [1 - args.weight]],
+                            beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
                             out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
                             verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
         else:

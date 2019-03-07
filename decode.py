@@ -19,7 +19,7 @@ from mlm_training.model import Model, make_model_param
 
 
 
-def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.8], [0.2]],
+def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8], [0.2]],
            hash_length=10, out=None, weight_model_dict=None, weight_model=None, verbose=False, gt=None):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
@@ -42,9 +42,6 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
 
     beam_size : int
         The beam size for the search. Defaults to 50.
-
-    union : boolean
-        True to use union sampling. False (default) to use joint sampling with the weight.
 
     weight : matrix
         A 2 x (1 or 88) matrix, whose first row is the weight for the acoustic model and whose 2nd
@@ -90,9 +87,6 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
         weight_model = True
         is_weight = True
 
-    if union:
-        branch_factor = int(branch_factor / 2)
-
     beam = Beam()
     beam.add_initial_state(model, sess)
 
@@ -114,45 +108,34 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
             weights_all, priors_all = run_weight_model(gt, weight_model, weight_model_dict, beam,
                                                        acoustic, frame_num)
 
-        # Used for union sampling
-        unique_samples = []
-
         new_beam = Beam()
         
         # Gather all computations to perform them batched
         # Acoustic sampling is done separately because the acoustic samples will be identical for every state.
-        if union or (not weight_model and weight[0][0] == 1.0):
-            # If sampling method is acoustic (or union), we generate the same samples for every state
+        if (not weight_model) and weight[0][0] == 1.0:
+            # If sampling method is acoustic only, we generate the same samples for every state
             for log_prob, sample in itertools.islice(enumerate_samples(frame), branch_factor):
                 
                 # Binarize the sample (return from enumerate_samples is an array of indexes)
                 binary_sample = np.zeros(88)
                 binary_sample[sample] = 1
 
-                # This is used to check for overlaps in union case
-                if union:
-                    unique_samples.append(list(binary_sample))
-
                 # Transition on this sample for each state
                 for i, state in enumerate(beam):
-                    weight_this = weights_all[:, i * 88 : (i + 1) * 88] if weight_model and is_weight else weight
-                    state.update_from_weight_model(weight_this[0], frame)
+                    state.update_from_weight_model(weight[0], frame)
                     new_beam.add(state.transition(binary_sample, log_prob))
 
-        if union or weight_model or weight[0][0] != 1.0:
+        else:
             # Here we need to sample per state, because we use the LSTM's prior in sampling
             for i, state in enumerate(beam):
                 weight_this = weights_all[:, i * 88 : (i + 1) * 88] if weight_model and is_weight else weight
-                sample_weight = [[0.0], [1.0]] if union else weight_this
-
-                prior_this = priors_all[i * 88 : (i + 1) * 88] if weight_model and (not is_weight) else None
                 
-                # Calculate the final weighted prior
-                if prior_this is None:
-                    prior = np.squeeze(sample_weight[0] * frame + sample_weight[1] * state.prior)
+                if weight_model and (not is_weight):
+                    prior = np.squeeze(priors_all[i * 88 : (i + 1) * 88])
                 else:
-                    prior = np.squeeze(prior_this)
+                    prior = np.squeeze(weight_this[0] * frame + weight_this[1] * state.prior)
                 
+                # Update state
                 state.update_from_weight_model(weight_this[0], prior)
 
                 for log_prob, sample in itertools.islice(enumerate_samples(prior), branch_factor):
@@ -161,9 +144,8 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, union=False, 
                     binary_sample = np.zeros(88)
                     binary_sample[sample] = 1
 
-                    # Check for overlap with acoustic sample in union case. Skip this sample if so.
-                    if not (union and list(binary_sample) in unique_samples):
-                        new_beam.add(state.transition(binary_sample, log_prob))
+                    # Transition on sample
+                    new_beam.add(state.transition(binary_sample, log_prob))
 
         new_beam.cut_to_size(beam_size, min(hash_length, frame_num + 1))
         beam = new_beam
@@ -850,7 +832,6 @@ if __name__ == '__main__':
     parser.add_argument("-b", "--beam", help="The beam size. Defaults to 100.", type=int, default=100)
     parser.add_argument("-k", "--branch", help="The branching factor. Defaults to 20.", type=int, default=20)
 
-    parser.add_argument("-u", "--union", help="Use the union sampling method.", action="store_true")
     parser.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
                         "Defaults to 0.8", type=float, default=0.8)
     parser.add_argument("-wm", "--weight_model", help="Load the given sklearn model using pickle, to dynamically " +
@@ -917,7 +898,7 @@ if __name__ == '__main__':
 
     # Decode
     pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
-                         beam_size=args.beam, union=args.union, weight=[[args.weight], [1 - args.weight]],
+                         beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
                          out=args.output, hash_length=args.hash, weight_model_dict=weight_model_dict,
                          verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
 
