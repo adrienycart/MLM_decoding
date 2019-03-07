@@ -762,18 +762,15 @@ def enumerate_samples(p):
     p : np.array
         A weighted probability prior for each pitch.
 
-    Return
+    Yields
     ======
-    A generator for the given samples, ordered by probability, which will return
-    the log-probability of a sample and the sample itself, a set of indices with an active pitch.
+    log_prob : float
+        The log probability of the given sample.
+        
+    samples : list(int)
+        A list of the indices where there should be 1's in tthe samples.
     """
-    # set up p and not_p probabilities
-    if p is None:
-        p = np.squeeze(weight[0] * acoustic + weight[1] * language)
-        not_p = np.squeeze(weight[0] * (1 - acoustic) + weight[1] * (1 - language))
-    else:
-        p = np.squeeze(p)
-        not_p = 1 - p
+    not_p = 1 - p
 
     # Base case: most likely chosen greedily
     v_0 = np.where(p > not_p)[0]
