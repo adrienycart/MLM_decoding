@@ -37,7 +37,7 @@ if __name__ == "__main__":
     weight_search.load_model()
     
     dimensions = [[False], # GT
-                  (0.0, 0.8), # min_diff
+                  (0.1, 0.8), # min_diff
                   (5, 50) if args.step == "time" else (3, 10), # history
                   (1, 4), # num_layers
                   [True], # is_weight
@@ -46,6 +46,7 @@ if __name__ == "__main__":
                   [0], # prior context
                   [True]] # use LSTM
 
-    opt = skopt.gp_minimize(weight_search.weight_search, dimensions, n_calls=10+args.iters, kappa=args.kappa, noise=0.0004, verbose=True, n_points=10)
+    opt = skopt.gp_minimize(weight_search.weight_search, dimensions, n_calls=10+args.iters,
+                            kappa=args.kappa, noise=0.0004, verbose=True, n_points=10)
     
     skopt.dump(opt, args.output)
