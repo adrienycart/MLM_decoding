@@ -86,6 +86,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
     if gt is not None:
         weight_model = True
         is_weight = True
+        
+    weights_all = None
+    priors_all = None
 
     beam = Beam()
     beam.add_initial_state(model, sess)
@@ -128,9 +131,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
         else:
             # Here we need to sample per state, because we use the LSTM's prior in sampling
             for i, state in enumerate(beam):
-                weight_this = weights_all[:, i * 88 : (i + 1) * 88] if weight_model and is_weight else weight
+                weight_this = weights_all[:, i * 88 : (i + 1) * 88] if weights_all is not None else weight
                 
-                if weight_model and (not is_weight):
+                if priors_all is not None:
                     prior = np.squeeze(priors_all[i * 88 : (i + 1) * 88])
                 else:
                     prior = np.squeeze(weight_this[0] * frame + weight_this[1] * state.prior)
@@ -197,7 +200,7 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
     """
     if gt:
         weights_all = np.transpose(np.vstack([get_best_weights(state.prior, frame, gt[:, frame_num]) for state in beam]))
-        priors_all = np.zeros(weights_all.shape[1])
+        priors_all = None
         return weights_all, priors_all
         
     # Load the weight_model properties
@@ -227,10 +230,10 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
             X = X[:, :-1]
 
         # 2 x len(X) matrix
-        weights_all = np.transpose(weight_model.predict_proba(X)) if is_weight else np.zeros((2, len(X)))
+        weights_all = np.transpose(weight_model.predict_proba(X)) if is_weight else None
 
         # len(X) array
-        priors_all = np.squeeze(weight_model.predict_proba(X)[:, 1]) if not is_weight else np.zeros(len(X))
+        priors_all = np.squeeze(weight_model.predict_proba(X)[:, 1]) if not is_weight else None
 
     else: # tensorflow
         X = np.vstack([create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window,
@@ -250,13 +253,14 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
         result = np.squeeze(weight_model.predict(X_split))
 
         # 2 x len(X) matrix
-        weights_all = np.zeros((2, len(X)))
+        weights_all = None
         if is_weight:
+            weights_all = np.zeros((2, len(X)))
             weights_all[1, :] = result
             weights_all[0, :] = 1 - result
 
         # len(X) array
-        priors_all = np.squeeze(result) if not is_weight else np.zeros(len(X))
+        priors_all = np.squeeze(result) if not is_weight else None
             
     return weights_all, priors_all
 
