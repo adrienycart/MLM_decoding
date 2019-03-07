@@ -6,21 +6,10 @@ class State:
     A state in the decoding process, containing a log probability and an LSTM hidden state.
     """
 
-    def __init__(self, hidden_state, prior):
+    def __init__(self):
         """
-        Create a new State, with the given log_probability and LSTM hidden state.
-
-        Parameters
-        ==========
-        hidden_state : model state
-            The LSTM state associated with this State.
-
-        prior : vector
-            An 88-length vector, representing the state's prior for the next frame's detections.
+        Create a new empty State.
         """
-        self.hidden_state = hidden_state
-        self.prior = prior
-
         self.weights = []
         self.combined_prior = []
         self.sample = []
@@ -28,9 +17,47 @@ class State:
 
         self.num = 0
         self.prev = None
+        
+        
+        
+    def update_from_weight_model(self, weights, combined_prior):
+        """
+        Update this state with data from the weight model.
+        
+        Parameters
+        ==========
+        weights : np.array
+            An 88-length probabilistic array containing the state's acoustic weights from this frame.
+
+        combined_prior : np.array
+            An 88-length probabilistic array containing the combined prior for this frame.
+        """
+        self.weights = np.repeat(np.array(weights), 88) if len(weights) == 1 else weights
+        self.combined_prior = combined_prior
+        
+        
+        
+    def update_from_lstm(self, hidden_state, prior):
+        """
+        Update this state with data from the LSTM.
+        
+        Parameters
+        ==========
+        hidden_state : tf.state
+            The hidden state of the LSTM after the previous transition.
+
+        prior : np.array
+            An 88-length probabilistic array containing this state's model's prior for the next frame.
+        """
+        self.hidden_state = hidden_state
+        self.prior = prior
+        try:
+            self.prev.hidden_state = None
+        except:
+            pass
 
 
-    def transition(self, sample, log_prob, hidden_state, prior, weights, combined_prior):
+    def transition(self, sample, log_prob):
         """
         Get the resulting state from the given transition, without altering this state.
 
@@ -42,32 +69,21 @@ class State:
         log_prob : float
             The log probability of the resulting transition.
 
-        hidden_state : tf.state
-            The hidden state resulting from the transition.
-
-        prior : np.array
-            An 88-length probabilistic array containing this state's model's prior for the next frame.
-
-        weights : np.array
-            An 88-length probabilistic array containing the state's acoustic weights from this frame.
-
-        combined_prior : np.array
-            An 88-length probabilistic array containing the combined prior for this frame.
-
         Returns
         =======
         state : State
             The state resulting from this transition.
         """
-        state = State(hidden_state, prior)
+        state = State()
         state.log_prob = self.log_prob + log_prob
 
         state.sample = sample
-        state.weights = np.repeat(np.array(weights), 88) if len(weights) == 0 else weights
-        state.combined_prior = combined_prior
+        state.weights = None
+        state.combined_prior = None
+        state.hidden_state = copy.copy(self.hidden_state)
+        state.prior = None
         state.num = self.num + 1
         state.prev = self
-        state.prev.hidden_state = None
         return state
 
 
@@ -80,11 +96,12 @@ class State:
         combined_priors : np.matrix
             An 88 x T matrix containing the combined priors of this State at each frame.
         """
-        combined_priors = np.zeros((88, self.num))
+        width = self.num if self.combined_prior is not None else self.num-1
+        combined_priors = np.zeros((88, width))
 
-        state = self
-        for i in range(self.num):
-            combined_priors[:, self.num - 1 - i] = state.combined_prior
+        state = self if self.combined_prior is not None else self.prev
+        for i in range(width):
+            combined_priors[:, width - 1 - i] = state.combined_prior
             state = state.prev
 
         return combined_priors
@@ -99,11 +116,12 @@ class State:
         weights : np.matrix
             An 88 x T matrix containing the weights of this State at each frame.
         """
-        weights = np.zeros((88, self.num))
+        width = self.num if self.weights is not None else self.num-1
+        weights = np.zeros((88, width))
 
-        state = self
-        for i in range(self.num):
-            weights[:, self.num - 1 - i] = state.weights
+        state = self if self.weights is not None else self.prev
+        for i in range(width):
+            weights[:, width - 1 - i] = state.weights
             state = state.prev
 
         return weights
@@ -118,11 +136,12 @@ class State:
         priors : np.matrix
             An 88 x T matrix containing the priors of this State at each frame.
         """
-        priors = np.zeros((88, self.num + 1))
+        width = self.num if self.prior is not None else self.num-1
+        priors = np.zeros((88, width + 1))
 
-        state = self
-        for i in range(self.num + 1):
-            priors[:, self.num - i] = state.prior
+        state = self if self.prior is not None else self.prev
+        for i in range(width + 1):
+            priors[:, width - i] = state.prior
             state = state.prev
 
         return priors

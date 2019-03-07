@@ -77,16 +77,21 @@ class Beam:
         """
         if model.pitchwise:
             single_state = model.get_initial_state(sess, 1)[0]
-            #We have to get 88 initial states, one for each pitch
-            initial_state = [single_state]*88
-
+            # We have to get 88 initial states, one for each pitch
+            initial_state = [single_state.copy() for i in range(88)]
+            
         else:
             initial_state = model.get_initial_state(sess, 1)[0]
+            
         prior = np.ones(88) / 2
 
-        self.beam.append(state.State(initial_state, prior))
+        new_state = state.State()
+        new_state.update_from_lstm(initial_state, prior)
+        
+        self.beam.append(new_state)
 
 
+        
     def cut_to_size(self, beam_size, hash_length):
         """
         Removes all but the beam_size most probable states from this beam.
