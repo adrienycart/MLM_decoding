@@ -53,7 +53,7 @@ def run_lstm_pitchwise_iterative(sess, model, states):
 
 
 def decode_pitchwise(piano_roll, acoustic, model, sess, pitches, beam_size=200, weight=[[0.8], [0.2]],
-                     hash_length=10, verbose=False):
+                     hash_length=10):
     """
     Transduce the given binary piano roll prior into a binary piano roll by changing the given pitches.
     
@@ -87,9 +87,6 @@ def decode_pitchwise(piano_roll, acoustic, model, sess, pitches, beam_size=200, 
         The history length for the hashed beam. If two states do not differ in the past hash_length
         frames, only the most probable one is saved in the beam. Defaults to 10.
         
-    verbose : bool
-        Print progress in number of frames. Defaults to False (no printing).
-        
     Returns
     =======
     pr : np.ndarray
@@ -110,9 +107,6 @@ def decode_pitchwise(piano_roll, acoustic, model, sess, pitches, beam_size=200, 
     acoustic = np.transpose(acoustic)
     
     for frame_num, frame in enumerate(acoustic):
-        if verbose and frame_num % 20 == 0:
-            print(str(frame_num) + " / " + str(acoustic.shape[0]))
-            
         # Run the LSTM!
         if frame_num != 0:
             run_lstm_pitchwise_iterative(sess, model, [s for beam in beams for s in beam])
@@ -136,7 +130,10 @@ def decode_pitchwise(piano_roll, acoustic, model, sess, pitches, beam_size=200, 
 
                 for log_prob, sample in zip([prior, 1-prior], [1, 0]):
 
-                    sample_full = np.concatenate((pr_windowed[:window], [sample], pr_windowed[-window:]))
+                    if window == 0:
+                        sample_full = np.array([sample])
+                    else:
+                        sample_full = np.concatenate((pr_windowed[:window], [sample], pr_windowed[-window:]))
 
                     # Transition on sample
                     new_beam.add(state.transition(sample_full, log_prob))
@@ -200,6 +197,9 @@ def decode_pitchwise_iterative(acoustic, model, sess, beam_size=200, weight=[[0.
     """
     window = int((model.n_notes - 1) / 2)
     
+    if window == 0:
+        num_iters = 1
+    
     pr = (acoustic>0.5).astype(int)
     prs = [np.copy(pr)]
     
@@ -209,16 +209,16 @@ def decode_pitchwise_iterative(acoustic, model, sess, beam_size=200, weight=[[0.
             
         previous = prs[-1]
         
-        for unlocked_indices in range(window):
+        for unlocked_indices in range(window + 1):
             if verbose:
-                print(f"Indices mod {unlocked_indices}/{window-1}")
+                print(f"Indices mod {unlocked_indices+1}/{window+1}")
                 
             pitches = list(range(unlocked_indices, 88, window+1))
             
             pr = decode_pitchwise(pr, acoustic, model, sess, pitches, beam_size=beam_size, weight=weight,
-                                  hash_length=hash_length, verbose=verbose)
+                                  hash_length=hash_length)
         
-        diff = str(np.sum(np.abs(previous - pr)))
+        diff = int(np.sum(np.abs(previous - pr)))
         print(f"Diff = {diff}")
         
         if diff == 0:
