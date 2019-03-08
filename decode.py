@@ -123,14 +123,17 @@ def decode_pitchwise(piano_roll, acoustic, model, sess, pitches, beam_size=200, 
             pr_windowed = pr_padded[pitch : pitch + 2 * window + 1, frame_num]
 
             for state in beam:
-                if weight == -1:
-                    prior = frame[pitch] * state.prior[0] + 1e-8
-                    anti_prior = (1-frame[pitch]) * (1-state.prior[0]) + 1e-8
+                if weight[0][0] == -1:
+                    prior = frame[pitch] * state.prior[0]
+                    anti_prior = (1-frame[pitch]) * (1-state.prior[0])
+                    # print(frame[pitch] , state.prior[0])
+                    # print(prior, anti_prior,np.log([prior, anti_prior]))
                 else:
                     prior = np.squeeze(weight[0][0] * frame[pitch] + weight[1][0] * state.prior[0])
                     anti_prior = 1-prior
                     # Update state
                     state.update_from_weight_model(weight[0], [prior])
+
 
                 for log_prob, sample in zip(np.log([prior, anti_prior]), [1, 0]):
 
