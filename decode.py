@@ -124,8 +124,8 @@ def decode_pitchwise(piano_roll, acoustic, model, sess, pitches, beam_size=200, 
 
             for state in beam:
                 if weight == -1:
-                    prior = frame[pitch] * state.prior[0]
-                    anti_prior = (1-frame[pitch]) * (1-state.prior[0])
+                    prior = frame[pitch] * state.prior[0] + 1e-8
+                    anti_prior = (1-frame[pitch]) * (1-state.prior[0]) + 1e-8
                 else:
                     prior = np.squeeze(weight[0][0] * frame[pitch] + weight[1][0] * state.prior[0])
                     anti_prior = 1-prior
