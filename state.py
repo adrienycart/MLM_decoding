@@ -94,10 +94,11 @@ class State:
         Returns
         =======
         combined_priors : np.matrix
-            An 88 x T matrix containing the combined priors of this State at each frame.
+            A num_pitches x T matrix containing the combined priors of this State at each frame.
         """
+        num_pitches = len(self.combined_prior) if self.combined_prior is not None else 88
         width = self.num if self.combined_prior is not None else self.num-1
-        combined_priors = np.zeros((88, width))
+        combined_priors = np.zeros((num_pitches, width))
 
         state = self if self.combined_prior is not None else self.prev
         for i in range(width):
@@ -114,10 +115,11 @@ class State:
         Returns
         =======
         weights : np.matrix
-            An 88 x T matrix containing the weights of this State at each frame.
+            A num_pitches x T matrix containing the weights of this State at each frame.
         """
+        num_pitches = len(self.weights) if self.weights is not None else 88
         width = self.num if self.weights is not None else self.num-1
-        weights = np.zeros((88, width))
+        weights = np.zeros((num_pitches, width))
 
         state = self if self.weights is not None else self.prev
         for i in range(width):
@@ -134,10 +136,11 @@ class State:
         Returns
         =======
         priors : np.matrix
-            An 88 x T matrix containing the priors of this State at each frame.
+            A num_pitches x T matrix containing the priors of this State at each frame.
         """
+        num_pitches = len(self.prior) if self.prior is not None else 88
         width = self.num if self.prior is not None else self.num-1
-        priors = np.zeros((88, width + 1))
+        priors = np.zeros((num_pitches, width + 1))
 
         state = self if self.prior is not None else self.prev
         for i in range(width + 1):
@@ -164,11 +167,12 @@ class State:
         Returns
         =======
         priors : np.matrix
-            An 88 x max(min_length, min(T, max_length)) binary matrix containing the pitch detections of this State.
+            A num_pitches x max(min_length, min(T, max_length)) binary matrix containing the pitch detections of this State.
         """
+        num_pitches = len(self.sample) if self.sample is not None else 88
         length = min(self.num, max_length) if max_length is not None else self.num
         length = max(min_length, length) if min_length is not None else length
-        piano_roll = np.zeros((88, length))
+        piano_roll = np.zeros((num_pitches, length))
 
         state = self
         for i in range(min(length, self.num)):

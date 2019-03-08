@@ -1,6 +1,7 @@
 import state
 from mlm_training.model import Model
 import numpy as np
+import copy
 
 class Beam:
     """
@@ -16,6 +17,7 @@ class Beam:
         """
         self.beam = []
 
+
     def __iter__(self):
         """
         Get an iterator for this beam.
@@ -26,6 +28,18 @@ class Beam:
             An iterator for this beam, iterating over the states within it.
         """
         return self.beam.__iter__()
+
+
+    def __len__(self):
+        """
+        Get the number of states in this beam.
+        
+        Returns
+        =======
+        length : int
+            The number of states in this beam.
+        """
+        return len(self.beam)
 
 
     def add(self, state):
@@ -61,7 +75,7 @@ class Beam:
 
 
 
-    def add_initial_state(self, model, sess):
+    def add_initial_state(self, model, sess, iterative_pw=False):
         """
         Add an empty initial state to the beam.
 
@@ -74,16 +88,20 @@ class Beam:
 
         sess : tf.session
             The tensorflow session of the loaded model.
+            
+        pitch_wise : boolean
+            True to use iterative pitchwise processing (and save only a single hidden_state
+            per State). False (default) otherwise.
         """
-        if model.pitchwise:
+        if model.pitchwise and not iterative_pw:
             single_state = model.get_initial_state(sess, 1)[0]
             # We have to get 88 initial states, one for each pitch
-            initial_state = [single_state.copy() for i in range(88)]
+            initial_state = [copy.copy(single_state) for i in range(88)]
             
         else:
             initial_state = model.get_initial_state(sess, 1)[0]
             
-        prior = np.ones(88) / 2
+        prior = np.ones(88) / 2 if not iterative_pw else np.array([0.5])
 
         new_state = state.State()
         new_state.update_from_lstm(initial_state, prior)

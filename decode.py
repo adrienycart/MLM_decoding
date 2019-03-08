@@ -19,8 +19,223 @@ from mlm_training.model import Model, make_model_param
 
 
 
+def run_lstm_pitchwise_iterative(sess, model, states):
+    """
+    Run the LSTM one step, and update the given states in place.
+    
+    Parameters
+    ==========
+    sess : tf.session
+        The session for the given model.
+        
+    model : Model
+        The language model to use for the transduction process.
+
+    states : list(state.State)
+        The list containing all of the states we want to update.
+    """
+    samples = np.zeros((len(states), 1, model.n_notes))
+    hidden_states = []
+
+    for i, s in enumerate(states):
+        hidden_states.append(s.hidden_state)
+        samples[i, 0, :] = s.sample
+
+    # Compute next step
+    hidden_states, priors = model.run_one_step(hidden_states, samples, sess)
+
+    # Update all states
+    for state, hidden_state, prior in zip(states, hidden_states, priors):
+        state.update_from_lstm(hidden_state, prior)
+
+
+
+
+
+def decode_pitchwise(piano_roll, acoustic, model, sess, pitches, beam_size=200, weight=[[0.8], [0.2]],
+                     hash_length=10, verbose=False):
+    """
+    Transduce the given binary piano roll prior into a binary piano roll by changing the given pitches.
+    
+    Parameters
+    ==========
+    piano_roll : np.ndarray
+        A binary piano roll, 88 X T.
+    
+    acoustic : np.ndarray
+        A probabilistic piano roll, 88 x T, containing values between 0.0 and 1.0
+        inclusive. acoustic[p, t] represents the probability of pitch p being present
+        at frame t.
+
+    model : Model
+        The language model to use for the transduction process.
+
+    sess : tf.session
+        The session for the given model.
+        
+    pitches : list(int)
+        A list of the pitches to transduce.
+
+    beam_size : int
+        The beam size for the search. Defaults to 200.
+
+    weight : matrix
+        A 2 x 1 matrix, whose first row is the weight for the acoustic model and whose 2nd
+        row is the weight for the language model. Defaults to [[0.8], [0.2]].
+
+    hash_length : int
+        The history length for the hashed beam. If two states do not differ in the past hash_length
+        frames, only the most probable one is saved in the beam. Defaults to 10.
+        
+    verbose : bool
+        Print progress in number of frames. Defaults to False (no printing).
+        
+    Returns
+    =======
+    pr : np.ndarray
+        The resulting binary piano roll, 88 X T.
+    """
+    window = int((model.n_notes - 1) / 2)
+    pr_padded = np.vstack((np.zeros((window, piano_roll.shape[1])),
+                           piano_roll,
+                           np.zeros((window, piano_roll.shape[1]))))
+    
+    # One beam per pitch
+    beams = []
+    for i in range(len(pitches)):
+        beam = Beam()
+        beam.add_initial_state(model, sess, iterative_pw=True)
+        beams.append(beam)
+
+    acoustic = np.transpose(acoustic)
+    
+    for frame_num, frame in enumerate(acoustic):
+        if verbose and frame_num % 20 == 0:
+            print(str(frame_num) + " / " + str(acoustic.shape[0]))
+            
+        # Run the LSTM!
+        if frame_num != 0:
+            run_lstm_pitchwise_iterative(sess, model, [s for beam in beams for s in beam])
+            
+        # Here, the beams contain a list of states, with sample histories, priors, and hidden_states,
+        # but needs to be updated with weights and combined_priors when sampling.
+
+        new_beams = []
+        for i in range(len(pitches)):
+            new_beams.append(Beam())
+        
+        # Here we sample from each state in each beam
+        for i, (pitch, beam, new_beam) in enumerate(zip(pitches, beams, new_beams)):
+            pr_windowed = pr_padded[pitch : pitch + 2 * window + 1, frame_num]
+            
+            for state in beam:
+                prior = np.squeeze(weight[0][0] * frame[pitch] + weight[1][0] * state.prior[0])
+
+                # Update state
+                state.update_from_weight_model(weight[0], [prior])
+
+                for log_prob, sample in zip([prior, 1-prior], [1, 0]):
+
+                    sample_full = np.concatenate((pr_windowed[:window], [sample], pr_windowed[-window:]))
+
+                    # Transition on sample
+                    new_beam.add(state.transition(sample_full, log_prob))
+
+            new_beam.cut_to_size(beam_size, min(hash_length, frame_num + 1))
+            beams[i] = new_beam
+            
+    for i, (pitch, beam) in enumerate(zip(pitches, beams)):
+        piano_roll[pitch, :] = beam.get_top_state().get_piano_roll()[window, :]
+        
+    return piano_roll
+
+
+
+
+
+def decode_pitchwise_iterative(acoustic, model, sess, beam_size=200, weight=[[0.8], [0.2]],
+                               hash_length=10, out=None, verbose=False, num_iters=20):
+    """
+    Transduce the given acoustic piano roll prior into a binary piano roll using iterative pitchwise model.
+    
+    Parameters
+    ==========
+    acoustic : matrix
+        A probabilistic piano roll, 88 x T, containing values between 0.0 and 1.0
+        inclusive. acoustic[p, t] represents the probability of pitch p being present
+        at frame t.
+
+    model : Model
+        The language model to use for the transduction process.
+
+    sess : tf.session
+        The session for the given model.
+
+    beam_size : int
+        The beam size for the search. Defaults to 200.
+
+    weight : matrix
+        A 2 x (1 or 88) matrix, whose first row is the weight for the acoustic model and whose 2nd
+        row is the weight for the language model, either for each pitch (2x88) or across all pitches
+        (2x1). Each column in the matrix should be normalized to sum to 1. Defaults to [[0.8], [0.2]].
+
+    hash_length : int
+        The history length for the hashed beam. If two states do not differ in the past hash_length
+        frames, only the most probable one is saved in the beam. Defaults to 10.
+
+    out : string
+        The directory in which to save the outputs, or None to not save anything. Defaults to None.
+
+    verbose : bool
+        Print progress updates. Defaults to False (no printing).
+
+    num_iters : int
+        The number of iterations to use, maximum. Defaults to 20.
+        
+    Returns
+    =======
+    prs : list(np.ndarray)
+        A list of the resulting binary piano rolls, 88 X T, from each iteration. prs[-1] is the output
+        of the system.
+    """
+    window = int((model.n_notes - 1) / 2)
+    
+    pr = (acoustic>0.5).astype(int)
+    prs = [np.copy(pr)]
+    
+    for iteration in range(num_iters):
+        if verbose:
+            print(f"Iteration {iteration+1}/{num_iters}")
+            
+        previous = prs[-1]
+        
+        for unlocked_indices in range(window):
+            if verbose:
+                print(f"Indices mod {unlocked_indices}/{window-1}")
+                
+            pitches = list(range(unlocked_indices, 88, window+1))
+            
+            pr = decode_pitchwise(pr, acoustic, model, sess, pitches, beam_size=beam_size, weight=weight,
+                                  hash_length=hash_length, verbose=verbose)
+        
+        diff = str(np.sum(np.abs(previous - pr)))
+        print(f"Diff = {diff}")
+        
+        if diff == 0:
+            break
+            
+        prs.append(np.copy(pr))
+        
+    return prs
+
+
+
+
+
+
 def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8], [0.2]],
-           hash_length=10, out=None, weight_model_dict=None, weight_model=None, verbose=False, gt=None):
+           hash_length=10, out=None, weight_model_dict=None, weight_model=None, verbose=False,
+           gt=None):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
 
@@ -41,7 +256,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
         The number of samples to use per frame. Defaults to 50.
 
     beam_size : int
-        The beam size for the search. Defaults to 50.
+        The beam size for the search. Defaults to 200.
 
     weight : matrix
         A 2 x (1 or 88) matrix, whose first row is the weight for the acoustic model and whose 2nd
@@ -82,7 +297,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
 
     weights : np.ndarray
         An 88 X T matrix, giving the acoustic weights for each pitch at each frame.
-    """
+    """ 
     if gt is not None:
         weight_model = True
         is_weight = True
@@ -273,7 +488,7 @@ def run_lstm(sess, model, beam):
         window = int((model.n_notes - 1) / 2)
         
         hidden_states_in = []
-        pw_samples = np.zeros((len(beam.beam) * 88, 1, model.n_notes))
+        pw_samples = np.zeros((len(beam) * 88, 1, model.n_notes))
 
         for i, s in enumerate(beam):
             hidden_states_in.extend(s.hidden_state)
@@ -294,7 +509,7 @@ def run_lstm(sess, model, beam):
 
     else: # Not pitchwise
         hidden_states = []
-        np_samples = np.zeros((len(beam.beam), 1, 88))
+        np_samples = np.zeros((len(beam), 1, 88))
 
         # Get states
         for i, s in enumerate(beam):
@@ -838,6 +1053,10 @@ if __name__ == '__main__':
     parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
 
     parser.add_argument("--gt", help="Use the gt to use the best possible weight_model results.", action="store_true")
+    
+    parser.add_argument("--pitchwise", type=int, help="Use the pitchwise language model. Give the window size.")
+    
+    parser.add_argument("--it", help="Use iterative pitchwise processing.", action="store_true")
 
     args = parser.parse_args()
 
@@ -862,9 +1081,17 @@ if __name__ == '__main__':
     data.make_from_file(args.MIDI, args.step, section=section)
 
     # Load model
+    n_hidden = args.hidden
+
+    # Load model
     model_param = make_model_param()
-    model_param['n_hidden'] = args.hidden
+    model_param['n_hidden'] = n_hidden
     model_param['n_steps'] = 1 # To generate 1 step at a time
+    if args.pitchwise is None:
+        model_param['pitchwise'] = False
+    else:
+        model_param['pitchwise'] = True
+        model_param['n_notes'] = 2 * args.pitchwise + 1
 
     # Build model object
     model = Model(model_param)
@@ -885,19 +1112,34 @@ if __name__ == '__main__':
         os.makedirs(args.output, exist_ok=True)
 
     # Decode
-    pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
-                         beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
-                         out=args.output, hash_length=args.hash, weight_model_dict=weight_model_dict,
-                         verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
+    if args.it:
+        prs = decode_pitchwise_iterative(data.input, model, sess, beam_size=args.beam,
+                                         weight=[[args.weight], [1 - args.weight]],
+                                         hash_length=args.hash, verbose=args.verbose, num_iters=20)
 
-    # Evaluate
-    if args.output is not None:
-        np.save(os.path.join(args.output, "pr"), pr)
-        np.save(os.path.join(args.output, "priors"), priors)
-        np.save(os.path.join(args.output, "weights"), weights)
-        np.save(os.path.join(args.output, "combined_priors"), combined_priors)
-    if args.step in ['quant','event']:
-        pr = dataMaps.convert_note_to_time(pr, data.corresp, max_len=max_len)
+        pr = prs[-1]
+        
+        # Evaluate
+        if args.output is not None:
+            np.save(os.path.join(args.output, "prs"), prs)
+        if args.step in ['quant','event']:
+            pr = dataMaps.convert_note_to_time(pr, data.corresp, max_len=max_len)
+        
+    else:
+        pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
+                        beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
+                        out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
+                        verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model,
+                        pitch_wise=args.it)
+
+        # Evaluate
+        if args.output is not None:
+            np.save(os.path.join(args.output, "pr"), pr)
+            np.save(os.path.join(args.output, "priors"), priors)
+            np.save(os.path.join(args.output, "weights"), weights)
+            np.save(os.path.join(args.output, "combined_priors"), combined_priors)
+        if args.step in ['quant','event']:
+            pr = dataMaps.convert_note_to_time(pr, data.corresp, max_len=max_len)
 
     data = dataMaps.DataMaps()
     data.make_from_file(args.MIDI, "time", section=section)
