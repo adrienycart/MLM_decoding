@@ -138,7 +138,7 @@ class State:
         priors : np.matrix
             A num_pitches x T matrix containing the priors of this State at each frame.
         """
-        num_pitches = len(self.prior) if self.prior is not None else 88
+        num_pitches = len(self.prior) if self.prior is not None and len(self.prior) > 0 else 88
         width = self.num if self.prior is not None else self.num-1
         priors = np.zeros((num_pitches, width + 1))
 
@@ -167,9 +167,10 @@ class State:
         Returns
         =======
         priors : np.matrix
-            A num_pitches x max(min_length, min(T, max_length)) binary matrix containing the pitch detections of this State.
+            A num_pitches x max(min_length, min(T, max_length)) binary matrix containing the pitch
+            detections of this State.
         """
-        num_pitches = len(self.sample) if self.sample is not None else 88
+        num_pitches = len(self.sample) if self.sample is not None and len(self.sample) > 0 else 88
         length = min(self.num, max_length) if max_length is not None else self.num
         length = max(min_length, length) if min_length is not None else length
         piano_roll = np.zeros((num_pitches, length))
