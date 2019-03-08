@@ -128,7 +128,7 @@ def decode_pitchwise(piano_roll, acoustic, model, sess, pitches, beam_size=200, 
                 # Update state
                 state.update_from_weight_model(weight[0], [prior])
 
-                for log_prob, sample in zip([prior, 1-prior], [1, 0]):
+                for log_prob, sample in zip(np.log([prior, 1-prior]), [1, 0]):
 
                     if window == 0:
                         sample_full = np.array([sample])
@@ -211,7 +211,7 @@ def decode_pitchwise_iterative(acoustic, model, sess, beam_size=200, weight=[[0.
         
         for unlocked_indices in range(window + 1):
             if verbose:
-                print(f"Indices mod {unlocked_indices+1}/{window+1}")
+                print(f"Indices {unlocked_indices} mod {window+1}")
                 
             pitches = list(range(unlocked_indices, 88, window+1))
             
@@ -1056,7 +1056,8 @@ if __name__ == '__main__':
     
     parser.add_argument("--pitchwise", type=int, help="Use the pitchwise language model. Give the window size.")
     
-    parser.add_argument("--it", help="Use iterative pitchwise processing.", action="store_true")
+    parser.add_argument("--it", help="Use iterative pitchwise processing with this number of iterations. " +
+                        "Defaults to 0, which doesn't use iterative processing.", type=int, default=0)
 
     args = parser.parse_args()
 
@@ -1112,10 +1113,10 @@ if __name__ == '__main__':
         os.makedirs(args.output, exist_ok=True)
 
     # Decode
-    if args.it:
+    if args.it > 0:
         prs = decode_pitchwise_iterative(data.input, model, sess, beam_size=args.beam,
                                          weight=[[args.weight], [1 - args.weight]],
-                                         hash_length=args.hash, verbose=args.verbose, num_iters=5)
+                                         hash_length=args.hash, verbose=args.verbose, num_iters=args.it)
 
         pr = prs[-1]
         
