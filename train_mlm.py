@@ -16,7 +16,7 @@ parser.add_argument('data_path',type=str,help="folder containing the split datas
 timestep = parser.add_mutually_exclusive_group()
 timestep.add_argument('-quant',action='store_true',help="use quantised timesteps")
 timestep.add_argument('-event',action='store_true',help="use event timesteps")
-parser.add_argument('-hidden',type=int,default=256,help="number of hidden nodes (default=256)")
+parser.add_argument('-n_hidden',type=int,default=256,help="number of hidden nodes (default=256)")
 parser.add_argument('-epochs',type=int,default=1000,help="maximum number of epochs")
 parser.add_argument('-early_stop_epochs',type=int,default=100,help="stop training after this number of epochs without improvement on valid set")
 parser.add_argument('-lr',type=float,default=0.01,help="learning rate")
@@ -46,7 +46,7 @@ note_min = note_range[0]
 note_max = note_range[1]
 
 
-n_hidden = args.hidden #number of features in hidden layer
+n_hidden = args.n_hidden #number of features in hidden layer
 learning_rate = args.lr
 
 
