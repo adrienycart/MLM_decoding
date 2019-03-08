@@ -71,7 +71,7 @@ class Beam:
                 best = state
                 best_prob = state.log_prob
 
-        return state
+        return best
 
 
 
@@ -129,10 +129,10 @@ class Beam:
         piano_rolls = []
 
         for state in beam:
+            if len(self.beam) == beam_size:
+                break
+                
             pr = state.get_piano_roll(max_length=hash_length)
             if not any((pr == x).all() for x in piano_rolls):
                 self.beam.append(state)
                 piano_rolls.append(pr)
-
-                if len(self.beam) == beam_size:
-                    break
