@@ -2,7 +2,7 @@ from dataMaps import DataMaps,convert_note_to_time, align_matrix
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
-from decode import decode
+from decode import decode, decode_pitchwise_iterative
 
 import os
 import argparse
@@ -41,6 +41,8 @@ parser.add_argument("-v", "--verbose", help="Use verbose printing.", action="sto
 parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
 parser.add_argument("--gt", help="Use the gt to use the best possible weight_model results.", action="store_true")
 parser.add_argument("--pitchwise", type=int, help="use pitchwise language model. Value is the number of semitones above and below current pitch to take into account.")
+parser.add_argument("--it", help="Use iterative pitchwise processing with this number of iterations. " +
+                    "Defaults to 0, which doesn't use iterative processing.", type=int, default=0)
 
 
 args = parser.parse_args()
@@ -128,7 +130,14 @@ for fn in os.listdir(folder):
         data.make_from_file(filename,args.step,section)
 
         # Decode
-        if args.weight_model is not None or args.weight != 1.0:
+        if args.it > 0:
+            prs = decode_pitchwise_iterative(data.input, model, sess, beam_size=args.beam,
+                                             weight=[[args.weight], [1 - args.weight]],
+                                             hash_length=args.hash, verbose=args.verbose, num_iters=args.it)
+
+            pr = prs[-1]
+            
+        elif args.weight_model is not None or args.weight != 1.0:
             pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
                             beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
                             out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
@@ -140,7 +149,7 @@ for fn in os.listdir(folder):
         if not args.save is None:
             np.save(os.path.join(args.save,fn.replace('.mid','_pr')), pr)
             np.savetxt(os.path.join(args.save,fn.replace('.mid','_pr.csv')), pr)
-            if args.weight_model is not None or args.weight != 1.0:
+            if (args.weight_model is not None or args.weight != 1.0) and args.it <= 0:
                 np.save(os.path.join(args.save,fn.replace('.mid','_priors')), priors)
                 np.save(os.path.join(args.save,fn.replace('.mid','_weights')), weights)
                 np.save(os.path.join(args.save,fn.replace('.mid','_combined_priors')), combined_priors)
