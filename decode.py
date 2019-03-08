@@ -154,7 +154,7 @@ def decode_pitchwise(piano_roll, acoustic, model, sess, pitches, beam_size=200, 
 
 
 def decode_pitchwise_iterative(acoustic, model, sess, beam_size=200, weight=[[0.8], [0.2]],
-                               hash_length=10, out=None, verbose=False, num_iters=20):
+                               hash_length=10, out=None, verbose=False, num_iters=5):
     """
     Transduce the given acoustic piano roll prior into a binary piano roll using iterative pitchwise model.
     
@@ -503,7 +503,7 @@ def run_lstm(sess, model, beam):
         # Update all states
         for i, s in enumerate(beam):
             hidden_state = hidden_states_out[88 * i : 88 * (i+1)]
-            prior = pw_priors[88 * i : 88 * (i+1)]
+            prior = np.squeeze(pw_priors[88 * i : 88 * (i+1)])
 
             s.update_from_lstm(hidden_state, prior)
 
@@ -1115,7 +1115,7 @@ if __name__ == '__main__':
     if args.it:
         prs = decode_pitchwise_iterative(data.input, model, sess, beam_size=args.beam,
                                          weight=[[args.weight], [1 - args.weight]],
-                                         hash_length=args.hash, verbose=args.verbose, num_iters=20)
+                                         hash_length=args.hash, verbose=args.verbose, num_iters=5)
 
         pr = prs[-1]
         
@@ -1129,8 +1129,7 @@ if __name__ == '__main__':
         pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
                         beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
                         out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
-                        verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model,
-                        pitch_wise=args.it)
+                        verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
 
         # Evaluate
         if args.output is not None:
