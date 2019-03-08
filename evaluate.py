@@ -32,7 +32,7 @@ parser.add_argument("-b", "--beam", type=int, help="The beam size. Defaults to 1
 parser.add_argument("-k", "--branch", type=int, help="The branching factor. Defaults to 20.", default=20)
 weight = parser.add_mutually_exclusive_group()
 weight.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
-                    "Defaults to 0.5", type=float, default=0.5)
+                    "If -1, priors are multiplied (only with --it). Defaults to 0.5", type=float, default=0.5)
 weight.add_argument("-wm", "--weight_model", help="Load the given sklearn model using pickle, to dynamically " +
                     "set weights. Defaults to None, which uses the static weight from -w instead.",
                     default=None)
@@ -48,8 +48,11 @@ parser.add_argument("--it", help="Use iterative pitchwise processing with this n
 args = parser.parse_args()
 
 if not (0 <= args.weight <= 1):
-    print("Weight must be between 0 and 1.", file=sys.stderr)
-    sys.exit(2)
+    if args.weight == -1 and not args.it is None:
+        print('No weight - priors multiplied')
+    else:
+        print("Weight must be between 0 and 1.", file=sys.stderr)
+        sys.exit(2)
 
 print('####################################')
 
@@ -136,7 +139,7 @@ for fn in os.listdir(folder):
                                              hash_length=args.hash, verbose=args.verbose, num_iters=args.it)
 
             pr = prs[-1]
-            
+
         elif args.weight_model is not None or args.weight != 1.0:
             pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
                             beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
