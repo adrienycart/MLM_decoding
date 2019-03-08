@@ -87,6 +87,9 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
         weight_model = True
         is_weight = True
         
+    if (not weight_model) and weight[0][0] == 1.0:
+        return (acoustic>0.5).astype(int), np.zeros(acoustic.shape), np.ones(acoustic.shape), acoustic
+        
     weights_all = None
     priors_all = None
 
@@ -113,42 +116,26 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
 
         new_beam = Beam()
         
-        # Gather all computations to perform them batched
-        # Acoustic sampling is done separately because the acoustic samples will be identical for every state.
-        if (not weight_model) and weight[0][0] == 1.0:
-            # If sampling method is acoustic only, we generate the same samples for every state
-            for log_prob, sample in itertools.islice(enumerate_samples(frame), branch_factor):
-                
+        # Here we sample from each state in the beam
+        for i, state in enumerate(beam):
+            weight_this = weights_all[:, i * 88 : (i + 1) * 88] if weights_all is not None else weight
+
+            if priors_all is not None:
+                prior = np.squeeze(priors_all[i * 88 : (i + 1) * 88])
+            else:
+                prior = np.squeeze(weight_this[0] * frame + weight_this[1] * state.prior)
+
+            # Update state
+            state.update_from_weight_model(weight_this[0], prior)
+
+            for log_prob, sample in itertools.islice(enumerate_samples(prior), branch_factor):
+
                 # Binarize the sample (return from enumerate_samples is an array of indexes)
                 binary_sample = np.zeros(88)
                 binary_sample[sample] = 1
 
-                # Transition on this sample for each state
-                for i, state in enumerate(beam):
-                    state.update_from_weight_model(weight[0], frame)
-                    new_beam.add(state.transition(binary_sample, log_prob))
-
-        else:
-            # Here we need to sample per state, because we use the LSTM's prior in sampling
-            for i, state in enumerate(beam):
-                weight_this = weights_all[:, i * 88 : (i + 1) * 88] if weights_all is not None else weight
-                
-                if priors_all is not None:
-                    prior = np.squeeze(priors_all[i * 88 : (i + 1) * 88])
-                else:
-                    prior = np.squeeze(weight_this[0] * frame + weight_this[1] * state.prior)
-                
-                # Update state
-                state.update_from_weight_model(weight_this[0], prior)
-
-                for log_prob, sample in itertools.islice(enumerate_samples(prior), branch_factor):
-
-                    # Binarize the sample (return from enumerate_samples is an array of indexes)
-                    binary_sample = np.zeros(88)
-                    binary_sample[sample] = 1
-
-                    # Transition on sample
-                    new_beam.add(state.transition(binary_sample, log_prob))
+                # Transition on sample
+                new_beam.add(state.transition(binary_sample, log_prob))
 
         new_beam.cut_to_size(beam_size, min(hash_length, frame_num + 1))
         beam = new_beam
