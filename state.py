@@ -50,7 +50,7 @@ class State:
             An 88-length probabilistic array containing this state's model's prior for the next frame.
         """
         self.hidden_state = hidden_state
-        self.prior = prior
+        self.prior = np.reshape(prior, -1)
         try:
             self.prev.hidden_state = None
         except:
