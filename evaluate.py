@@ -43,7 +43,7 @@ parser.add_argument("--gt", help="Use the gt to use the best possible weight_mod
 parser.add_argument("--pitchwise", type=int, help="use pitchwise language model. Value is the number of semitones above and below current pitch to take into account.")
 parser.add_argument("--it", help="Use iterative pitchwise processing with this number of iterations. " +
                     "Defaults to 0, which doesn't use iterative processing.", type=int, default=0)
-
+parser.add_argument('--n_hidden', help="Number of hidden nodes for the LSTM", type=int, default=256)
 
 args = parser.parse_args()
 
@@ -88,7 +88,7 @@ note_min = note_range[0]
 note_max = note_range[1]
 
 if args.weight_model is not None or args.weight != 1.0:
-    n_hidden = 256
+    n_hidden = args.n_hidden
 
     # Load model
     model_param = make_model_param()
