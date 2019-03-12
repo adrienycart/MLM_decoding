@@ -325,7 +325,7 @@ class Model:
                     else:
                         next_cell_state = cell_state
 
-                        use_real_input = tf.Print(tf.distributions.Bernoulli(probs=sched_samp_p,dtype=tf.bool).sample(),[time,cell_state.h],message="loop")
+                        use_real_input = tf.distributions.Bernoulli(probs=sched_samp_p,dtype=tf.bool).sample()
 
                         next_input = tf.cond(use_real_input,
                                 lambda: inputs_ta.read(time),
@@ -353,7 +353,7 @@ class Model:
                 pred = tf.layers.dense(outputs, n_classes,name='rnn/output_layer',reuse=tf.AUTO_REUSE)
                 pred = tf.transpose(pred,[1,0,2])
 
-                self._prediction_sched_samp = tf.Print(pred,[final_state.h],message='FINAL')
+                self._prediction_sched_samp = pred
         return self._prediction_sched_samp
 
 
