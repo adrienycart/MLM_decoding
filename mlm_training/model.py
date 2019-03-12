@@ -202,17 +202,17 @@ class Model:
         return self._seq_lens
 
 
-    # @property
-    # def sched_samp_p(self):
-    #     """
-    #     Placeholder for scheduled sampling probability
-    #     """
-    #     if self._sched_samp_p is None:
-    #         suffix = self.suffix
-    #         sched_samp_p = tf.placeholder(shape=[],name="sched_samp_p"+suffix)
-    #         self._sched_samp_p = sched_samp_p
-    #     return self._sched_samp_p
-    #
+    @property
+    def sched_samp_p(self):
+        """
+        Placeholder for scheduled sampling probability
+        """
+        if self._sched_samp_p is None:
+            suffix = self.suffix
+            sched_samp_p = tf.placeholder("float",shape=[],name="sched_samp_p"+suffix)
+            self._sched_samp_p = sched_samp_p
+        return self._sched_samp_p
+
     # @property
     # def inputs_sched_samp(self):
     #     """
@@ -256,7 +256,6 @@ class Model:
 
                 x = self.inputs
                 seq_len = self.seq_lens
-                dropout = tf.placeholder_with_default(1.0, shape=(), name="dropout"+suffix)
 
                 W = tf.Variable(tf.truncated_normal([n_hidden,n_classes]),name="W"+suffix)
                 b = tf.Variable(tf.truncated_normal([n_classes]),name="b"+suffix)
@@ -282,13 +281,96 @@ class Model:
 
 
     @property
+    def prediction_sched_samp(self):
+        """
+        Logit predictions: x[t] given x[0:t]
+        """
+        if self._prediction_sched_samp is None:
+            with tf.device(self.device_name):
+                n_notes = self.n_notes
+                n_classes = self.n_classes
+                n_steps = self.n_steps
+                n_hidden = self.n_hidden
+                suffix = self.suffix
+                batch_size = self.batch_size
+
+                inputs = tf.concat([self.inputs,tf.zeros_like(self.inputs[:,0:1,:])],axis=1)
+                inputs = tf.transpose(inputs,[1,0,2])
+                # inputs = tf.placeholder(shape=(max_time, batch_size, input_depth),
+                #                     dtype=tf.float32)
+                sequence_length = self.seq_lens
+                inputs_ta = tf.TensorArray(dtype=tf.float32, size=n_steps+1)
+                inputs_ta = inputs_ta.unstack(inputs)
+
+
+                cell = tf.contrib.rnn.LSTMCell(n_hidden,state_is_tuple=True,forget_bias = 1.0)
+                hidden_state_in = cell.zero_state(batch_size, dtype=tf.float32)
+                self.initial_state = hidden_state_in
+                sched_samp_p = self.sched_samp_p
+
+                #
+                # def dense_layer(inputs,W,b,n_steps):
+                #     inputs = tf.reshape(inputs,[-1,n_hidden])
+                #     outputs = tf.matmul(inputs,W) + b
+                #     outputs = tf.reshape(outputs,[-1,n_steps,n_classes])
+                #     return outputs
+
+
+                def loop_fn(time, cell_output, cell_state, loop_state):
+                    emit_output = cell_output  # == None for time == 0
+
+                    if cell_output is None:  # time == 0
+                        next_cell_state = hidden_state_in
+                        next_input = inputs_ta.read(time)
+                    else:
+                        next_cell_state = cell_state
+
+                        use_real_input = tf.Print(tf.distributions.Bernoulli(probs=sched_samp_p,dtype=tf.bool).sample(),[time,cell_state.h],message="loop")
+
+                        next_input = tf.cond(use_real_input,
+                                lambda: inputs_ta.read(time),
+                                lambda: tf.contrib.distributions.Bernoulli(
+                                # probs=tf.nn.sigmoid(dense_layer(cell_output,W,b,1)),
+                                probs=tf.nn.sigmoid(tf.layers.dense(cell_output, n_classes,
+                                    name='output_layer',
+                                    reuse=tf.AUTO_REUSE)),
+                                dtype=tf.float32).sample())
+
+                    next_loop_state = None
+
+
+                    elements_finished = (time >= n_steps)
+
+                    return (elements_finished, next_input, next_cell_state,
+                          emit_output, next_loop_state)
+
+                outputs_ta, final_state, _ = tf.nn.raw_rnn(cell, loop_fn)
+                outputs = outputs_ta.stack()
+
+                self.output_state = final_state
+
+                # pred = dense_layer(outputs)
+                pred = tf.layers.dense(outputs, n_classes,name='rnn/output_layer',reuse=tf.AUTO_REUSE)
+                pred = tf.transpose(pred,[1,0,2])
+
+                self._prediction_sched_samp = tf.Print(pred,[final_state.h],message='FINAL')
+        return self._prediction_sched_samp
+
+
+
+
+
+    @property
     def pred_sigm(self):
         """
         Sigmoid predictions: x[t] given x[0:t]
         """
         if self._pred_sigm is None:
             with tf.device(self.device_name):
-                pred = self.prediction
+                if self.scheduled_sampling:
+                    pred = self.prediction_sched_samp
+                else:
+                    pred = self.prediction
                 pred = tf.sigmoid(pred)
                 self._pred_sigm = pred
         return self._pred_sigm
@@ -300,7 +382,10 @@ class Model:
         """
         if self._last_pred_sigm is None:
             with tf.device(self.device_name):
-                pred_sigm = self.pred_sigm
+                if self.scheduled_sampling:
+                    pred = self.prediction_sched_samp
+                else:
+                    pred = self.prediction
                 self._last_pred_sigm = pred_sigm[:,-1,:]
         return self._last_pred_sigm
 
@@ -375,7 +460,11 @@ class Model:
                 n_steps = self.n_steps
                 suffix = self.suffix
                 y = self.labels
-                cross_entropy2 = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.prediction, labels=y),axis=[1,2])
+                if self.scheduled_sampling:
+                    pred = self.prediction_sched_samp
+                else:
+                    pred = self.prediction
+                cross_entropy2 = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=pred, labels=y),axis=[1,2])
                 self._cross_entropy2 = cross_entropy2
         return self._cross_entropy2
 
@@ -424,7 +513,10 @@ class Model:
                     #It is necessary that the output has the same dimensions as input (even if not used)
                     return cross_entropy_trans, 0.0, 0.0
 
-                pred = self.prediction
+                if self.scheduled_sampling:
+                    pred = self.prediction_sched_samp
+                else:
+                    pred = self.prediction
                 xs = self.inputs
                 ys = self.labels
 
@@ -462,7 +554,11 @@ class Model:
                 pred_sigm = self.pred_sigm
                 y_inv = 1-y
                 p_t = tf.abs(y_inv - pred_sigm)
-                logits = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.prediction, labels=y)
+                if self.scheduled_sampling:
+                    pred = self.prediction_sched_samp
+                else:
+                    pred = self.prediction
+                logits = tf.nn.sigmoid_cross_entropy_with_logits(logits=pred, labels=y)
                 focal_loss = tf.reduce_mean(tf.pow(p_t,self.gamma)*logits)
 
                 self._focal_loss = focal_loss
@@ -516,7 +612,8 @@ class Model:
                 batch_x = dataset[ptr:ptr+batch_size]
                 batch_y = target[ptr:ptr+batch_size]
                 batch_len_list = len_list[ptr:ptr+batch_size]
-                feed_dict={x: batch_x, y: batch_y,seq_len: batch_len_list,batch_size_ph:batch_x.shape[0]}
+                feed_dict.update({x:batch_x,y:batch_y,seq_len:batch_len_list,batch_size_ph:batch_x.shape[0]})
+
             else :
                 batch_x = dataset[ptr:ptr+batch_size]
                 feed_dict={x: batch_x}
@@ -631,7 +728,6 @@ class Model:
         Actually performs training steps.
         """
 
-        sigm_pred = self.pred_sigm
         optimizer = self.optimize
         cross_entropy = self.cross_entropy
         cross_entropy2= self.cross_entropy2
@@ -640,14 +736,13 @@ class Model:
         f_measure = self.f_measure
         suffix = self.suffix
         batch_size_ph = self.batch_size
+        sched_samp_p = self.sched_samp_p
 
         x = self.inputs
         y = self.labels
         seq_len = self.seq_lens
 
-        sched_sampl = train_param['scheduled_sampling']
 
-        drop = tf.get_default_graph().get_tensor_by_name("dropout"+suffix+":0")
 
         print('Starting computations : '+str(datetime.now()))
 
@@ -666,13 +761,13 @@ class Model:
         valid_data, valid_target, valid_lengths = self.extract_data(data,'valid')
 
         ## scheduled sampling strategy
-        if sched_sampl is not None:
-            if sched_sampl == 'linear':
+        if self.scheduled_sampling:
+            if train_param['scheduled_sampling'] == 'linear':
                 schedule = np.linspace(1.0,0.0,train_param['schedule_duration'])
-            elif sched_sampl == 'sigmoid':
+            elif train_param['scheduled_sampling'] == 'sigmoid':
                 schedule = 1 / (1 + np.exp(np.linspace(-5.0,5.0,train_param['schedule_duration'])))
             else:
-                raise ValueError('Schedule not understood: '+sched_sampl)
+                raise ValueError('Schedule not understood: '+train_param['scheduled_sampling'])
 
 
 
@@ -688,82 +783,37 @@ class Model:
             display_step = None
 
 
-            # n_files = training_data.shape[0]
-            # no_of_batches = int(np.ceil(float(n_files)/batch_size))
-            #
-            # if train_param['display_per_epoch'] is None:
-            #     display_step = None
-            # else:
-            #     display_step = max(int(round(float(no_of_batches)/train_param['display_per_epoch'])),1)
-            # for j in range(no_of_batches):
-            #     batch_x = training_data[ptr:ptr+batch_size]
-            #     batch_y = training_target[ptr:ptr+batch_size]
-            #     batch_lens = training_lengths[ptr:ptr+batch_size]
-            #
-            #     ptr += batch_size
 
             for batch_x,batch_y, batch_lens in train_data_generator:
                 batch_x = np.transpose(batch_x,[0,2,1])
                 batch_y = np.transpose(batch_y,[0,2,1])
 
                 ## Simple scheduled sampling
-                if sched_sampl is not None:
+                if self.scheduled_sampling:
                     if i < train_param['schedule_duration']:
                         p = schedule[i]
                     else:
                         p=0
 
-                    preds = sess.run(sigm_pred,{x: batch_x,seq_len: batch_lens,batch_size_ph:batch_x.shape[0]})
-                    idx = sample(1-p,outshape=[batch_x.shape[0],batch_x.shape[1]-1]).astype(bool)
-                    #We sample from frame i of preds the vector we will put in frame i+1 of input data
-                    sample_idx = np.concatenate([idx,np.full([batch_x.shape[0],1],False)],axis=1)
-                    sampled_frames = sample(preds[sample_idx])
-                    replace_idx = np.concatenate([np.full([batch_x.shape[0],1],False),idx],axis=1)
-                    batch_x[replace_idx]=sampled_frames
+                    feed_dict_optim = {x: batch_x, y: batch_y, seq_len: batch_lens,batch_size_ph:batch_x.shape[0],sched_samp_p:p}
+                    feed_dict_valid = {x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size,sched_samp_p:0.0}
+                else:
+                    feed_dict_optim = {x: batch_x, y: batch_y, seq_len: batch_lens, batch_size_ph:batch_x.shape[0]}
+                    feed_dict_valid = {x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size}
 
-
-
-                sess.run(optimizer, feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens, drop: train_param['dropout'],batch_size_ph:batch_x.shape[0]})
+                sess.run(optimizer, feed_dict=feed_dict_optim)
                 if not display_step is None and j%display_step == 0 :
-                    cross_batch = sess.run(cross_entropy, feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens,batch_size_ph:batch_x.shape[0]})
+                    cross_batch = sess.run(cross_entropy, feed_dict=feed_dict_optim)
                     print("Batch "+str(j)+ ", Cross entropy = "+"{:.5f}".format(cross_batch))
                     if train_param['summarize']:
-                        summary_b = sess.run(summary_batch,feed_dict={x: batch_x, y: batch_y, seq_len: batch_lens,batch_size_ph:batch_x.shape[0]})
+                        summary_b = sess.run(summary_batch,feed_dict=feed_dict_optim)
                         train_writer.add_summary(summary_b,global_step=n_batch)
                 n_batch += 1
 
-            ## Simple scheduled sampling
-            if sched_sampl is not None and train_param['sched_valid'] is not None:
-                preds = sess.run(sigm_pred,{x: valid_data,seq_len: valid_lengths,batch_size_ph:valid_data.shape[0]})
-                if train_param['sched_valid'] == 'sample' or train_param['sched_valid'] == 'avg':
-                    if train_param['sched_valid'] == 'sample':
-                        n_repeat = 1
-                    elif train_param['sched_valid'] == 'avg':
-                        n_repeat=5
 
-                    p=0 #Always use fully-sampled inputs for validation
-                    #pred is : Batch size, n_steps, n_notes
-
-                    crosses = np.array([n_repeat],dtype=float)
-                    for repeat in range(n_repeat):
-                        idx = sample(1-p,outshape=[valid_data.shape[0],valid_data.shape[1]-1]).astype(bool)
-                        #We sample from frame i of preds the vector we will put in frame i+1 of input data
-                        sample_idx = np.concatenate([idx,np.full([valid_data.shape[0],1],False)],axis=1)
-                        sampled_frames = sample(preds[sample_idx])
-                        replace_idx = np.concatenate([np.full([valid_data.shape[0],1],False),idx],axis=1)
-                        valid_data[replace_idx]=sampled_frames
-                        cross = self._run_by_batch(sess,cross_entropy2,{x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size},batch_size)
-                        crosses[repeat] = cross
-                    cross = np.mean(np.array(crosses))
-                elif train_param['sched_valid'] == 'thresh':
-                    pred_thresh = (preds>0.5).astype(float)
-                    valid_data[:,1:,:] = pred_thresh[:,:-1,:]
-                    cross = self._run_by_batch(sess,cross_entropy2,{x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size},batch_size)
-
-            else:
-                cross = self._run_by_batch(sess,cross_entropy2,{x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size},batch_size)
+            cross = self._run_by_batch(sess,cross_entropy2,feed_dict_valid,batch_size)
             if train_param['summarize']:
-                summary_e = sess.run(summary_epoch,feed_dict={x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:valid_data.shape[0]})
+                summary_e = sess.run(summary_epoch,feed_dict=feed_dict_valid)
                 train_writer.add_summary(summary_e, global_step=i)
             print("_________________")
             print("Epoch: " + str(i) + ", Cross Entropy = " + \
@@ -777,7 +827,7 @@ class Model:
 
             # Save the variables to disk.
             # When using scheduled sampling: Only start early stopping once schedule is finished.
-            if train_param['early_stop'] and (sched_sampl is None or (sched_sampl is not None and i>train_param['schedule_duration'])):
+            if train_param['early_stop'] and (train_param['schedule_duration'] is None or (train_param['schedule_duration'] is not None and i>train_param['schedule_duration'])):
                 if cross<best_cross:
                         saved = saver_best.save(sess, os.path.join(ckpt_save_path,"best_model.ckpt"),global_step=i)
                         best_cross = cross
@@ -870,14 +920,20 @@ class Model:
             sess, _ = self.load(save_path,model_path)
 
         suffix = self.suffix
-        pred = self.prediction
         x = self.inputs
         seq_len = self.seq_lens
         batch_size_ph = self.batch_size
 
         dataset = self._transpose_data(dataset)
 
-        notes_pred = sess.run(pred, feed_dict = {x: dataset, seq_len: len_list,batch_size_ph:dataset.shape[0]} )
+        if self.scheduled_sampling:
+            pred = self.prediction_sched_samp
+            feed_dict ={x: dataset, seq_len: len_list,batch_size_ph:dataset.shape[0],self.sched_samp_p:1.0}
+        else:
+            pred = self.prediction
+            feed_dict = {x: dataset, seq_len: len_list,batch_size_ph:dataset.shape[0]}
+
+        notes_pred = sess.run(pred, feed_dict = feed_dict)
         notes_pred = tf.transpose(notes_pred,[0,2,1])
 
         if sigmoid:
@@ -942,8 +998,12 @@ class Model:
 
         len_list = np.full([len(samples)],samples.shape[1])
 
-        predictions,hidden_states_out = sess.run([pred,output_state], feed_dict = {x: samples,
-                seq_len: len_list,batch_size_ph:len(samples),initial_state:hidden_states_in} )
+        if self.scheduled_sampling:
+            feed_dict ={x: samples, seq_len: len_list,batch_size_ph:len(samples),initial_state:hidden_states_in,self.sched_samp_p:1.0}
+        else:
+            feed_dict ={x: samples, seq_len: len_list,batch_size_ph:len(samples),initial_state:hidden_states_in}
+
+        predictions,hidden_states_out = sess.run([pred,output_state], feed_dict = feed_dict )
 
         c_out, h_out = hidden_states_out
 
@@ -1049,11 +1109,13 @@ def getTotalNumParameters():
     '''
     total_parameters = 0
     for variable in tf.trainable_variables():
+        # print('------------')
+        # print(variable.name)
         # shape is an array of tf.Dimension
         shape = variable.get_shape()
         variable_parameters = 1
         for dim in shape:
-            #print(dim)
+            # print(dim)
             variable_parameters *= dim.value
         total_parameters += variable_parameters
     return total_parameters
@@ -1115,6 +1177,7 @@ def make_model_param():
     model_param['n_steps']=300
     model_param['use_focal_loss']=False
     model_param['pitchwise']=False
+    model_param['scheduled_sampling'] = False
 
     model_param['chunks']=None
     model_param['device_name']="/gpu:0"
@@ -1130,7 +1193,6 @@ def make_train_param():
 
     train_param['epochs']=20
     train_param['batch_size']=50
-    train_param['dropout']=1.0
 
     train_param['display_per_epoch']=10,
     train_param['save_step']=1
@@ -1140,7 +1202,7 @@ def make_train_param():
     train_param['early_stop_epochs']=15
     train_param['scheduled_sampling'] = None
     train_param['scheduled_duration'] = 0
-    train_param['sched_valid'] = None
+
 
     return train_param
 

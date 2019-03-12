@@ -24,7 +24,6 @@ parser.add_argument('-use_focal_loss',action='store_true',help="use focal loss i
 parser.add_argument('-resume',action='store_true',help="resume training from latest checkpoint in save_path")
 parser.add_argument('-sched_sampl',type=str,help="type of schedule for scheduled sampling. If not specified, no scheduled sampling")
 parser.add_argument('-sched_dur',type=int,default=1000,help="duration in epochs of the schedule (if lower than epochs, sampling will always be applied after the end of schedule)")
-parser.add_argument('-sched_valid',type=str,help='validate on sampled inputs')
 parser.add_argument('-pitchwise',type=int,help='to train a pitch-wise model; value gives width of pitch window.')
 
 
@@ -60,7 +59,7 @@ train_param['summarize']=True
 train_param['early_stop_epochs']=args.early_stop_epochs
 train_param['scheduled_sampling']=args.sched_sampl
 train_param['schedule_duration']=args.sched_dur
-train_param['sched_valid']=args.sched_valid
+
 
 
 print("Computation start : "+str(datetime.now()))
@@ -81,6 +80,10 @@ else:
     model_param['pitchwise']=True
     model_param['n_notes'] = 2*args.pitchwise+1
     train_param['batch_size']=500
+if args.sched_sampl is None:
+    model_param['scheduled_sampling']=False
+else:
+    model_param['scheduled_sampling']=True
 
 
 save_path = args.save_path
