@@ -318,6 +318,55 @@ class DataMaps:
         setattr(self,data,roll_padded)
         return
 
+    def cut(self,len_chunk,keep_padding=True,as_list=False):
+        #Returns the roll cut in chunks of len_chunk elements, as well as
+        #the list of lengths of the chunks
+        #The last element is zero-padded to have len_chunk elements
+
+
+        if keep_padding:
+            size = self.input.shape[1]
+        else:
+            size = self.length
+
+        if as_list:
+            input_cut = []
+            target_cut = []
+            lengths = []
+        else:
+            n_chunks = int(np.ceil(float(size)/len_chunk))
+            input_cut = np.zeros([n_chunks,self.input.shape[0],len_chunk])
+            target_cut = np.zeros([n_chunks,self.input.shape[0],len_chunk])
+            lengths = np.zeros([n_chunks])
+
+        j = 0
+        n = 0
+        length = self.length
+        while j < size:
+            if as_list:
+                lengths += [min(length,len_chunk)]
+            else:
+                lengths[n] = min(length,len_chunk)
+            length = max(0, length-len_chunk)
+            if j + len_chunk < size:
+                if as_list:
+                    input_cut += [self.input[:,j:j+len_chunk]]
+                    target_cut += [self.target[:,j:j+len_chunk]]
+                else:
+                    input_cut[n]= self.input[:,j:j+len_chunk]
+                    target_cut[n] = self.target[:,j:j+len_chunk]
+                j += len_chunk
+                n += 1
+            else : #Finishing clause : zero-pad the remaining
+                if as_list:
+                    input_cut += [np.pad(self.input[:,j:size],pad_width=((0,0),(0,len_chunk-(size-j))),mode='constant')]
+                    target_cut += [np.pad(self.target[:,j:size],pad_width=((0,0),(0,len_chunk-(size-j))),mode='constant')]
+                else:
+                    input_cut[n,:,:]= np.pad(self.input[:,j:size],pad_width=((0,0),(0,len_chunk-(size-j))),mode='constant')
+                    target_cut[n,:,:]= np.pad(self.target[:,j:size],pad_width=((0,0),(0,len_chunk-(size-j))),mode='constant')
+                j += len_chunk
+        return input_cut, target_cut, lengths
+
 
     def normalize_input(self,mean,var):
         input_data = self.input
@@ -534,10 +583,11 @@ def get_name_from_maps(filename):
     return name
 
 
-# filename = 'data/outputs_default_config_split/test/MAPS_MUS-scn15_11_ENSTDkAm.mid'
-# np.seterr(all='raise')
-# data = DataMaps()
-# data.make_from_file(filename,'quant',[0,30])
+filename = 'data/outputs_default_config_split/test/MAPS_MUS-scn15_11_ENSTDkAm.mid'
+np.seterr(all='raise')
+data = DataMaps()
+data.make_from_file(filename,'quant',[0,30])
+
 
 
 

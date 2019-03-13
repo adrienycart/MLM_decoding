@@ -32,6 +32,7 @@ class Model:
 
         self._batch_size = None
         self._inputs = None
+        self._acoustic_outputs = None
         self._seq_lens = None
         self._labels = None
         self._thresh = None
@@ -190,6 +191,21 @@ class Model:
         return self._inputs
 
     @property
+    def acoustic_outputs(self):
+        """
+        Placeholder for input sequences
+        """
+        if self._acoustic_outputs is None:
+            n_notes = self.n_notes
+            n_steps = self.n_steps
+            suffix = self.suffix
+
+            ac = tf.placeholder("float", [None,n_steps,n_notes],name="acoustic_outputs"+suffix)
+
+            self._acoustic_outputs = ac
+        return self._acoustic_outputs
+
+    @property
     def seq_lens(self):
         """
         Placeholder for sequence lengths (not used at the moment)
@@ -308,12 +324,13 @@ class Model:
                 self.initial_state = hidden_state_in
                 sched_samp_p = self.sched_samp_p
 
-                #
-                # def dense_layer(inputs,W,b,n_steps):
-                #     inputs = tf.reshape(inputs,[-1,n_hidden])
-                #     outputs = tf.matmul(inputs,W) + b
-                #     outputs = tf.reshape(outputs,[-1,n_steps,n_classes])
-                #     return outputs
+                if self.scheduled_sampling == 'mix':
+                    acoustic = tf.concat([self.acoustic_outputs,tf.zeros_like(self.acoustic_outputs[:,0:1,:])],axis=1)
+                    acoustic = tf.transpose(acoustic,[1,0,2])
+                    # inputs = tf.placeholder(shape=(max_time, batch_size, input_depth),
+                    #                     dtype=tf.float32)
+                    acoustic_ta = tf.TensorArray(dtype=tf.float32, size=n_steps+1)
+                    acoustic_ta = acoustic_ta.unstack(acoustic)
 
 
                 def loop_fn(time, cell_output, cell_state, loop_state):
@@ -327,14 +344,25 @@ class Model:
 
                         use_real_input = tf.distributions.Bernoulli(probs=sched_samp_p,dtype=tf.bool).sample()
 
-                        next_input = tf.cond(use_real_input,
-                                lambda: inputs_ta.read(time),
-                                lambda: tf.contrib.distributions.Bernoulli(
-                                # probs=tf.nn.sigmoid(dense_layer(cell_output,W,b,1)),
-                                probs=tf.nn.sigmoid(tf.layers.dense(cell_output, n_classes,
-                                    name='output_layer',
-                                    reuse=tf.AUTO_REUSE)),
-                                dtype=tf.float32).sample())
+                        if self.scheduled_sampling == 'mix':
+                            w = self.sampl_mix_weight
+                            next_input = tf.cond(use_real_input,
+                                    lambda: inputs_ta.read(time),
+                                    lambda: tf.contrib.distributions.Bernoulli(
+                                    # probs=tf.nn.sigmoid(dense_layer(cell_output,W,b,1)),
+                                    probs=tf.nn.sigmoid(tf.layers.dense(w*acoustic_ta.read(time)+(1-w)*cell_output, n_classes,
+                                        name='output_layer',
+                                        reuse=tf.AUTO_REUSE)),
+                                    dtype=tf.float32).sample())
+                        elif self.scheduled_sampling == 'self':
+                            next_input = tf.cond(use_real_input,
+                                    lambda: inputs_ta.read(time),
+                                    lambda: tf.contrib.distributions.Bernoulli(
+                                    # probs=tf.nn.sigmoid(dense_layer(cell_output,W,b,1)),
+                                    probs=tf.nn.sigmoid(tf.layers.dense(cell_output, n_classes,
+                                        name='output_layer',
+                                        reuse=tf.AUTO_REUSE)),
+                                    dtype=tf.float32).sample())
 
                     next_loop_state = None
 
@@ -762,12 +790,14 @@ class Model:
 
         ## scheduled sampling strategy
         if self.scheduled_sampling:
-            if train_param['scheduled_sampling'] == 'linear':
+            if train_param['schedule_shape'] == 'linear':
                 schedule = np.linspace(1.0,0.0,train_param['schedule_duration'])
-            elif train_param['scheduled_sampling'] == 'sigmoid':
+            elif train_param['schedule_shape'] == 'sigmoid':
                 schedule = 1 / (1 + np.exp(np.linspace(-5.0,5.0,train_param['schedule_duration'])))
             else:
-                raise ValueError('Schedule not understood: '+train_param['scheduled_sampling'])
+                raise ValueError('Schedule not understood: '+train_param['schedule_shape'])
+            #Rescale schedule between 1 and 0.5 (instead of 1 and 0)
+            schedule = 0.5*schedule + 0.5
 
 
 
@@ -1203,6 +1233,7 @@ def make_model_param():
     model_param['use_focal_loss']=False
     model_param['pitchwise']=False
     model_param['scheduled_sampling'] = False
+    model_param['sampl_mix_weight']= None
 
     model_param['chunks']=None
     model_param['device_name']="/gpu:0"
@@ -1225,7 +1256,7 @@ def make_train_param():
     train_param['summarize']=True
     train_param['early_stop']=True
     train_param['early_stop_epochs']=15
-    train_param['scheduled_sampling'] = None
+    train_param['schedule_shape'] = None
     train_param['scheduled_duration'] = 0
 
 

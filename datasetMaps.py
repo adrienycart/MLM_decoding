@@ -73,7 +73,7 @@ class DatasetMaps:
                 dataset += data_list
         return dataset
 
-    def load_data(self,folder,timestep_type,max_len=None,note_range=[21,109],length_of_chunks=None,method='step',subsets=['valid','test']):
+    def load_data(self,folder,timestep_type,max_len=None,note_range=[21,109],length_of_chunks=None,method='avg',subsets=['valid','test']):
         self.note_range = note_range
 
         for subset in subsets:
@@ -90,37 +90,50 @@ class DatasetMaps:
     def get_len_files(self):
         return self.max_len
 
-    def get_dataset(self,subset,meter=False):
-        #Outputs an array containing all the inputs and targets (two 3D-tensor)
-        #and the list of the actual lengths of the inputs
+    def get_dataset_generator(self,subset,batch_size,len_chunk=None):
+        seq_buff = []
+        targets_buff = []
+        len_buff = []
         data_list = getattr(self,subset)
-        n_files = len(data_list)
-        len_file = data_list[0].input.shape[1]
-        n_notes = self.get_n_notes()
+        files_left = list(range(len(data_list)))
 
-        if meter:
-            inputs = np.zeros([n_files,n_notes+4,len_file])
-        else:
-            inputs = np.zeros([n_files,n_notes,len_file])
-        targets = np.zeros([n_files,n_notes,len_file])
-        lengths = np.zeros([n_files])
+        n_notes = self.note_range[1]-self.note_range[0]
+        if self.max_len is None:
+            self.set_max_len()
 
-        i=0
-        while i<n_files:
-            data = data_list[i]
-            input_data = data.input
-            target = data.target
-            if meter:
-                meter_grid = data.meter_grid
-                inputs[i,:n_notes,:]=input_data
-                inputs[i,n_notes:,:data.length]=meter_grid
+        while files_left != [] or len(seq_buff)>=batch_size:
+            if len(seq_buff)<batch_size:
+                file_index = files_left.pop()
+                data = data_list[file_index]
+
+                if len_chunk is None:
+                    roll= data.input
+                    target = data.target
+                    length = data.length
+                    seq_buff.append(roll)
+                    len_buff.append(length)
+                    targets_buff.append(target)
+                else:
+                    chunks_in,chunks_tar, chunks_len = data.cut(len_chunk,keep_padding=False,as_list=True)
+                    seq_buff.extend(chunks_in)
+                    targets_buff.extend(chunks_tar)
+                    len_buff.extend(chunks_len)
             else:
-                inputs[i] = input_data
-            targets[i] = target
-            lengths[i] = data.length
-            i += 1
-
-        return inputs, targets, lengths
+                if len_chunk is None:
+                    output_seq = np.zeros([batch_size,n_notes,self.max_len])
+                    output_tar = np.zeros([batch_size,n_notes,self.max_len])
+                    for i,(seq,tar) in enumerate(zip(seq_buff[:batch_size],targets_buff[:batch_size])):
+                        output_seq[i,:,:seq.shape[1]]=seq
+                        output_tar[i,:,:tar.shape[1]]=tar
+                    output = (output_seq,output_tar,np.array(len_buff[:batch_size]))
+                else:
+                    output_seq = np.array(seq_buff[:batch_size])
+                    output_tar = np.array(targets_buff[:batch_size])
+                    output = (output_seq,output_tar,np.array(len_buff[:batch_size]))
+                del seq_buff[:batch_size]
+                del targets_buff[:batch_size]
+                del len_buff[:batch_size]
+                yield output
 
 
     def shuffle_one(self,subset):
@@ -241,7 +254,14 @@ def safe_mkdir(dir,clean=False):
 
 
 # data = DatasetMaps()
-# data.load_data('data/outputs_default_config','event',max_len=30,note_range=[21,109])
+# data.load_data('data/outputs_default_config_split20p','quant',max_len=30,note_range=[21,109],subsets=['valid'])
+# data_gen = data.get_dataset_generator('valid',10,len_chunk = 300)
+#
+#
+# for input,target,lens in data_gen:
+#     # pass
+#     print(input.shape, target.shape)
+#     print(lens)
 
 
 #######
