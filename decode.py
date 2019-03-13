@@ -19,7 +19,7 @@ from mlm_training.model import Model, make_model_param
 
 
 
-def run_lstm_pitchwise_iterative(sess, model, states):
+def run_lstm_pitchwise_iterative(sess, model, states, uncertainty=0.0):
     """
     Run the LSTM one step, and update the given states in place.
 
@@ -33,6 +33,11 @@ def run_lstm_pitchwise_iterative(sess, model, states):
 
     states : list(state.State)
         The list containing all of the states we want to update.
+    
+    uncertainty : float
+        The uncertainty of the LSTM prior outputs. The outputs will be scaled
+        to a range of size (1 - 2*uncertainty), centered around 0.5. Specifically,
+        (0.0, 1.0) -> (0.0+uncertainty, 1.0-uncertainty). Defaults to 0.0.
     """
     samples = np.zeros((len(states), 1, model.n_notes))
     hidden_states = []
@@ -46,14 +51,14 @@ def run_lstm_pitchwise_iterative(sess, model, states):
 
     # Update all states
     for state, hidden_state, prior in zip(states, hidden_states, priors):
-        state.update_from_lstm(hidden_state, prior)
+        state.update_from_lstm(hidden_state, (1 - 2 * uncertainty) * prior + uncertainty)
 
 
 
 
 
 def decode_pitchwise(piano_roll, acoustic, model, sess, pitches, beam_size=200, weight=[[0.8], [0.2]],
-                     hash_length=10):
+                     hash_length=10, uncertainty=0.0):
     """
     Transduce the given binary piano roll prior into a binary piano roll by changing the given pitches.
 
@@ -86,6 +91,11 @@ def decode_pitchwise(piano_roll, acoustic, model, sess, pitches, beam_size=200, 
     hash_length : int
         The history length for the hashed beam. If two states do not differ in the past hash_length
         frames, only the most probable one is saved in the beam. Defaults to 10.
+
+    uncertainty : float
+        The uncertainty of the LSTM prior outputs. The outputs will be scaled
+        to a range of size (1 - 2*uncertainty), centered around 0.5. Specifically,
+        (0.0, 1.0) -> (0.0+uncertainty, 1.0-uncertainty). Defaults to 0.0.
 
     Returns
     =======
@@ -158,7 +168,8 @@ def decode_pitchwise(piano_roll, acoustic, model, sess, pitches, beam_size=200, 
 
 
 def decode_pitchwise_iterative(acoustic, model, sess, beam_size=200, weight=[[0.8], [0.2]],
-                               hash_length=10, out=None, verbose=False, num_iters=5):
+                               hash_length=10, out=None, verbose=False, num_iters=5,
+                               uncertainty=0.0):
     """
     Transduce the given acoustic piano roll prior into a binary piano roll using iterative pitchwise model.
 
@@ -195,6 +206,11 @@ def decode_pitchwise_iterative(acoustic, model, sess, beam_size=200, weight=[[0.
 
     num_iters : int
         The number of iterations to use, maximum. Defaults to 20.
+
+    uncertainty : float
+        The uncertainty of the LSTM prior outputs. The outputs will be scaled
+        to a range of size (1 - 2*uncertainty), centered around 0.5. Specifically,
+        (0.0, 1.0) -> (0.0+uncertainty, 1.0-uncertainty). Defaults to 0.0.
 
     Returns
     =======
@@ -1066,6 +1082,12 @@ if __name__ == '__main__':
     parser.add_argument("--it", help="Use iterative pitchwise processing with this number of iterations. " +
                         "Defaults to 0, which doesn't use iterative processing.", type=int, default=0)
 
+    parser.add_argument("--uncertainty", help="Add some uncertainty to the LSTM decoding outputs, when " +
+                        "used with --it. The outputs will be scaled to a range of size " +
+                        "(1 - 2*uncertainty), centered around 0.5. Specifically, " +
+                        "(0.0, 1.0) -> (0.0+uncertainty, 1.0-uncertainty). Defaults to 0.0.",
+                        type=float, default=0)
+
     args = parser.parse_args()
 
     if not (0 <= args.weight <= 1):
@@ -1123,7 +1145,8 @@ if __name__ == '__main__':
     if args.it > 0:
         prs = decode_pitchwise_iterative(data.input, model, sess, beam_size=args.beam,
                                          weight=[[args.weight], [1 - args.weight]],
-                                         hash_length=args.hash, verbose=args.verbose, num_iters=args.it)
+                                         hash_length=args.hash, verbose=args.verbose, num_iters=args.it,
+                                         uncertainty=args.uncertainty)
 
         pr = prs[-1]
 

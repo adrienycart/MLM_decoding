@@ -43,6 +43,11 @@ parser.add_argument("--gt", help="Use the gt to use the best possible weight_mod
 parser.add_argument("--pitchwise", type=int, help="use pitchwise language model. Value is the number of semitones above and below current pitch to take into account.")
 parser.add_argument("--it", help="Use iterative pitchwise processing with this number of iterations. " +
                     "Defaults to 0, which doesn't use iterative processing.", type=int, default=0)
+parser.add_argument("--uncertainty", help="Add some uncertainty to the LSTM decoding outputs, when " +
+                    "used with --it. The outputs will be scaled to a range of size " +
+                    "(1 - 2*uncertainty), centered around 0.5. Specifically, " +
+                    "(0.0, 1.0) -> (0.0+uncertainty, 1.0-uncertainty). Defaults to 0.0.",
+                    type=float, default=0)
 parser.add_argument('--n_hidden', help="Number of hidden nodes for the LSTM", type=int, default=256)
 
 args = parser.parse_args()
@@ -136,7 +141,8 @@ for fn in os.listdir(folder):
         if args.it > 0:
             prs = decode_pitchwise_iterative(data.input, model, sess, beam_size=args.beam,
                                              weight=[[args.weight], [1 - args.weight]],
-                                             hash_length=args.hash, verbose=args.verbose, num_iters=args.it)
+                                             hash_length=args.hash, verbose=args.verbose, num_iters=args.it,
+                                             uncertainty=args.uncertainty)
 
             pr = prs[-1]
 
