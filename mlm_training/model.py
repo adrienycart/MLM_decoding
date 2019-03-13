@@ -880,7 +880,7 @@ class Model:
         """
 
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
-        saver = tf.train.Saver()
+
         if model_path==None:
             folder = os.path.join("./ckpt/",save_path)
             path = None
@@ -893,9 +893,34 @@ class Model:
         else:
             path = model_path
 
-        print("Loading "+path)
+        # Get variables in graph
+        all_variables = tf.global_variables()
+        var_list = dict(zip([var.name[:-2] for var in all_variables],all_variables)) #var.name[:-2] to remove ':0' at the end of the name
+        # print("before", var_list)
+        # Get variables in checkpoint
+        saved_vars = tf.train.list_variables(path)
+        saved_vars_names = [v[0] for v in saved_vars]
+        # print(saved_vars_names)
+        # Match names (if trained without scheduled sampling, tested with, or vice versa)
+        if self.scheduled_sampling:
+            if 'W' in saved_vars_names and 'b' in saved_vars_names:
+                var_list.update({'b':var_list['rnn/output_layer/bias'],
+                                 'W':var_list['rnn/output_layer/kernel']})
+                var_list.pop('rnn/output_layer/bias')
+                var_list.pop('rnn/output_layer/kernel')
+        else:
+            if 'rnn/output_layer/bias' in saved_vars_names and 'rnn/output_layer/kernel' in saved_vars_names:
+                var_list.update({'rnn/output_layer/bias':var_list['b'],
+                                 'rnn/output_layer/kernel':var_list['W']})
+                var_list.pop('W')
+                var_list.pop('b')
+        # print("after", var_list)
+        saver = tf.train.Saver(var_list=var_list)
 
+        print("Loading "+path)
         saver.restore(sess, path)
+
+
         return sess, saver
 
     def resume_training(self,load_path,data,save_path,train_param,model_path=None,n_batch=0,n_epoch=0):
@@ -1068,22 +1093,22 @@ class Model:
         thresh = self.thresh
         batch_size_ph = self.batch_size
 
+        sched_samp_p = self.sched_samp_p
+
         #Metrics with perfect input
-        preds, cross_GT, cross_tr_GT, F_measure_GT = sess.run([pred,cross, cross_tr, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0]} )
+        preds, cross_GT, cross_tr_GT, F_measure_GT = sess.run([pred,cross, cross_tr, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0],sched_samp_p:1.0} )
 
         #Metrics with sampled input
-        sampled_frames = sample(preds)
-        data[:,1:,:]=sampled_frames[:,:-1,:]
-        cross_s, cross_tr_s, F_measure_s = sess.run([cross, cross_tr, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0]} )
+        cross_s, cross_tr_s, F_measure_s = sess.run([cross, cross_tr, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0],sched_samp_p:0.5} )
 
-        #Metrics with thresholded input
-        sampled_frames = (preds>0.5).astype(int)
-        data[:,1:,:]=sampled_frames[:,:-1,:]
-        cross_th, cross_tr_th, F_measure_th = sess.run([cross, cross_tr, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0]} )
+        # #Metrics with thresholded input
+        # sampled_frames = (preds>0.5).astype(int)
+        # data[:,1:,:]=sampled_frames[:,:-1,:]
+        # cross_th, cross_tr_th, F_measure_th = sess.run([cross, cross_tr, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0]} )
 
 
 
-        return [cross_GT, cross_tr_GT, F_measure_GT],[cross_s, cross_tr_s, F_measure_s],[cross_th, cross_tr_th, F_measure_th]
+        return [cross_GT, cross_tr_GT, F_measure_GT],[cross_s, cross_tr_s, F_measure_s],#[cross_th, cross_tr_th, F_measure_th]
 
 
 
