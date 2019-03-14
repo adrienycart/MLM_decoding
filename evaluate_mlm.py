@@ -46,7 +46,7 @@ model_param = make_model_param()
 model_param['n_hidden']=n_hidden
 model_param['learning_rate']=0
 model_param['chunks']=max_len
-model_param['scheduled_sampling'] = True
+model_param['scheduled_sampling'] = "self"
 
 
 save_path = args.save_path

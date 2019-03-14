@@ -87,7 +87,6 @@ model_param['learning_rate']=learning_rate
 model_param['chunks']=max_len
 model_param['use_focal_loss']=args.use_focal_loss
 model_param['scheduled_sampling']=args.sched_sampl
-model_param['']
 if args.pitchwise is None:
     model_param['pitchwise']=False
 else:

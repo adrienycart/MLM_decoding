@@ -583,10 +583,10 @@ def get_name_from_maps(filename):
     return name
 
 
-filename = 'data/outputs_default_config_split/test/MAPS_MUS-scn15_11_ENSTDkAm.mid'
-np.seterr(all='raise')
-data = DataMaps()
-data.make_from_file(filename,'quant',[0,30])
+# filename = 'data/outputs_default_config_split/test/MAPS_MUS-scn15_11_ENSTDkAm.mid'
+# np.seterr(all='raise')
+# data = DataMaps()
+# data.make_from_file(filename,'quant',[0,30])
 
 
 
