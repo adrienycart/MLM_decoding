@@ -28,6 +28,7 @@ parser.add_argument('-sched_sampl_load',type=str,help="path of the pretrained mo
 parser.add_argument('-sampl_mix_weight',type=float,help="mix weight when sampling from a mix of acoustic and language priors")
 parser.add_argument('-sched_shape',type=str,default="linear",help="shape of the sampling likelihood curve")
 parser.add_argument('-sched_dur',type=int,default=1000,help="duration in epochs of the schedule (if lower than epochs, sampling will always be applied after the end of schedule)")
+parser.add_argument('-sched_end_val',type=float,default=0.5,help="end value of sampling likelihood")
 parser.add_argument('-pitchwise',type=int,help='to train a pitch-wise model; value gives width of pitch window.')
 
 
@@ -67,6 +68,7 @@ train_param['summarize']=True
 train_param['early_stop_epochs']=args.early_stop_epochs
 train_param['schedule_shape']=args.sched_shape
 train_param['schedule_duration']=args.sched_dur
+train_param['schedule_end_value']=args.sched_end_val
 
 
 

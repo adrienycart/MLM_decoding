@@ -796,8 +796,9 @@ class Model:
                 schedule = 1 / (1 + np.exp(np.linspace(-5.0,5.0,train_param['schedule_duration'])))
             else:
                 raise ValueError('Schedule not understood: '+train_param['schedule_shape'])
-            #Rescale schedule between 1 and 0.5 (instead of 1 and 0)
-            schedule = 0.5*schedule + 0.5
+            #Rescale schedule between 1 and end_val (instead of 1 and 0)
+            end_val = train_param['schedule_end_value']
+            schedule = (1-end_value)*schedule + end_value
 
 
 
