@@ -824,7 +824,7 @@ class Model:
                     if i < train_param['schedule_duration']:
                         p = schedule[i]
                     else:
-                        p=0
+                        p= train_param['schedule_end_value']
 
                     feed_dict_optim = {x: batch_x, y: batch_y, seq_len: batch_lens,batch_size_ph:batch_x.shape[0],sched_samp_p:p}
                     feed_dict_valid = {x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size,sched_samp_p:train_param['schedule_end_value']}
