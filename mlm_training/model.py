@@ -827,7 +827,7 @@ class Model:
                         p=0
 
                     feed_dict_optim = {x: batch_x, y: batch_y, seq_len: batch_lens,batch_size_ph:batch_x.shape[0],sched_samp_p:p}
-                    feed_dict_valid = {x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size,sched_samp_p:0.0}
+                    feed_dict_valid = {x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size,sched_samp_p:train_param['schedule_end_value']}
                 else:
                     feed_dict_optim = {x: batch_x, y: batch_y, seq_len: batch_lens, batch_size_ph:batch_x.shape[0]}
                     feed_dict_valid = {x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size}
