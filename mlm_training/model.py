@@ -1127,10 +1127,18 @@ class Model:
         sched_samp_p = self.sched_samp_p
 
         #Metrics with perfect input
-        preds, cross_GT, cross_tr_GT, F_measure_GT = sess.run([pred,cross, cross_tr, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0],sched_samp_p:1.0} )
 
-        #Metrics with sampled input
-        cross_s, cross_tr_s, F_measure_s = sess.run([cross, cross_tr, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0],sched_samp_p:0.5} )
+        crosses = []
+        crosses_tr = []
+        F_measures = []
+        for i in np.arange(1.0,0.0,-0.1):
+            cross_GT, cross_tr_GT, F_measure_GT = sess.run([cross, cross_tr, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0],sched_samp_p:i} )
+            crosses += [cross_GT]
+            crosses_tr += [cross_tr_GT]
+            F_measures += [F_measure_GT]
+
+
+
 
         # #Metrics with thresholded input
         # sampled_frames = (preds>0.5).astype(int)
@@ -1139,7 +1147,7 @@ class Model:
 
 
 
-        return [cross_GT, cross_tr_GT, F_measure_GT],[cross_s, cross_tr_s, F_measure_s],#[cross_th, cross_tr_th, F_measure_th]
+        return crosses,crosses_tr,F_measures#[cross_th, cross_tr_th, F_measure_th]
 
 
 
