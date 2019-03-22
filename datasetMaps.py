@@ -19,7 +19,7 @@ class DatasetMaps:
         self.valid = []
 
         self.note_range = [0,128]
-        self.max_len = 0
+        self.max_len = None
         self.acoustic_model = ""
 
 
@@ -28,7 +28,7 @@ class DatasetMaps:
             if fn.endswith('.mid') and not fn.startswith('.'):
                 yield fn
 
-    def get_list_of_dataMaps(self,subfolder,timestep_type,max_len=None,note_range=[21,109],length_of_chunks=None,method='step'):
+    def get_list_of_dataMaps(self,subfolder,timestep_type,max_len=None,length_of_chunks=None,method='step'):
         dataset = []
 
 
@@ -46,16 +46,16 @@ class DatasetMaps:
             if length_of_chunks == None:
                 data = DataMaps()
                 if max_len == None:
-                    data.make_from_file(filename,timestep_type,None,note_range,method,acoustic_model=self.acoustic_model)
+                    data.make_from_file(filename,timestep_type,None,method,acoustic_model=self.acoustic_model)
                 else:
-                    data.make_from_file(filename,timestep_type,[0,max_len],note_range,method,acoustic_model=self.acoustic_model)
+                    data.make_from_file(filename,timestep_type,[0,max_len],method,acoustic_model=self.acoustic_model)
                 data.name = os.path.splitext(os.path.basename(filename))[0]
                 dataset += [data]
             else :
                 #Cut each file in chunks of 'length_of_chunks' seconds
                 #Make a new dataMaps for each chunk.
                 data_whole = DataMaps()
-                data_whole.make_from_file(filename,timestep_type,None,note_range,method,acoustic_model=self.acoustic_model)
+                data_whole.make_from_file(filename,timestep_type,None,method,acoustic_model=self.acoustic_model)
                 if max_len == None:
                     end_file = data_whole.duration
                 else :
@@ -74,13 +74,19 @@ class DatasetMaps:
                 dataset += data_list
         return dataset
 
-    def load_data(self,folder,timestep_type,max_len=None,note_range=[21,109],length_of_chunks=None,method='avg',subsets=['valid','test'],acoustic_model="kelz"):
-        self.note_range = note_range
+    def load_data(self,folder,timestep_type,max_len=None,length_of_chunks=None,method='avg',subsets=['valid','test'],acoustic_model="kelz"):
+        if acoustic_model == 'benetos':
+            self.note_range = [21,109]
+        elif acoustic_model == 'kelz':
+            self.note_range = [21,109]
+        elif acoustic_model == 'bittner':
+            self.note_range = [24,97]
+
         self.acoustic_model = acoustic_model
 
         for subset in subsets:
             subfolder = os.path.join(folder,subset)
-            data_list = self.get_list_of_dataMaps(subfolder,timestep_type,max_len,note_range,length_of_chunks,method)
+            data_list = self.get_list_of_dataMaps(subfolder,timestep_type,max_len,length_of_chunks,method)
             setattr(self,subset,data_list)
 
         print("Dataset loaded ! "+str(datetime.now()))
@@ -149,15 +155,22 @@ class DatasetMaps:
         else :
             return max([x.length for x in dataset])
 
-    def zero_pad(self):
-
+    def set_max_len(self):
         max_train = self.__max_len(self.train)
         max_valid = self.__max_len(self.valid)
         max_test = self.__max_len(self.test)
         max_len = max([max_train,max_valid,max_test])
         self.max_len = max_len
 
-        for subset in ["train","valid","test"]:
+
+    def zero_pad(self, subset='all'):
+        #Zero-padding the dataset
+        if subset == 'all':
+            max_len = get_len_files()
+            for subset in ["train","valid","test"]:
+                self.zero_pad_one(subset,max_len)
+        else:
+            max_len = self.__max_len(getattr(self, subset))
             self.zero_pad_one(subset,max_len)
 
 
@@ -256,10 +269,10 @@ def safe_mkdir(dir,clean=False):
 
 
 # data = DatasetMaps()
-# data.load_data('data/outputs_default_config_split20p','quant',max_len=30,note_range=[21,109],subsets=['valid'])
-# data_gen = data.get_dataset_generator('valid',10,len_chunk = 300)
-#
-#
+# data.load_data('data/outputs_default_config_split','quant',max_len=30,subsets=['valid'],acoustic_model="bittner")
+# data_gen = data.get_dataset_generator('valid',10)
+# #
+# #
 # for input,target,lens in data_gen:
 #     # pass
 #     print(input.shape, target.shape)
