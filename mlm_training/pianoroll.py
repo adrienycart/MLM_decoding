@@ -213,13 +213,24 @@ def get_quant_piano_roll(midi_data,fs=4,section=None):
 
 def get_event_roll(midi_data,section=None):
     steps = np.unique(midi_data.get_onsets())
-    #Round to closest 0.04 value
-    steps_round = np.around(steps.astype(np.float)*25)/25
-    #Remove duplicates
-    _,indexes = np.unique(steps_round,return_index=True)
-    steps = steps[indexes]
 
-    pr = midi_data.get_piano_roll(times=steps)
+    #Remove onsets that are within 50ms of each other (keep first one only)
+    diff = steps[1:] - steps[:-1]
+    close = diff<0.05
+    while np.any(close):
+        to_keep = np.where(np.logical_not(close))
+        steps = steps[to_keep[0]+1]
+        diff = steps[1:] - steps[:-1]
+        close = diff<0.05
+
+
+    for s1,s2 in zip(steps[:-1],steps[1:]):
+        if s2-s1 < 0.05:
+            print s1, s2, s2-s1
+            print round(s1*20)/20, round(s2*20)/20
+
+    pr = midi_data.get_piano_roll(fs=500,times=steps)
+
     pr = (pr>=7).astype(int)
 
     if not section is None:
