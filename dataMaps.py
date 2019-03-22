@@ -12,6 +12,7 @@ class DataMaps:
     """Classe representing a couple (posteriogram, ground truth)."""
 
     def __init__(self):
+        self.input_fs = None
         self.input = [] # posteriogram
         self.target = [] # transcription ground-truth
         self.corresp = [] # correspondance table: position in seconds of each timestep
@@ -25,24 +26,33 @@ class DataMaps:
         self.begin=0 # beginning of the considered section in seconds
         self.end=0 # end of the considered section in seconds
         self.timestep_type = None
+        self.acoutic_model = ""
 
-    def make_from_file(self,filename,timestep_type,section=None,note_range=[21,109],method='avg'):
-
+    def make_from_file(self,filename,timestep_type,section=None,method='avg',si_target=False,acoustic_model='benetos'):
+        self.acoustic_model = acoustic_model
+        if acoustic_model == 'benetos':
+            self.input_fs = 100
+            note_range = [21,109]
+        elif acoustic_model == 'kelz':
+            self.input_fs = 25
+            note_range = [21,109]
+        elif acoustic_model == 'bittner':
+            self.input_fs = 22050.0/256.0
+            note_range = [24,97]
         self.timestep_type = timestep_type
         self.set_name_from_maps(filename)
 
-        csv_matrix, pm_data = self.get_pm_and_csv(filename)
-
-
+        pm_data = pm.PrettyMIDI(filename)
+        input_matrix = self.get_input_matrix(filename)
 
         if timestep_type == 'quant' or timestep_type == 'event':
             self.set_corresp(pm_data,timestep_type)
             self.target = self.get_aligned_pianoroll(pm_data,section)
-            self.input = align_matrix(csv_matrix,self.corresp,section,method)
+            self.input = align_matrix(input_matrix,self.corresp,self.input_fs,section,method)
 
         elif timestep_type == 'time':
 
-            fs=25
+            fs=self.input_fs
             piano_roll = pm_data.get_piano_roll(fs)
             if not section == None :
                 #Select the relevant portion of the piano-roll and input
@@ -51,15 +61,15 @@ class DataMaps:
                 min_time_step_input = int(round(section[0]*fs))
                 max_time_step_input = int(round(section[1]*fs))
                 self.target = piano_roll[:,min_time_step_target:max_time_step_target]
-                self.input = csv_matrix[:,min_time_step_input:max_time_step_input]
+                self.input = input_matrix[:,min_time_step_input:max_time_step_input]
                 self.begin = section[0]
-                self.end = min([section[1],piano_roll.shape[1]/25.0,csv_matrix.shape[1]/25.0])
+                self.end = min([section[1],piano_roll.shape[1]/25.0,input_matrix.shape[1]/25.0])
             else:
                 #Keep the whole piano-roll
                 self.target = piano_roll
-                self.input = csv_matrix
+                self.input = input_matrix
                 self.begin = 0
-                self.end = min([piano_roll.shape[1]/25.0,csv_matrix.shape[1]/25.0])
+                self.end = min([piano_roll.shape[1]/25.0,input_matrix.shape[1]/25.0])
         else:
             raise ValueError('Timestep type not understood: '+str(timestep_type))
 
@@ -71,22 +81,38 @@ class DataMaps:
         self.crop_target(note_range)
         self.even_up_rolls()
 
-        # NOT USED CURRENTLY
-        # self.set_sigs_and_keys(pm_data)
-        # self.set_meter_grid()
         return
 
-    def get_pm_and_csv(self,filename):
+
+    def get_input_matrix(self,filename):
         #Method to get a pretty_midi object and an input matrix from a MIDI filename.
+        if self.acoustic_model == 'benetos':
+            csv_filename = filename.replace('.mid','_pianoroll.csv')
+            input_matrix = np.transpose(np.loadtxt(csv_filename,delimiter=','),[1,0])
+        elif self.acoustic_model == 'kelz':
+            csv_filename = filename.replace('.mid','.csv')
+            input_matrix = np.transpose(np.loadtxt(csv_filename),[1,0])
+        elif self.acoustic_model == 'bittner':
+            npz_filename = filename.replace('.mid','_multif0_salience.npz')
+            matrix = np.load(npz_filename)['salience']
+
+            N = matrix.shape[1]
+            n_freqs = matrix.shape[0]
+
+            freqs =  32.7*np.power(2,np.arange(0,n_freqs)/60.0)
+            mid_numbers = pm.hz_to_note_number(freqs)
+            mid_numbers = np.round(mid_numbers).astype(int)
+
+            max_mid = max(mid_numbers)
+            min_mid = min(mid_numbers)
+
+            input_matrix = np.zeros([max_mid+1-min_mid,N])
+            for i in range(min_mid,max_mid+1):
+                input_matrix[i-min_mid,:] = np.mean(matrix[mid_numbers==i],axis=0)
 
 
-        csv_filename = filename.replace('.mid','.csv')
 
-        csv_filename = filename.replace('.mid','.csv')
-        csv_matrix = np.transpose(np.loadtxt(csv_filename),[1,0])
-        midi_data = pm.PrettyMIDI(filename)
-
-        return csv_matrix,midi_data
+        return input_matrix
 
 
 
@@ -141,14 +167,17 @@ class DataMaps:
             tick_steps = np.round(note_steps*PPQ).astype(int)
             corresp = np.zeros_like(tick_steps,dtype=float)
             for i,tick in enumerate(tick_steps):
-                corresp[i]=pm_data.tick_to_time(tick)
+                corresp[i]=pm_data.tick_to_time(int(tick))
         elif timestep_type == 'event':
             corresp = np.unique(pm_data.get_onsets())
-            #Round to closest 0.04 value
-            corresp_round = np.around(corresp.astype(np.float)*25)/25
-            #Remove duplicates
-            _,indexes = np.unique(corresp_round,return_index=True)
-            corresp = corresp[indexes]
+            #Remove onsets that are within 40ms of each other (keep first one only)
+            diff = corresp[1:] - corresp[:-1]
+            close = diff<0.04
+            while np.any(close):
+                to_keep = np.where(np.logical_not(close))
+                corresp = corresp[to_keep[0]+1]
+                diff = corresp[1:] - corresp[:-1]
+                close = diff<0.04
         else:
             raise  ValueError('Timestep type not understood: '+str(timestep_type))
 
@@ -443,14 +472,13 @@ def get_closest(e,l):
         return [index1, val1],[index2, val2]
 
 
-def align_matrix(csv_matrix,corresp,section=None,method='avg'):
+def align_matrix(input_matrix,corresp,input_fs,section=None,method='avg'):
     #Makes a quantised input
     #The original input has to be downsampled: the method argument
     #specifies the downsampling method.
 
-    n_notes = csv_matrix.shape[0]
-
-    end_sec = min(csv_matrix.shape[1]*0.04,corresp[-1])
+    n_notes = input_matrix.shape[0]
+    end_sec = min(input_matrix.shape[1]/float(input_fs),corresp[-1])
     (n_steps,_),_ = get_closest(end_sec,corresp)
 
     aligned_input = np.zeros([n_notes,n_steps])
@@ -498,29 +526,30 @@ def align_matrix(csv_matrix,corresp,section=None,method='avg'):
             value = (value>0.5).astype(int)
 
 
+
         aligned_input[:,i]=value
 
     for i in range(aligned_input.shape[1]-1):
         begin = corresp[i]
         end = corresp[i+1]
-        begin_index = int(round(begin*25)) #25 is the sampling frequency of the input
-        end_index = max(int(round(end*25)),int(round(begin*25))+1) #We want to select at least 1 frame of the input
-        sub_input = csv_matrix[:,begin_index:end_index]
+        begin_index = int(round(begin*input_fs)) #input_fs is the sampling frequency of the input
+        end_index = max(int(round(end*input_fs)),int(round(begin*input_fs))+1) #We want to select at least 1 frame of the input
+        sub_input = input_matrix[:,begin_index:end_index]
 
         if sub_input.shape[1]==0:
             #Used for debugging
             print("error making align input")
             print(begin, end,end-begin)
             print(begin_index, end_index)
-            print(begin*25,end*25)
+            print(begin*input_fs,end*input_fs)
             print(sub_input.shape)
-            print(csv_matrix.shape)
+            print(input_matrix.shape)
 
         fill_value(sub_input,i)
 
     last_begin = corresp[-1]
-    last_begin_index = int(round(last_begin*25))
-    last_sub_input = csv_matrix[:,last_begin_index:]
+    last_begin_index = int(round(last_begin*input_fs))
+    last_sub_input = input_matrix[:,last_begin_index:]
 
     #Prevents some warnings when the corresp file is not perfect
     if not last_sub_input.shape[1]==0:
@@ -538,11 +567,11 @@ def align_matrix(csv_matrix,corresp,section=None,method='avg'):
 
     return aligned_input
 
-def convert_note_to_time(pianoroll,corresp,max_len=None):
+def convert_note_to_time(pianoroll,corresp,input_fs,max_len=None):
     #Converts a pianoroll from note-based to time-based time steps,
     #using the corresp table.
 
-    fs=25 #Always convert to 40ms timesteps
+    fs=input_fs
 
     #Set length of resulting piano-roll
     if max_len==None:

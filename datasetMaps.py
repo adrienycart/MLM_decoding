@@ -20,6 +20,7 @@ class DatasetMaps:
 
         self.note_range = [0,128]
         self.max_len = 0
+        self.acoustic_model = ""
 
 
     def walkdir(self,folder):
@@ -45,16 +46,16 @@ class DatasetMaps:
             if length_of_chunks == None:
                 data = DataMaps()
                 if max_len == None:
-                    data.make_from_file(filename,timestep_type,None,note_range,method)
+                    data.make_from_file(filename,timestep_type,None,note_range,method,acoustic_model=self.acoustic_model)
                 else:
-                    data.make_from_file(filename,timestep_type,[0,max_len],note_range,method)
+                    data.make_from_file(filename,timestep_type,[0,max_len],note_range,method,acoustic_model=self.acoustic_model)
                 data.name = os.path.splitext(os.path.basename(filename))[0]
                 dataset += [data]
             else :
                 #Cut each file in chunks of 'length_of_chunks' seconds
                 #Make a new dataMaps for each chunk.
                 data_whole = DataMaps()
-                data_whole.make_from_file(filename,timestep_type,None,note_range,method)
+                data_whole.make_from_file(filename,timestep_type,None,note_range,method,acoustic_model=self.acoustic_model)
                 if max_len == None:
                     end_file = data_whole.duration
                 else :
@@ -73,8 +74,9 @@ class DatasetMaps:
                 dataset += data_list
         return dataset
 
-    def load_data(self,folder,timestep_type,max_len=None,note_range=[21,109],length_of_chunks=None,method='avg',subsets=['valid','test']):
+    def load_data(self,folder,timestep_type,max_len=None,note_range=[21,109],length_of_chunks=None,method='avg',subsets=['valid','test'],acoustic_model="kelz"):
         self.note_range = note_range
+        self.acoustic_model = acoustic_model
 
         for subset in subsets:
             subfolder = os.path.join(folder,subset)
