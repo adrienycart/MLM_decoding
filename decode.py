@@ -51,7 +51,7 @@ def run_lstm_pitchwise_iterative(sess, model, states, uncertainty=0.0):
 
     # Update all states
     for state, hidden_state, prior in zip(states, hidden_states, priors):
-        state.update_from_lstm(hidden_state, (1 - 2 * uncertainty) * prior + uncertainty)
+        state.update_from_lstm(hidden_state, min(1-uncertainty, max(0+uncertainty, prior)))
 
 
 
@@ -119,7 +119,8 @@ def decode_pitchwise(piano_roll, acoustic, model, sess, pitches, beam_size=200, 
     for frame_num, frame in enumerate(acoustic):
         # Run the LSTM!
         if frame_num != 0:
-            run_lstm_pitchwise_iterative(sess, model, [s for beam in beams for s in beam])
+            run_lstm_pitchwise_iterative(sess, model, [s for beam in beams for s in beam],
+                                         uncertainty=uncertainty)
 
         # Here, the beams contain a list of states, with sample histories, priors, and hidden_states,
         # but needs to be updated with weights and combined_priors when sampling.
@@ -239,7 +240,7 @@ def decode_pitchwise_iterative(acoustic, model, sess, beam_size=200, weight=[[0.
             pitches = list(range(unlocked_indices, 88, window+1))
 
             pr = decode_pitchwise(pr, acoustic, model, sess, pitches, beam_size=beam_size, weight=weight,
-                                  hash_length=hash_length)
+                                  hash_length=hash_length, uncertainty=uncertainty)
 
         diff = int(np.sum(np.abs(previous - pr)))
         print(f"Diff = {diff}")
@@ -911,7 +912,7 @@ def get_features(acoustic, frame_num, priors):
 
     # Flux
     if frame_num != 0:
-        features[:, 6] = frame - acoustic[frame_num, :]
+        features[:, 6] = frame - acoustic[frame_num-1, :]
         features[:, 7] = language - priors[:, -2]
     else:
         features[:, 6] = frame
@@ -1108,7 +1109,7 @@ if __name__ == '__main__':
 
     # Load data
     data = dataMaps.DataMaps()
-    data.make_from_file(args.MIDI, args.step, section=section)
+    data.make_from_file(args.MIDI, args.step, section=section, acoustic_model='kelz')
 
     # Load model
     n_hidden = args.hidden

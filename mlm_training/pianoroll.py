@@ -226,8 +226,8 @@ def get_event_roll(midi_data,section=None):
 
     for s1,s2 in zip(steps[:-1],steps[1:]):
         if s2-s1 < 0.05:
-            print s1, s2, s2-s1
-            print round(s1*20)/20, round(s2*20)/20
+            print(s1, s2, s2-s1)
+            print(round(s1*20)/20, round(s2*20)/20)
 
     pr = midi_data.get_piano_roll(fs=500,times=steps)
 

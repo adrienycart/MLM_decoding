@@ -167,7 +167,7 @@ def get_num_features(size, history, ac_pitch_window_size, la_pitch_window_size):
 
 
 def make_model(history, ac_pitch_window_size, la_pitch_window_size, num_features, ac_num_pitch_convs=5,
-               ac_num_history_convs=10, la_num_convs=5):
+               ac_num_history_convs=10, la_num_convs=20):
     """
     Create and return a new keras model.
 
@@ -209,11 +209,11 @@ def make_model(history, ac_pitch_window_size, la_pitch_window_size, num_features
     acoustic = keras.layers.Conv2D(ac_num_history_convs, (ac_num_pitch_convs, min(history, 5)))(acoustic)
     acoustic = keras.layers.Flatten()(acoustic)
 
-    # Language model history - series of 2D convolutions
+#     Language model history - series of 2D convolutions
     language = keras.layers.Reshape((la_pitch_window_size, history, 1),
                                     input_shape=(la_pitch_window_size * history,))(language_in)
     language = keras.layers.Conv2D(la_num_convs, (3, 3), strides=1)(language)
-    language = keras.layers.Conv2D(la_num_convs, (3, 3), strides=2)(language)
+#     language = keras.layers.Conv2D(la_num_convs, (3, 3), strides=2)(language)
     language = keras.layers.Flatten()(language)
 
     # Dense layers
@@ -225,6 +225,9 @@ def make_model(history, ac_pitch_window_size, la_pitch_window_size, num_features
     dense = keras.layers.Dense(20, activation='relu')(dense)
     dense = keras.layers.Dropout(0.2)(dense)
 
+    dense = keras.layers.Dense(20, activation='relu')(dense)
+    dense = keras.layers.Dropout(0.2)(dense)
+    
     dense = keras.layers.Dense(20, activation='relu')(dense)
     dense = keras.layers.Dropout(0.2)(dense)
 

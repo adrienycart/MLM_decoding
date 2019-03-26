@@ -81,109 +81,75 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
     diffs : np.array
         The differences between the language and acoustic model priors for each data point.
     """
-    if union:
-        branch_factor = int(branch_factor / 2)
+    weights_all = None
+    priors_all = None
+
+    beam = Beam()
+    beam.add_initial_state(model, sess)
+
+    acoustic = np.transpose(acoustic)
     
     x = np.zeros((0, 0))
     y = np.zeros(0)
     diffs = np.zeros(0)
     
-    beam = Beam()
-    beam.add_initial_state(model, sess)
-    
     gt = np.transpose(gt)
-    ranks = []
-    
-    acoustic = np.transpose(acoustic)
-    
-    for frame_num, frame in enumerate(acoustic):
-        if frame_num % 20 == 0 and verbose:
+
+    for frame_num, (gt_frame, frame) in enumerate(zip(gt, acoustic)):
+        if verbose and frame_num % 20 == 0:
             print(str(frame_num) + " / " + str(acoustic.shape[0]))
-        gt_frame = gt[frame_num, :]
-        
-        states = []
-        samples = []
-        weights = []
-        priors = []
-        
-        # Used for union sampling
-        unique_samples = []
-        
+            
+        # Run the LSTM!
+        if frame_num != 0:
+            decode.run_lstm(sess, model, beam)
+
+        # Here, beam contains a list of states, with sample histories, priors, and LSTM hidden_states,
+        # but needs to be updated with weights and combined_priors when sampling.
+            
         # Get data
         for state in beam:
             pitches = np.argwhere(1 - np.isclose(np.squeeze(state.prior), np.squeeze(frame),
                                                  rtol=0.0, atol=min_diff))[:,0] if min_diff > 0 else np.arange(88)
+            
             if len(pitches) > 0:
                 if len(x) > 0:
-                    x = np.vstack((x, decode.create_weight_x(state, acoustic, frame_num, history, pitches=pitches,
-                                                             features=features)))
+                    x = np.vstack((x, decode.create_weight_x_sk(state, acoustic, frame_num, history, pitches=pitches,
+                                                                features=features)))
                 else:
-                    x = decode.create_weight_x(state, acoustic, frame_num, history, pitches=pitches, features=features)
+                    x = decode.create_weight_x_sk(state, acoustic, frame_num, history, pitches=pitches, features=features)
                 y = np.append(y, gt_frame[pitches])
                 diffs = np.append(diffs, np.abs(np.squeeze(frame)[pitches] - np.squeeze(state.prior)[pitches]))
-        
-        # Gather all computations to perform them batched
-        # Acoustic sampling is done separately because the acoustic samples will be identical for every state.
+
+        new_beam = Beam()
+
+        # Here we sample from each state in the beam
         if gt_only:
-            states = [beam.get_top_state()]
-            samples = [gt_frame]
-            weights = [[[1.0], [0.0]]]
-            priors = [np.squeeze(states[0].prior)]
+            new_beam.add(state.transition(gt_frame, 0.0))
             
         else:
-            if union or weight[0][0] == 1.0:
-                # If sampling method is acoustic (or union), we generate the same samples for every current hypothesis
-                for _, sample in itertools.islice(decode.enumerate_samples(frame, beam.beam[0].prior,
-                                                  weight=[[1.0], [0.0]]), branch_factor):
+            for i, state in enumerate(beam):
+                weight_this = weights_all[:, i * 88 : (i + 1) * 88] if weights_all is not None else weight
+
+                if priors_all is not None:
+                    prior = np.squeeze(priors_all[i * 88 : (i + 1) * 88])
+                else:
+                    prior = np.squeeze(weight_this[0] * frame + weight_this[1] * state.prior)
+
+                # Update state
+                state.update_from_weight_model(weight_this[0], prior)
+
+                for log_prob, sample in itertools.islice(decode.enumerate_samples(prior), branch_factor):
+
+                    # Binarize the sample (return from enumerate_samples is an array of indexes)
                     binary_sample = np.zeros(88)
                     binary_sample[sample] = 1
 
-                    # This is used to check for overlaps in union case
-                    if union:
-                        unique_samples.append(list(binary_sample))
+                    # Transition on sample
+                    new_beam.add(state.transition(binary_sample, log_prob))
 
-                    for i, state in enumerate(beam):
-                        weight_this = weight
-                        states.append(state)
-                        priors.append(np.squeeze(state.prior))
-                        weights.append(weight_this)
-                        samples.append(binary_sample)
+        new_beam.cut_to_size(beam_size, min(hash_length, frame_num + 1))
+        beam = new_beam
 
-            if union or weight[0][0] != 1.0:
-                for i, state in enumerate(beam):
-                    sample_weight = [[0.0], [1.0]] if union else weight
-                    for _, sample in itertools.islice(decode.enumerate_samples(frame, state.prior,
-                                                      weight=sample_weight), branch_factor):
-
-                        binary_sample = np.zeros(88)
-                        binary_sample[sample] = 1
-
-                        # Overlap with acoustic sample in union case. Skip this sample.
-                        if not (union and list(binary_sample) in unique_samples):
-                            weight_this = weight
-
-                            priors.append(np.squeeze(state.prior))
-                            states.append(state)
-                            samples.append(binary_sample)
-                            weights.append(weight_this)
-
-        log_probs, combined_priors = decode.get_log_prob(np.array(samples), np.array(frame),
-                                                         np.array(priors), np.array(weights))
-
-        np_samples = np.zeros((len(samples), 1, 88))
-        for i, sample in enumerate(samples):
-            np_samples[i, 0, :] = sample
-
-        hidden_states, priors = model.run_one_step([s.hidden_state for s in states], np_samples, sess)
-
-        beam = Beam()
-        for hidden_state, prior, log_prob, state, sample, w, combined_prior in zip(hidden_states, priors,
-                                                                                   log_probs, states, samples,
-                                                                                   weights, combined_priors):
-            beam.add(state.transition(sample, log_prob, hidden_state, prior, w, combined_prior))
-
-        beam.cut_to_size(beam_size, min(hash_length, frame_num + 1))
-        
     return x, y, diffs
 
 
@@ -208,7 +174,6 @@ if __name__ == '__main__':
     parser.add_argument("-b", "--beam", help="The beam size. Defaults to 100.", type=int, default=100)
     parser.add_argument("-k", "--branch", help="The branching factor. Defaults to 20.", type=int, default=20)
     
-    parser.add_argument("-u", "--union", help="Use the union sampling method.", action="store_true")
     parser.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
                         "Defaults to 0.5", type=float, default=0.5)
     
@@ -256,11 +221,11 @@ if __name__ == '__main__':
     # Load data
     if args.MIDI.endswith(".mid"):
         data = dataMaps.DataMaps()
-        data.make_from_file(args.MIDI, args.step, section=section)
+        data.make_from_file(args.MIDI, args.step, section=section, acoustic_model='kelz')
     
         # Decode
         X, Y, D = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                               union=args.union, weight=[args.weight, 1 - args.weight], hash_length=args.hash,
+                               weight=[args.weight, 1 - args.weight], hash_length=args.hash,
                                gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
                                verbose=args.verbose)
     else:
@@ -272,11 +237,11 @@ if __name__ == '__main__':
             if args.verbose:
                 print(file)
             data = dataMaps.DataMaps()
-            data.make_from_file(file, args.step, section=section)
+            data.make_from_file(file, args.step, section=section, acoustic_model='kelz')
 
             # Decode
             x, y, d = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                                   union=args.union, weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
+                                   weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
                                    gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
                                    verbose=args.verbose)
             

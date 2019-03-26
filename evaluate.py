@@ -135,7 +135,7 @@ for fn in os.listdir(folder):
         sys.stdout.flush()
 
         data = DataMaps()
-        data.make_from_file(filename,args.step,section)
+        data.make_from_file(filename,args.step,section, acoustic_model='kelz')
 
         # Decode
         if args.it > 0:

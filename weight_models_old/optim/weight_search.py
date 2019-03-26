@@ -35,7 +35,9 @@ def load_data():
     except:
         # Maybe we won't use it?
         print("Warning: gt data not opened")
-    with gzip.open("weight_models_new/data/beam." + step['step'] + ".pkl.gz", "rb") as file:
+#     with gzip.open("weight_models_new/data/beam." + step['step'] + ".pkl.gz", "rb") as file:
+#         data_dict['beam'] = pickle.load(file)
+    with gzip.open("weight_models_old/data/sched/beam." + step['step'] + ".pkl.gz", "rb") as file:
         data_dict['beam'] = pickle.load(file)
     
 model_dict = {'model' : None,
@@ -51,7 +53,7 @@ def load_model():
     # Build model object
     model_dict['model'] = Model(model_param)
     if step['step'] == "quant":
-        model_path = "./lstm-20/quant_0.001/best_model.ckpt-758"
+        model_path = "./lstm-sched/quant/best_model.ckpt-1194"
     elif step['step'] == "event":
         model_path = "./lstm-20/event_0.001/best_model.ckpt-394"
     elif step['step'] == "time":
@@ -220,7 +222,7 @@ def weight_search(params, num=0, verbose=False):
         frames = np.vstack((frames, [P_f, R_f, F_f]))
         notes = np.vstack((notes, [P_n, R_n, F_n]))
         
-        if F_n < 0.25:
+        if F_n < 0.05:
             print("Early stopping, F-measure too low.")
             sys.stdout.flush()
             return 0.0
