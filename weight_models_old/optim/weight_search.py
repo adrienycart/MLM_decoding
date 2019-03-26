@@ -197,7 +197,7 @@ def weight_search(params, num=0, verbose=False):
         sys.stdout.flush()
         
         data = DataMaps()
-        data.make_from_file(filename,step['step'],section)
+        data.make_from_file(filename,step['step'],section,acoustic_model="kelz")
 
         # Decode
         pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=5,
@@ -206,10 +206,10 @@ def weight_search(params, num=0, verbose=False):
                             verbose=verbose, weight_model_dict=most_recent_model)
 
         if step['step'] != "time":
-            pr = convert_note_to_time(pr,data.corresp,max_len=max_len)
+            pr = convert_note_to_time(pr,data.corresp,data.input_fs,max_len=max_len)
 
         data = DataMaps()
-        data.make_from_file(filename, "time", section=section)
+        data.make_from_file(filename, "time", section=section, acoustic_model="kelz")
         target = data.target
 
         #Evaluate

@@ -165,7 +165,7 @@ for fn in os.listdir(folder):
                 np.savetxt(os.path.join(args.save,fn.replace('.mid','_priors.csv')), priors)
 
         if args.step in ['quant','event']:
-            pr = convert_note_to_time(pr,data.corresp,max_len=max_len)
+            pr = convert_note_to_time(pr,data.corresp,data.input_fs,max_len=max_len)
 
         data = DataMaps()
         data.make_from_file(filename, "time", section=section)

@@ -1155,7 +1155,7 @@ if __name__ == '__main__':
         if args.output is not None:
             np.save(os.path.join(args.output, "prs"), prs)
         if args.step in ['quant','event']:
-            pr = dataMaps.convert_note_to_time(pr, data.corresp, max_len=max_len)
+            pr = dataMaps.convert_note_to_time(pr, data.corresp, data.input_fs, max_len=max_len)
 
     else:
         pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,

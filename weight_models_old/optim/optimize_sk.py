@@ -18,6 +18,7 @@ if __name__ == "__main__":
     parser.add_argument("--kappa", help="The kappa to use in the optimization. Defaults to 50.", type=float,
                         default=50)
     parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
+    parser.add_argument("--prior", help="Train for prior, rather than weight (default).", action="store_true")
     args = parser.parse_args()
     
     print("Running for " + str(args.iters) + " iterations.")
@@ -40,7 +41,7 @@ if __name__ == "__main__":
                   (0.1, 0.8), # min_diff
                   (5, 50) if args.step == "time" else (3, 10), # history
                   (1, 4), # num_layers
-                  [True], # is_weight
+                  [not args.prior], # is_weight
                   [True, False], # features
                   [0], # history pitch context
                   [0], # prior context
