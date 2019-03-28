@@ -142,7 +142,7 @@ class DatasetMaps:
 
                 if self.rand_transp:
                     transp = np.random.randint(-3,3)
-                    piano_roll = piano_roll.transpose(transp)
+                    data = data.transpose(transp)
 
                 if len_chunk is None:
                     roll= data.input
@@ -298,17 +298,17 @@ def safe_mkdir(dir,clean=False):
                 os.rename(full_path,os.path.join(old_path,fn))
 
 
-# data = DatasetMaps()
-# data.load_data('data/outputs_default_config_split','quant',max_len=30,subsets=['valid'],acoustic_model="bittner")
-# inputs, targets, lens =data.get_dataset_chunks_no_pad('valid',100)
+data = DatasetMaps(rand_transp=True)
+data.load_data('data/outputs_default_config_split','quant',max_len=30,subsets=['valid'],acoustic_model="bittner")
+inputs, targets, lens =data.get_dataset_chunks_no_pad('valid',100)
 #
 # print(inputs.shape, targets.shape, lens.shape)
-# data_gen = data.get_dataset_generator('valid',10)
+data_gen = data.get_dataset_generator('valid',10)
 # # #
 # # #
-# for inputs,target,lens in data_gen:
+for inputs,target,lens in data_gen:
 #     # pass
-#     print(inputs.shape, target.shape)
+    print(inputs.shape, target.shape)
 #
 #     inputs_1 = inputs[target==1]
 #
