@@ -342,6 +342,21 @@ class DataMaps:
             self.note_range = note_range
         return
 
+    def transpose(self,diff):
+        #Returns a copy of self, transposed of diff semitones
+        #diff can be positive or negative
+        data_trans = copy.deepcopy(self)
+        input_data = self.input
+        target_data = self.target
+        if diff<0:
+            data_trans.input = np.append(input_data[-diff:,:],np.zeros([-diff,input_data.shape[1]]),0)
+            data_trans.target = np.append(target_data[-diff:,:],np.zeros([-diff,target_data.shape[1]]),0)
+        elif diff>0:
+            data_trans.input = np.append(np.zeros([diff,input_data.shape[1]]),input_data[:-diff,:],0)
+            data_trans.target = np.append(np.zeros([diff,target_data.shape[1]]),target_data[:-diff,:],0)
+        #if diff == 0 : do nothing
+        return data_trans
+
     def zero_pad(self,data,length):
         #Makes the piano-roll of given length
         #Cuts if longer, zero-pads if shorter

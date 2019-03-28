@@ -13,7 +13,7 @@ from dataMaps import DataMaps
 class DatasetMaps:
     """Classe representing the dataset."""
 
-    def __init__(self):
+    def __init__(self,rand_transp=False):
         self.train = []
         self.test = []
         self.valid = []
@@ -21,6 +21,7 @@ class DatasetMaps:
         self.note_range = [0,128]
         self.max_len = None
         self.acoustic_model = ""
+        self.rand_transp=rand_transp
 
 
     def walkdir(self,folder):
@@ -138,6 +139,10 @@ class DatasetMaps:
             if len(seq_buff)<batch_size:
                 file_index = files_left.pop()
                 data = data_list[file_index]
+
+                if self.rand_transp:
+                    transp = np.random.randint(-3,3)
+                    piano_roll = piano_roll.transpose(transp)
 
                 if len_chunk is None:
                     roll= data.input

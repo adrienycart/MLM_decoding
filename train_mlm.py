@@ -75,10 +75,9 @@ train_param['schedule_end_value']=args.sched_end_val
 print("Computation start : "+str(datetime.now()))
 
 if args.sched_sampl == 'mix':
-    data= DatasetMaps()
+    data= DatasetMaps(rand_transp=True)
     data.load_data(args.data_path,timestep_type=timestep_type,subsets=['valid'],acoustic_model='bittner')
 
-    data.train = data.valid
 
 else:
     data = Dataset(rand_transp=True)
