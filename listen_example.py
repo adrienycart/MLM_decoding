@@ -40,11 +40,11 @@ def create_midi_file(gt_midi, model_output_dir, midi_output_dir, filename, step=
         The number of seconds of each file to convert. Defaults to 30.
     """
     data = DataMaps()
-    data.make_from_file(os.path.join(gt_midi, filename), step, [0, max_len])
+    data.make_from_file(os.path.join(gt_midi, filename), step, [0, max_len], acoustic_model="kelz")
 
     csv_path = os.path.join(model_output_dir, filename.replace('.mid', '_pr.csv'))
     roll = np.loadtxt(csv_path)
-    roll_time = convert_note_to_time(roll, data.corresp, max_len=max_len)
+    roll_time = convert_note_to_time(roll, data.corresp, data.input_fs, max_len=max_len)
     midi_data = make_midi_from_roll(roll_time, 25)
 
     output_filename = os.path.join(midi_output_dir, get_name_from_maps(filename) + '_' + filename[-6:-4])
