@@ -99,6 +99,30 @@ class DatasetMaps:
     def get_len_files(self):
         return self.max_len
 
+
+    def get_dataset_chunks_no_pad(self,subset,len_chunk):
+        #Outputs an array containing all the pieces cut in chunks (3D-tensor)
+        #and a list for the lengths
+        data_list = getattr(self,subset)
+        n_files = len(data_list)
+        n_notes = self.get_n_notes()
+
+        inputs = []
+        targets = []
+        lengths = []
+
+        i = 0
+        while i<n_files:
+            data = data_list[i]
+
+            input_chunks,target_chunks, chunks_len = data.cut(len_chunk,keep_padding=False,as_list=True)
+            inputs += input_chunks
+            targets += target_chunks
+            lengths += chunks_len
+            i += 1
+
+        return np.asarray(inputs), np.asarray(targets),np.asarray(lengths)
+
     def get_dataset_generator(self,subset,batch_size,len_chunk=None):
         seq_buff = []
         targets_buff = []
@@ -271,13 +295,19 @@ def safe_mkdir(dir,clean=False):
 
 # data = DatasetMaps()
 # data.load_data('data/outputs_default_config_split','quant',max_len=30,subsets=['valid'],acoustic_model="bittner")
+# inputs, targets, lens =data.get_dataset_chunks_no_pad('valid',100)
+#
+# print(inputs.shape, targets.shape, lens.shape)
 # data_gen = data.get_dataset_generator('valid',10)
-# #
-# #
-# for input,target,lens in data_gen:
+# # #
+# # #
+# for inputs,target,lens in data_gen:
 #     # pass
-#     print(input.shape, target.shape)
-#     print(lens)
+#     print(inputs.shape, target.shape)
+#
+#     inputs_1 = inputs[target==1]
+#
+#     print(np.max(inputs_1),np.mean(inputs_1),np.std(inputs_1))
 
 
 #######

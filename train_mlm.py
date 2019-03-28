@@ -60,7 +60,7 @@ learning_rate = args.lr
 
 train_param = make_train_param()
 train_param['epochs']=args.epochs
-train_param['batch_size']=5
+train_param['batch_size']=10
 train_param['display_per_epoch']=None
 train_param['save_step']=1
 train_param['max_to_keep']=1
@@ -76,10 +76,13 @@ print("Computation start : "+str(datetime.now()))
 
 if args.sched_sampl == 'mix':
     data= DatasetMaps()
-    data.load_data(args.data_path,timestep_type=timestep_type,note_range=note_range,subsets=['train','valid'])
+    data.load_data(args.data_path,timestep_type=timestep_type,subsets=['valid'],acoustic_model='bittner')
+
+    data.train = data.valid
+
 else:
     data = Dataset(rand_transp=True)
-    data.load_data(args.data_path,timestep_type=timestep_type,note_range=note_range)
+    data.load_data(args.data_path,timestep_type=timestep_type)
 # data.transpose_all()
 
 
@@ -89,6 +92,7 @@ model_param['learning_rate']=learning_rate
 model_param['chunks']=max_len
 model_param['use_focal_loss']=args.use_focal_loss
 model_param['scheduled_sampling']=args.sched_sampl
+model_param['sampl_mix_weight'] = args.sampl_mix_weight
 if args.pitchwise is None:
     model_param['pitchwise']=False
 else:

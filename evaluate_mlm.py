@@ -58,17 +58,33 @@ model.print_params()
 dataset, seq_lens = data.get_dataset_chunks_no_pad('test',max_len)
 
 # result_GT,result_s, result_th = model.compute_eval_metrics_pred(dataset,seq_lens,0.5,save_path)
-crosses,crosses_tr,F_measures = model.compute_eval_metrics_pred(dataset,seq_lens,0.5,save_path)
-crosses = [crosses]
-crosses_tr = [crosses_tr]
-F_measures = [F_measures]
+crosses_list = []
+crosses_tr_list = []
+F_measures_list = []
+sess,_ = model.load(save_path)
+for i in range(10):
+    crosses,crosses_tr,F_measures = model.compute_eval_metrics_pred(dataset,seq_lens,0.5,None,sess=sess)
+    crosses_list += [crosses]
+    crosses_tr_list += [crosses_tr]
+    F_measures_list += [F_measures]
+crosses = [np.mean(crosses_list,axis=0)]
+crosses_tr = [np.mean(crosses_tr_list,axis=0)]
+F_measures = [np.mean(F_measures_list,axis=0)]
 model_names = [os.path.basename(save_path)]
 if args.compare is not None:
     for save_path_compare in args.compare:
-        crosses_comp,crosses_tr_comp,F_measures_comp = model.compute_eval_metrics_pred(dataset,seq_lens,0.5,save_path_compare)
-        crosses += [crosses_comp]
-        crosses_tr += [crosses_tr_comp]
-        F_measures += [F_measures_comp]
+        crosses_list = []
+        crosses_tr_list = []
+        F_measures_list = []
+        sess,_ = model.load(save_path_compare)
+        for i in range(10):
+            crosses_comp,crosses_tr_comp,F_measures_comp = model.compute_eval_metrics_pred(dataset,seq_lens,0.5,None,sess=sess)
+            crosses_list += [crosses_comp]
+            crosses_tr_list += [crosses_tr_comp]
+            F_measures_list += [F_measures_comp]
+        crosses += [np.mean(crosses_list,axis=0)]
+        crosses_tr += [np.mean(crosses_tr_list,axis=0)]
+        F_measures += [np.mean(F_measures_list,axis=0)]
         model_names += [os.path.basename(save_path_compare)]
 
 

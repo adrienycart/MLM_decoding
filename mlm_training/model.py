@@ -325,6 +325,7 @@ class Model:
                 sched_samp_p = self.sched_samp_p
 
                 if self.scheduled_sampling == 'mix':
+
                     acoustic = tf.concat([self.acoustic_outputs,tf.zeros_like(self.acoustic_outputs[:,0:1,:])],axis=1)
                     acoustic = tf.transpose(acoustic,[1,0,2])
                     # inputs = tf.placeholder(shape=(max_time, batch_size, input_depth),
@@ -346,13 +347,14 @@ class Model:
 
                         if self.scheduled_sampling == 'mix':
                             w = self.sampl_mix_weight
+                            prev_probs = tf.nn.sigmoid(tf.layers.dense(cell_output, n_classes,
+                                name='output_layer',
+                                reuse=tf.AUTO_REUSE))
                             next_input = tf.cond(use_real_input,
                                     lambda: inputs_ta.read(time),
                                     lambda: tf.contrib.distributions.Bernoulli(
                                     # probs=tf.nn.sigmoid(dense_layer(cell_output,W,b,1)),
-                                    probs=tf.nn.sigmoid(tf.layers.dense(w*acoustic_ta.read(time)+(1-w)*cell_output, n_classes,
-                                        name='output_layer',
-                                        reuse=tf.AUTO_REUSE)),
+                                    probs=w*acoustic_ta.read(time)+(1-w)*prev_probs,
                                     dtype=tf.float32).sample())
                         elif self.scheduled_sampling == 'self':
                             next_input = tf.cond(use_real_input,
@@ -623,12 +625,14 @@ class Model:
         seq_len = self.seq_lens
         batch_size_ph = self.batch_size
 
-        if y in feed_dict:
-            dataset = feed_dict[x]
-            target = feed_dict[y]
-            len_list = feed_dict[seq_len]
-        else:
-            dataset = feed_dict[x]
+
+        dataset = feed_dict[x]
+        target = feed_dict[y]
+        len_list = feed_dict[seq_len]
+        if self.scheduled_sampling == 'mix':
+            ac_out_ph = self.acoustic_outputs
+            ac_out = feed_dict[ac_out_ph]
+
 
         no_of_batches = int(np.ceil(float(len(dataset))/batch_size))
         #crosses = np.zeros([dataset.shape[0]])
@@ -636,15 +640,15 @@ class Model:
         results = []
         ptr = 0
         for j in range(no_of_batches):
-            if y in feed_dict:
-                batch_x = dataset[ptr:ptr+batch_size]
-                batch_y = target[ptr:ptr+batch_size]
-                batch_len_list = len_list[ptr:ptr+batch_size]
+            batch_x = dataset[ptr:ptr+batch_size]
+            batch_y = target[ptr:ptr+batch_size]
+            batch_len_list = len_list[ptr:ptr+batch_size]
+            if self.scheduled_sampling == 'mix':
+                batch_ac_out = ac_out[ptr:ptr+batch_size]
+                feed_dict.update({x:batch_x,y:batch_y,ac_out_ph:batch_ac_out,seq_len:batch_len_list,batch_size_ph:batch_x.shape[0]})
+            else:
                 feed_dict.update({x:batch_x,y:batch_y,seq_len:batch_len_list,batch_size_ph:batch_x.shape[0]})
 
-            else :
-                batch_x = dataset[ptr:ptr+batch_size]
-                feed_dict={x: batch_x}
             ptr += batch_size
             result_batch = sess.run(op, feed_dict=feed_dict)
             results = np.append(results,result_batch)
@@ -682,12 +686,12 @@ class Model:
             chunks = self.chunks
 
             if chunks:
-                data_raw, lengths = dataset.get_dataset_chunks_no_pad(subset,chunks)
+                data, targets, lengths  = dataset.get_dataset_chunks_no_pad(subset,chunks)
             else :
-                data_raw, lengths = dataset.get_dataset(subset)
+                data, targets, lengths = dataset.get_dataset(subset)
 
-            data = self._transpose_data(data_raw[:,:,:-1]) #Drop last sample
-            targets = self._transpose_data(data_raw[:,:,1:]) #Drop first sample
+            data = self._transpose_data(data)
+            targets = self._transpose_data(targets)
 
         return data, targets, lengths
 
@@ -801,11 +805,9 @@ class Model:
             schedule = (1-end_value)*schedule + end_value
 
 
-
         while i < n_epoch+epochs and epoch_since_best<train_param['early_stop_epochs']:
             start_epoch = datetime.now()
             ptr = 0
-
             # training_data, training_target, training_lengths = self.extract_data(data,'train')
             if self.pitchwise:
                 train_data_generator = data.get_pitchwise_dataset_generator('train',batch_size,int((self.n_notes-1)/2.0),self.chunks)
@@ -826,8 +828,21 @@ class Model:
                     else:
                         p= train_param['schedule_end_value']
 
-                    feed_dict_optim = {x: batch_x, y: batch_y, seq_len: batch_lens,batch_size_ph:batch_x.shape[0],sched_samp_p:p}
-                    feed_dict_valid = {x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size,sched_samp_p:train_param['schedule_end_value']}
+                    if self.scheduled_sampling == 'mix':
+                        batch_ac_out = batch_x[:,:-1,:]
+                        batch_x = batch_y[:,:-1,:]
+                        batch_y = batch_y[:,1:,:]
+
+                        valid_ac_out = valid_data[:,:-1,:]
+                        valid_x = valid_target[:,:-1,:]
+                        valid_y = valid_target[:,1:,:]
+                        ac_out = self.acoustic_outputs
+
+                        feed_dict_optim = {x: batch_x, y: batch_y, ac_out: batch_ac_out,seq_len: batch_lens,batch_size_ph:batch_x.shape[0],sched_samp_p:p}
+                        feed_dict_valid = {x: valid_x, y: valid_y, ac_out: valid_ac_out,seq_len: valid_lengths,batch_size_ph:batch_size,sched_samp_p:train_param['schedule_end_value']}
+                    elif self.scheduled_sampling == 'self':
+                        feed_dict_optim = {x: batch_x, y: batch_y, seq_len: batch_lens,batch_size_ph:batch_x.shape[0],sched_samp_p:p}
+                        feed_dict_valid = {x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size,sched_samp_p:train_param['schedule_end_value']}
                 else:
                     feed_dict_optim = {x: batch_x, y: batch_y, seq_len: batch_lens, batch_size_ph:batch_x.shape[0]}
                     feed_dict_valid = {x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size}

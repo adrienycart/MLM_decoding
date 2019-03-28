@@ -224,7 +224,7 @@ class Dataset:
             lengths[i] = chunks_len
             i += 1
 
-        return dataset, lengths
+        return dataset[:,:,:-1], dataset[:,:,1:], lengths
 
     def get_dataset_chunks_no_pad(self,subset,len_chunk):
         #Outputs an array containing all the pieces cut in chunks (3D-tensor)
@@ -248,7 +248,7 @@ class Dataset:
             lengths += list(chunks_len)
             i += 1
 
-        return np.asarray(dataset), np.asarray(lengths)
+        return np.asarray(dataset)[:,:,:-1],np.asarray(dataset)[:,:,1:], np.asarray(lengths)
 
 
     def get_dataset_generator(self,subset,batch_size,len_chunk=None):
