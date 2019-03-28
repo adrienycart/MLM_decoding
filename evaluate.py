@@ -168,7 +168,7 @@ for fn in os.listdir(folder):
             pr = convert_note_to_time(pr,data.corresp,data.input_fs,max_len=max_len)
 
         data = DataMaps()
-        data.make_from_file(filename, "time", section=section)
+        data.make_from_file(filename, "time", section=section, acoustic_model="kelz")
         target = data.target
 
         #Evaluate
