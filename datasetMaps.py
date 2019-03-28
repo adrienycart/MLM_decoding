@@ -298,17 +298,17 @@ def safe_mkdir(dir,clean=False):
                 os.rename(full_path,os.path.join(old_path,fn))
 
 
-data = DatasetMaps(rand_transp=True)
-data.load_data('data/outputs_default_config_split','quant',max_len=30,subsets=['valid'],acoustic_model="bittner")
-inputs, targets, lens =data.get_dataset_chunks_no_pad('valid',100)
-#
-# print(inputs.shape, targets.shape, lens.shape)
-data_gen = data.get_dataset_generator('valid',10)
-# # #
-# # #
-for inputs,target,lens in data_gen:
-#     # pass
-    print(inputs.shape, target.shape)
+# data = DatasetMaps(rand_transp=True)
+# data.load_data('data/outputs_default_config_split','quant',max_len=30,subsets=['valid'],acoustic_model="bittner")
+# inputs, targets, lens =data.get_dataset_chunks_no_pad('valid',100)
+# #
+# # print(inputs.shape, targets.shape, lens.shape)
+# data_gen = data.get_dataset_generator('valid',10)
+# # # #
+# # # #
+# for inputs,target,lens in data_gen:
+# #     # pass
+#     print(inputs.shape, target.shape)
 #
 #     inputs_1 = inputs[target==1]
 #
