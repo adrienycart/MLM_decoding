@@ -76,8 +76,7 @@ print("Computation start : "+str(datetime.now()))
 
 if args.sched_sampl == 'mix':
     data= DatasetMaps(rand_transp=True)
-    data.load_data(args.data_path,timestep_type=timestep_type,subsets=['valid'],acoustic_model='bittner')
-
+    data.load_data(args.data_path,timestep_type=timestep_type,subsets=['train','valid'],acoustic_model='bittner')
 
 else:
     data = Dataset(rand_transp=True)
