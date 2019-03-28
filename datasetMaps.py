@@ -80,7 +80,8 @@ class DatasetMaps:
         elif acoustic_model == 'kelz':
             self.note_range = [21,109]
         elif acoustic_model == 'bittner':
-            self.note_range = [24,97]
+            # self.note_range = [24,97]
+            self.note_range = [21,109]
 
         self.acoustic_model = acoustic_model
 

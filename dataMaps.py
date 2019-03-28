@@ -38,7 +38,8 @@ class DataMaps:
             note_range = [21,109]
         elif acoustic_model == 'bittner':
             self.input_fs = 22050.0/256.0
-            note_range = [24,97]
+            # note_range = [24,97]
+            note_range = [21,109]
         self.timestep_type = timestep_type
         self.set_name_from_maps(filename)
 
@@ -93,9 +94,11 @@ class DataMaps:
             csv_filename = filename.replace('.mid','.csv')
             input_matrix = np.transpose(np.loadtxt(csv_filename),[1,0])
         elif self.acoustic_model == 'bittner':
+            #Load matrix
             npz_filename = filename.replace('.mid','_multif0_salience.npz')
             matrix = np.load(npz_filename)['salience']
 
+            # Group frequencies into MIDI pitches
             N = matrix.shape[1]
             n_freqs = matrix.shape[0]
 
@@ -109,6 +112,11 @@ class DataMaps:
             input_matrix = np.zeros([max_mid+1-min_mid,N])
             for i in range(min_mid,max_mid+1):
                 input_matrix[i-min_mid,:] = np.mean(matrix[mid_numbers==i],axis=0)
+
+            # Zero-pad to range [21,109]
+            input_note_range = [24,97]
+            output_note_range = [21,109]
+            input_matrix = np.pad(input_matrix,((24-21,109-97),(0,0)),'constant')
 
 
 
