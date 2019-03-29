@@ -261,7 +261,9 @@ if __name__ == '__main__':
     print(Y.shape)
     print(D.shape)
     
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    if os.path.dirname(args.out) != '':
+        os.makedirs(os.path.dirname(args.out), exist_ok=True)
+        
     # Save data
     with gzip.open(args.out, "wb") as file:
         pickle.dump({'X' : X,

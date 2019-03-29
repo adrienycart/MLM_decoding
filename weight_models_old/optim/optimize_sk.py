@@ -8,8 +8,7 @@ import weight_search
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("model", help="The LSTM model to load, the best filename without extension.",
-                        required=True)
+    parser.add_argument("model", help="The LSTM model to load, the best filename without extension.")
     parser.add_argument("valid_data", help="The directory containing validation data files.")
     
     parser.add_argument("--acoustic", type=str, choices=["kelz", "bittner"], help="Change the acoustic model " +
@@ -41,14 +40,14 @@ if __name__ == "__main__":
     print("using GPU " + args.gpu)
     print("Training for " + ("prior" if args.prior else "weight"))
     print("Loading LSTM " + args.model)
-    print("Using gt data " + args.gt_data)
-    print("Using beam data " + args.beam_data)
+    print("Using gt data " + ('None' if args.gt_data is None else args.gt_data))
+    print("Using beam data " + ('None' if args.beam_data is None else args.beam_data))
     print("Saving models to " + args.model_dir)
     sys.stdout.flush()
     
     os.makedirs(args.model_dir, exist_ok=True)
     
-    if args.output is not None:
+    if args.output is not None and os.path.dirname(args.output) != '':
         os.makedirs(os.path.dirname(args.output), exist_ok=True)
     
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"

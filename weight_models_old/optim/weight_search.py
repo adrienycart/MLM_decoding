@@ -22,7 +22,7 @@ import numpy as np
 model_dict = {'model' : None,
               'sess'  : None}
 
-params = {'model_out' : None,
+global_params = {'model_out' : None,
           'step'      : None,
           'acoustic'  : None}
     
@@ -32,7 +32,7 @@ data_dict = {'gt'    : None,
     
 def load_data_info(gt=None, beam=None, valid=None, model_path=None, n_hidden=256, step=None, model_out=".",
                    acoustic='kelz'):
-    global params
+    global global_params
     global data_dict
     global model_dict
     
@@ -54,9 +54,9 @@ def load_data_info(gt=None, beam=None, valid=None, model_path=None, n_hidden=256
     model_dict['model'] = Model(model_param)
     model_dict['sess'],_ = model_dict['model'].load(model_path, model_path=model_path)
     
-    params['step'] = step
-    params['model_out'] = model_out
-    params['acoustic'] = acoustic
+    global_params['step'] = step
+    global_params['model_out'] = model_out
+    global_params['acoustic'] = acoustic
 
     
 most_recent_model = None
@@ -178,22 +178,22 @@ def weight_search(params, num=0, verbose=False):
     if not use_lstm:
         weight_model_name += "_noLSTM"
     weight_model_name += "_weight" if is_weight else "_prior"
-    weight_model_name += "." + step['step'] + "." + str(num) + ".pkl"
+    weight_model_name += "." + global_params['step'] + "." + str(num) + ".pkl"
     
     # Write out weight model
-    with open(os.path.join(params['model_out'], weight_model_name), "wb") as file:
+    with open(os.path.join(global_params['model_out'], weight_model_name), "wb") as file:
         pickle.dump(most_recent_model, file)
 
     results = {}
     frames = np.zeros((0, 3))
     notes = np.zeros((0, 3))
 
-    for filename in glob.glob(os.path.join(data_dir['valid'], "*.mid")):
+    for filename in glob.glob(os.path.join(data_dict['valid'], "*.mid")):
         print(filename)
         sys.stdout.flush()
         
         data = DataMaps()
-        data.make_from_file(filename,step['step'],section,acoustic_model=params['acoustic'])
+        data.make_from_file(filename,global_params['step'],section,acoustic_model=global_params['acoustic'])
 
         # Decode
         pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=5,
@@ -201,11 +201,11 @@ def weight_search(params, num=0, verbose=False):
                             out=None, hash_length=12, weight_model=weight_model,
                             verbose=verbose, weight_model_dict=most_recent_model)
 
-        if params['step'] != "time":
+        if global_params['step'] != "time":
             pr = convert_note_to_time(pr,data.corresp,data.input_fs,max_len=max_len)
 
         data = DataMaps()
-        data.make_from_file(filename, "time", section=section, acoustic_model=params['acoustic'])
+        data.make_from_file(filename, "time", section=section, acoustic_model=global_params['acoustic'])
         target = data.target
 
         #Evaluate
