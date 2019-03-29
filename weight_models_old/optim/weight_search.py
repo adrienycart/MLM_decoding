@@ -19,32 +19,32 @@ import tensorflow as tf
 import pretty_midi as pm
 import numpy as np
 
-
-step = {'step' : None}
-
-def set_step(new_step):
-    step['step'] = new_step
-    
-data_dict = {'gt'   : None,
-             'beam' : None}
-    
-def load_data():
-    try:
-        with gzip.open("weight_models_new/data/gt." + step['step'] + ".pkl.gz", "rb") as file:
-            data_dict['gt'] = pickle.load(file)
-    except:
-        # Maybe we won't use it?
-        print("Warning: gt data not opened")
-#     with gzip.open("weight_models_new/data/beam." + step['step'] + ".pkl.gz", "rb") as file:
-#         data_dict['beam'] = pickle.load(file)
-    with gzip.open("weight_models_old/data/sched/beam." + step['step'] + ".pkl.gz", "rb") as file:
-        data_dict['beam'] = pickle.load(file)
-    
 model_dict = {'model' : None,
               'sess'  : None}
+
+params = {'model_out' : None,
+          'step'      : None,
+          'acoustic'  : None}
     
-def load_model():
-    n_hidden = 256
+data_dict = {'gt'    : None,
+             'beam'  : None,
+             'valid' : None}
+    
+def load_data_info(gt=None, beam=None, valid=None, model_path=None, n_hidden=256, step=None, model_out=".",
+                   acoustic='kelz'):
+    global params
+    global data_dict
+    global model_dict
+    
+    if gt is not None:
+        with gzip.open(gt, "rb") as file:
+            data_dict['gt'] = pickle.load(file)
+            
+    if beam is not None:
+        with gzip.open(beam, "rb") as file:
+            data_dict['beam'] = pickle.load(file)
+            
+    data_dict['valid'] = valid
     
     model_param = make_model_param()
     model_param['n_hidden'] = n_hidden
@@ -52,14 +52,11 @@ def load_model():
 
     # Build model object
     model_dict['model'] = Model(model_param)
-    if step['step'] == "quant":
-        model_path = "./lstm-sched/quant/best_model.ckpt-1194"
-    elif step['step'] == "event":
-        model_path = "./lstm-20/event_0.001/best_model.ckpt-394"
-    elif step['step'] == "time":
-        model_path = "./lstm-20/unquant_0.001/best_model.ckpt-161"
-        
     model_dict['sess'],_ = model_dict['model'].load(model_path, model_path=model_path)
+    
+    params['step'] = step
+    params['model_out'] = model_out
+    params['acoustic'] = acoustic
 
     
 most_recent_model = None
@@ -92,7 +89,6 @@ def weight_search(params, num=0, verbose=False):
         use_lstm = params[8]
     
     warnings.filterwarnings("ignore", message="tick should be an int.")
-    folder = "data/outputs-20/valid"
 
     max_len = 30
     section = [0, max_len]
@@ -185,19 +181,19 @@ def weight_search(params, num=0, verbose=False):
     weight_model_name += "." + step['step'] + "." + str(num) + ".pkl"
     
     # Write out weight model
-    with open("weight_models_old/models/" + weight_model_name, "wb") as file:
+    with open(os.path.join(params['model_out'], weight_model_name), "wb") as file:
         pickle.dump(most_recent_model, file)
 
     results = {}
     frames = np.zeros((0, 3))
     notes = np.zeros((0, 3))
 
-    for filename in glob.glob(os.path.join(folder, "*.mid")):
+    for filename in glob.glob(os.path.join(data_dir['valid'], "*.mid")):
         print(filename)
         sys.stdout.flush()
         
         data = DataMaps()
-        data.make_from_file(filename,step['step'],section,acoustic_model="kelz")
+        data.make_from_file(filename,step['step'],section,acoustic_model=params['acoustic'])
 
         # Decode
         pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=5,
@@ -205,11 +201,11 @@ def weight_search(params, num=0, verbose=False):
                             out=None, hash_length=12, weight_model=weight_model,
                             verbose=verbose, weight_model_dict=most_recent_model)
 
-        if step['step'] != "time":
+        if params['step'] != "time":
             pr = convert_note_to_time(pr,data.corresp,data.input_fs,max_len=max_len)
 
         data = DataMaps()
-        data.make_from_file(filename, "time", section=section, acoustic_model="kelz")
+        data.make_from_file(filename, "time", section=section, acoustic_model=params['acoustic'])
         target = data.target
 
         #Evaluate

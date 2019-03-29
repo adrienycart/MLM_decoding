@@ -171,6 +171,10 @@ if __name__ == '__main__':
                         "for frame timing. Either time (default), quant (for 16th notes), or event (for onsets).",
                         default="time")
     
+    parser.add_argument("--acoustic", type=str, choices=["kelz", "bittner"], help="Change the acoustic model " +
+                        "used in the files. Either kelz (default), or bittner.",
+                        default="kelz")
+    
     parser.add_argument("-b", "--beam", help="The beam size. Defaults to 100.", type=int, default=100)
     parser.add_argument("-k", "--branch", help="The branching factor. Defaults to 20.", type=int, default=20)
     
@@ -221,7 +225,7 @@ if __name__ == '__main__':
     # Load data
     if args.MIDI.endswith(".mid"):
         data = dataMaps.DataMaps()
-        data.make_from_file(args.MIDI, args.step, section=section, acoustic_model='kelz')
+        data.make_from_file(args.MIDI, args.step, section=section, acoustic_model=args.acoustic)
     
         # Decode
         X, Y, D = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
@@ -237,7 +241,7 @@ if __name__ == '__main__':
             if args.verbose:
                 print(file)
             data = dataMaps.DataMaps()
-            data.make_from_file(file, args.step, section=section, acoustic_model='kelz')
+            data.make_from_file(file, args.step, section=section, acoustic_model=args.acoustic)
 
             # Decode
             x, y, d = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
@@ -257,6 +261,7 @@ if __name__ == '__main__':
     print(Y.shape)
     print(D.shape)
     
+    os.makedirs(os.path.dirname(args.out), exist_ok=True)
     # Save data
     with gzip.open(args.out, "wb") as file:
         pickle.dump({'X' : X,

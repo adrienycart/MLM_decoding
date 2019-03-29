@@ -177,7 +177,7 @@ if __name__ == "__main__":
         sys.stdout.flush()
         
         data = DataMaps()
-        data.make_from_file(file, args.step, section)
+        data.make_from_file(file, args.step, section, acoustic_model="bittner")
         
         pr = decode_all_pitches(data.input, priors, transitions)
         
@@ -187,10 +187,10 @@ if __name__ == "__main__":
             np.savetxt(os.path.join(args.save, base.replace('.mid','_pr.csv')), pr)
         
         if args.step in ['quant','event']:
-            pr = convert_note_to_time(pr, data.corresp, max_len=max_len)
+            pr = convert_note_to_time(pr, data.corresp, data.input_fs, max_len=max_len)
 
         data = DataMaps()
-        data.make_from_file(file, "time", section=section)
+        data.make_from_file(file, "time", section=section, acoustic_model="bittner")
         target = data.target
 
         #Evaluate

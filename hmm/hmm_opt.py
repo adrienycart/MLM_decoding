@@ -31,21 +31,21 @@ def test(params):
     frames = np.zeros((0, 3))
     notes = np.zeros((0, 3))
     
-    folder = "data/outputs-20/valid"
+    folder = "data/bittner/valid"
     for file in glob.glob(os.path.join(folder, "*.mid")):
         print(file)
         sys.stdout.flush()
         
         data = DataMaps()
-        data.make_from_file(file, step, [0, 30])
+        data.make_from_file(file, step, [0, 30], acoustic_model="bittner")
         
         pr = hmm_eval.decode_all_pitches(data.input, priors, transitions)
 
         if step != "time":
-            pr = convert_note_to_time(pr, data.corresp, max_len=30)
+            pr = convert_note_to_time(pr, data.corresp, data.input_fs, max_len=30)
 
         data = DataMaps()
-        data.make_from_file(file, "time", section=[0, 30])
+        data.make_from_file(file, "time", section=[0, 30], acoustic_model="bittner")
         target = data.target
 
         #Evaluate
