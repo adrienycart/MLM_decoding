@@ -66,7 +66,7 @@ if __name__ == "__main__":
                   (5, 50) if args.step == "time" else (3, 10), # history
                   (1, 4), # num_layers
                   [not args.prior], # is_weight
-                  [True, False], # features
+                  [True], # features
                   [0], # history pitch context
                   [0], # prior context
                   [True]] # use LSTM
