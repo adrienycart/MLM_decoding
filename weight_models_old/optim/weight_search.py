@@ -24,14 +24,15 @@ model_dict = {'model' : None,
 
 global_params = {'model_out' : None,
           'step'      : None,
-          'acoustic'  : None}
+          'acoustic'  : None,
+          'early_exit' : None}
     
 data_dict = {'gt'    : None,
              'beam'  : None,
              'valid' : None}
     
 def load_data_info(gt=None, beam=None, valid=None, model_path=None, n_hidden=256, step=None, model_out=".",
-                   acoustic='kelz'):
+                   acoustic='kelz', early_exit=0.001):
     global global_params
     global data_dict
     global model_dict
@@ -57,6 +58,7 @@ def load_data_info(gt=None, beam=None, valid=None, model_path=None, n_hidden=256
     global_params['step'] = step
     global_params['model_out'] = model_out
     global_params['acoustic'] = acoustic
+    global_params['early_exit'] = early_exit
 
     
 most_recent_model = None
@@ -218,7 +220,7 @@ def weight_search(params, num=0, verbose=False):
         frames = np.vstack((frames, [P_f, R_f, F_f]))
         notes = np.vstack((notes, [P_n, R_n, F_n]))
         
-        if F_n < 0.001:
+        if F_n < global_params['early_exit']:
             print("Early stopping, F-measure too low.")
             sys.stdout.flush()
             return 0.0
