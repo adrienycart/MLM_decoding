@@ -1109,7 +1109,7 @@ class Model:
 
 
 
-    def compute_eval_metrics_pred(self,dataset,len_list,threshold,save_path,n_model=None,sess=None):
+    def compute_eval_metrics_pred(self,data,targets,len_list,threshold,save_path,n_model=None,sess=None):
         """
         Compute averaged metrics over the dataset.
         If sess or saver are not provided (None), a model will be loaded from
@@ -1126,8 +1126,8 @@ class Model:
         F0 = tf.reduce_mean(self.f_measure)
 
 
-        data = self._transpose_data(dataset[:,:,:-1])
-        targets = self._transpose_data(dataset[:,:,1:])
+        data = self._transpose_data(data)
+        targets = self._transpose_data(targets)
 
 
 
@@ -1141,13 +1141,21 @@ class Model:
 
         sched_samp_p = self.sched_samp_p
 
+        if self.scheduled_sampling == 'mix':
+            acoustic_outputs = self.acoustic_outputs
+
         #Metrics with perfect input
 
         crosses = []
         crosses_tr = []
         F_measures = []
         for i in np.arange(1.0,0.0,-0.1):
-            cross_GT, cross_tr_GT, F_measure_GT = sess.run([cross, cross_tr, F0], feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:dataset.shape[0],sched_samp_p:i} )
+            if self.scheduled_sampling == 'mix':
+                feed_dict = {x: targets[:,:-1,:], seq_len: len_list, y: targets[:,1:,:], acoustic_outputs:data[:,:-1,:],thresh: threshold,batch_size_ph:data.shape[0],sched_samp_p:i}
+            else:
+                feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:data.shape[0],sched_samp_p:i}
+
+            cross_GT, cross_tr_GT, F_measure_GT = sess.run([cross, cross_tr, F0], feed_dict = feed_dict)
             crosses += [cross_GT]
             crosses_tr += [cross_tr_GT]
             F_measures += [F_measure_GT]

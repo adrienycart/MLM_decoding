@@ -78,7 +78,7 @@ class DataMaps:
         #Target has to be binarized because the pretty_midi get_piano_roll function
         #returns a real-value piano-roll.
         self.binarize_target()
-
+        self.set_sigs_and_keys(pm_data)
         self.crop_target(note_range)
         self.even_up_rolls()
 

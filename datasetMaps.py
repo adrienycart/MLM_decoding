@@ -298,9 +298,46 @@ def safe_mkdir(dir,clean=False):
                 os.rename(full_path,os.path.join(old_path,fn))
 
 
+# from scipy.stats import beta
+# #
 # data = DatasetMaps(rand_transp=True)
-# data.load_data('data/outputs_default_config_split','quant',max_len=30,subsets=['valid'],acoustic_model="bittner")
+# data.load_data('data/outputs_default_config_split','quant',max_len=30,subsets=['valid'],acoustic_model="kelz")
 # inputs, targets, lens =data.get_dataset_chunks_no_pad('valid',100)
+
+# import matplotlib.pyplot as plt
+# plt.hist(inputs[targets==0],bins=100,normed=True)
+# plt.show()
+
+
+# x = np.linspace(beta.ppf(0.01, 0.16161456834042578, 45.7996581719276),beta.ppf(0.99, 0.16161456834042578, 45.7996581719276), 100)
+#
+# beta_1 = beta(0.6604772316085724, 3.4350729202394525, loc=0, scale=1)
+# beta_0 = beta(0.16161456834042578, 45.7996581719276, loc=0, scale=1)
+#
+# print beta_1.pdf(0.3),beta_0.pdf(0.3),
+# print beta_1.pdf(1e-7),beta_0.pdf(1e-7),
+
+#
+# # import matplotlib.pyplot as plt
+#
+# plt.plot(x, beta.pdf(x), 'k-', lw=2, label='frozen pdf')
+# # plt.plot(x, beta_0.pdf(x), 'k-', lw=2, label='frozen pdf')
+# plt.show()
+
+# inputs_1 = inputs[targets==1]
+# inputs_0 = inputs[targets==0]
+#
+# inputs_1 += 1e-7
+# inputs_0 += 1e-7
+#
+# print np.min(inputs_1),np.max(inputs_1)
+# print np.min(inputs_0),np.max(inputs_0)
+
+
+# print beta.fit(inputs_1,floc=0,fscale=1)
+# print beta.fit(inputs_0,floc=0,fscale=1)
+
+
 # #
 # # print(inputs.shape, targets.shape, lens.shape)
 # data_gen = data.get_dataset_generator('valid',10)
