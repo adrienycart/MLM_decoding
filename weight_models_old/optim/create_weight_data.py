@@ -197,6 +197,8 @@ if __name__ == '__main__':
     parser.add_argument("--gt", help="Transition on ground truth samples only.", action="store_true")
     
     parser.add_argument("--features", help="Use features in the x data points.", action="store_true")
+
+    parser.add_argument("--gpu", help="The GPU to use. Defaults to 0.", default="0")
     
     parser.add_argument("-v", "--verbose", help="Print frame updates", action="store_true")
     
@@ -212,6 +214,9 @@ if __name__ == '__main__':
     except:
         max_len = None
         section = None
+
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     
     # Load model
     model_param = make_model_param()

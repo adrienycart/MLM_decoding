@@ -32,6 +32,9 @@ if __name__ == "__main__":
                         "will not load any.", default=None)
     parser.add_argument("--model_dir", help="The directory to save model files to. Defaults to the current directory.",
                         default=".")
+    parser.add_argument("--early_exit", help="Tell the model to quit the computation of a point if the value of any " +
+                        "piece's notewise F-measure is below this amount. Defaults to 0.001.", type=float,
+                        default=0.001)
     args = parser.parse_args()
     
     print("Running for " + str(args.iters) + " iterations.")
@@ -42,6 +45,7 @@ if __name__ == "__main__":
     print("Loading LSTM " + args.model)
     print("Using gt data " + ('None' if args.gt_data is None else args.gt_data))
     print("Using beam data " + ('None' if args.beam_data is None else args.beam_data))
+    print("Early exit threshold at " + str(args.early_exit))
     print("Saving models to " + args.model_dir)
     sys.stdout.flush()
     
@@ -54,14 +58,15 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     
     weight_search.load_data_info(gt=args.gt_data, beam=args.beam_data, valid=args.valid_data, step=args.step,
-                                 model_path=args.model, model_out=args.model_dir, acoustic=args.acoustic)
+                                 model_path=args.model, model_out=args.model_dir, acoustic=args.acoustic,
+                                 early_exit=args.early_exit)
     
     dimensions = [[False], # GT
                   (0.1, 0.8), # min_diff
                   (5, 50) if args.step == "time" else (3, 10), # history
                   (1, 4), # num_layers
                   [not args.prior], # is_weight
-                  [True, False], # features
+                  [True], # features
                   [0], # history pitch context
                   [0], # prior context
                   [True]] # use LSTM
