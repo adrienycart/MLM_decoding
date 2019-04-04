@@ -105,7 +105,7 @@ def compute_eval_metrics_frame(input,target):
     F = Fmeasure(input,target)
     return prec, rec, F
 
-def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None):
+def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_offset=False):
     #Compute evaluation metrics note-by-note
     #filter out all notes shorter than min_dur (in seconds, default 50ms)
     #A note is correctly detected if it has the right pitch and the inset is within tolerance parameter (default 50ms)
@@ -126,6 +126,11 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None):
     if tolerance == None:
         tolerance = 0.05
 
+    if with_offset:
+        offset_ratio = 0.2
+    else:
+        offset_ratio = None
+
 
     notes_est , intervals_est = get_notes_intervals(input, fs)
     notes_ref , intervals_ref = get_notes_intervals(target, fs)
@@ -133,7 +138,9 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None):
     if len(notes_est) == 0:
         return 0,0,0
     else:
-        P,R,F,_ = mir_eval.transcription.precision_recall_f1_overlap(intervals_ref,notes_ref,intervals_est,notes_est,pitch_tolerance=0.25,offset_ratio=None,onset_tolerance=tolerance)
+        P,R,F,_ = mir_eval.transcription.precision_recall_f1_overlap(intervals_ref,
+        notes_ref,intervals_est,notes_est,pitch_tolerance=0.25,offset_ratio=offset_ratio,
+        onset_tolerance=tolerance,offset_min_tolerance=0.05)
         return P,R,F
 
 

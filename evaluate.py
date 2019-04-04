@@ -49,6 +49,7 @@ parser.add_argument("--uncertainty", help="Add some uncertainty to the LSTM deco
                     "(0.0, 1.0) -> (0.0+uncertainty, 1.0-uncertainty). Defaults to 0.0.",
                     type=float, default=0)
 parser.add_argument('--n_hidden', help="Number of hidden nodes for the LSTM", type=int, default=256)
+parser.add_argument('--with_offset', help="use offset for framewise metrics", action='store_true')
 
 args = parser.parse_args()
 
@@ -173,7 +174,7 @@ for fn in os.listdir(folder):
 
         #Evaluate
         P_f,R_f,F_f = compute_eval_metrics_frame(pr,target)
-        P_n,R_n,F_n = compute_eval_metrics_note(pr,target,min_dur=0.05)
+        P_n,R_n,F_n = compute_eval_metrics_note(pr,target,min_dur=0.05,with_offset=args.with_offset)
 
         frames = np.vstack((frames, [P_f, R_f, F_f]))
         notes = np.vstack((notes, [P_n, R_n, F_n]))
