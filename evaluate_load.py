@@ -2,8 +2,10 @@ import numpy as np
 import os
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 from mlm_training.utils import safe_mkdir
-from dataMaps import DataMaps
+from dataMaps import DataMaps, convert_note_to_time
 import pickle
+import argparse
+import sys
 
 
 parser = argparse.ArgumentParser()
@@ -27,20 +29,26 @@ results = {}
 # safe_mkdir(save_folder)
 
 for fn in os.listdir(input_folder):
-    if fn.endswith('.mid') and not fn.startswith('.'):
+    if fn.endswith('_pr.csv') and not fn.startswith('.'):
         filename_input = os.path.join(input_folder,fn)
-        filename_target = os.path.join(target_folder,fn)
-        print(filename)
+        filename_target = os.path.join(target_folder,fn).replace('_pr.csv','.mid')
+        print(filename_input)
 
         data = DataMaps()
-        data.make_from_file(filename_target,'time',[0,30])
+        data.make_from_file(filename_target,'time',[0,30],acoustic_model='kelz')
 
-        input_roll = np.loadtxt(filename_input.replace('.mid','_pr.csv'))
+        input_roll = np.loadtxt(filename_input)
         target_roll = data.target
 
-        P_f,R_f,F_f = compute_eval_metrics_frame(baseline_roll,target_roll)
-        P_n,R_n,F_n = compute_eval_metrics_note(baseline_roll,target_roll,min_dur=0.05,with_offset=args.with_offse)
+        if args.step in ['quant','event']:
+            data_quant = DataMaps()
+            data_quant.make_from_file(filename_target,args.step,[0,30],acoustic_model='kelz')
+            input_roll = convert_note_to_time(input_roll,data_quant.corresp,data_quant.input_fs,max_len=30)
 
+        P_f,R_f,F_f = compute_eval_metrics_frame(input_roll,target_roll)
+        P_n,R_n,F_n = compute_eval_metrics_note(input_roll,target_roll,min_dur=0.05,with_offset=args.with_offset)
+
+        print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
         frame  += [[P_f,R_f,F_f]]
         note   += [[P_n,R_n,F_n]]
 
