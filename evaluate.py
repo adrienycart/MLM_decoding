@@ -51,6 +51,7 @@ parser.add_argument("--uncertainty", help="Add some uncertainty to the LSTM deco
 parser.add_argument('--n_hidden', help="Number of hidden nodes for the LSTM", type=int, default=256)
 parser.add_argument('--with_offset', help="use offset for framewise metrics", action='store_true')
 
+
 args = parser.parse_args()
 
 if not (0 <= args.weight <= 1):
