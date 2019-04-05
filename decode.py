@@ -33,7 +33,7 @@ def run_lstm_pitchwise_iterative(sess, model, states, uncertainty=0.0):
 
     states : list(state.State)
         The list containing all of the states we want to update.
-    
+
     uncertainty : float
         The uncertainty of the LSTM prior outputs. The outputs will be scaled
         to a range of size (1 - 2*uncertainty), centered around 0.5. Specifically,
@@ -749,7 +749,7 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
 
     prior_context : int
         The window of priors to include around the current priors. Defaults to 0.
-        
+
     no_mlm : boolean
         Whether to suppress MLM-based inputs. Defaults to False.
 
@@ -864,7 +864,7 @@ def get_features(acoustic, frame_num, priors, no_mlm=False):
 
     language : np.ndarray
         The language priors from the entire piece.
-        
+
     no_mlm : boolean
         Whether to suppress MLM-based inputs. Defaults to False.
 
@@ -909,8 +909,7 @@ def get_features(acoustic, frame_num, priors, no_mlm=False):
     num_features = 9
     frame = acoustic[frame_num, :]
     language = np.squeeze(priors[:, -1])
-    if no_mlm:
-        language = np.zeros(language.shape)
+
     features = np.zeros((88, num_features))
 
     features[:, 0] = uncertainty(acoustic)
@@ -930,6 +929,9 @@ def get_features(acoustic, frame_num, priors, no_mlm=False):
 
     # Absolute pitch (0, 1) range
     features[:, 8] = np.arange(88) / 87
+
+    if no_mlm:
+        features[:, [1,3,5,7]] = 0
 
     return features
 
