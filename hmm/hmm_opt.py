@@ -16,11 +16,13 @@ from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 order = None
 priors = None
 step = None
+with_offset = None
 
 def test(params):
     global priors
     global step
     global order
+    global with_offset
     print(params)
     
     transitions = np.zeros((88, 2 ** order, 2))
@@ -31,13 +33,13 @@ def test(params):
     frames = np.zeros((0, 3))
     notes = np.zeros((0, 3))
     
-    folder = "data/bittner/valid"
+    folder = "data/outputs-20/valid"
     for file in glob.glob(os.path.join(folder, "*.mid")):
         print(file)
         sys.stdout.flush()
         
         data = DataMaps()
-        data.make_from_file(file, step, [0, 30], acoustic_model="bittner")
+        data.make_from_file(file, step, [0, 30], acoustic_model="kelz")
         
         pr = hmm_eval.decode_all_pitches(data.input, priors, transitions)
 
@@ -45,12 +47,12 @@ def test(params):
             pr = convert_note_to_time(pr, data.corresp, data.input_fs, max_len=30)
 
         data = DataMaps()
-        data.make_from_file(file, "time", section=[0, 30], acoustic_model="bittner")
+        data.make_from_file(file, "time", section=[0, 30], acoustic_model="kelz")
         target = data.target
 
         #Evaluate
         P_f,R_f,F_f = compute_eval_metrics_frame(pr, target)
-        P_n,R_n,F_n = compute_eval_metrics_note(pr, target, min_dur=0.05)
+        P_n,R_n,F_n = compute_eval_metrics_note(pr, target, min_dur=0.05, with_offset=with_offset)
         
         print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
         sys.stdout.flush()
@@ -86,6 +88,7 @@ if __name__ == "__main__":
     parser.add_argument("--iters", help="The number of iterations to run optimization for (after the initial 10 " +
                         "random points). Defaults to 200.", type=int, default=200)
     parser.add_argument("--order", help="The order of the HMM to train (unigram, bigram, etc)", type=int, default=1)
+    parser.add_argument("--with_offset", help="Train the HMM for F-measure with offsets.", action="store_true")
     args = parser.parse_args()
     
     with open(args.priors, "rb") as file:
@@ -93,10 +96,12 @@ if __name__ == "__main__":
         
     step = args.step
     order = args.order
+    with_offset = args.with_offset
     
     print("Running for " + str(args.iters) + " iterations.")
     print("step type: " + args.step)
     print("order: " + str(args.order))
+    print("With offsets" if args.with_offset else "Without offsets")
     print("saving output to " + args.output)
     sys.stdout.flush()
     

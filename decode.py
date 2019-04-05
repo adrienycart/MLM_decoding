@@ -438,6 +438,7 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
         history_context = weight_model_dict['history_context'] if 'history_context' in weight_model_dict else 0
         prior_context = weight_model_dict['prior_context'] if 'prior_context' in weight_model_dict else 0
         use_lstm = weight_model_dict['use_lstm'] if 'use_lstm' in weight_model_dict else True
+        no_mlm = weight_model_dict['no_mlm'] if 'no_mlm' in weight_model_dict else False
     else:
         sklearn = False
         history = weight_model_dict['history']
@@ -450,7 +451,8 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
     if sklearn:
         X = np.vstack([create_weight_x_sk(state, acoustic, frame_num, history, features=features,
                                           history_context=history_context,
-                                          prior_context=prior_context) for state in beam])
+                                          prior_context=prior_context,
+                                          no_mlm=no_mlm) for state in beam])
         # Remove LSTM sample
         if not use_lstm:
             X = X[:, :-1]
@@ -717,7 +719,7 @@ def get_data_tf(history, ac_pitch_window, la_pitch_window, acoustic, pr, frame_n
 
 
 def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), features=False,
-                    history_context=0, prior_context=0):
+                    history_context=0, prior_context=0, no_mlm=False):
     """
     Get the x input for the sk-learn dynamic weighting model.
 
@@ -747,6 +749,9 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
 
     prior_context : int
         The window of priors to include around the current priors. Defaults to 0.
+        
+    no_mlm : boolean
+        Whether to suppress MLM-based inputs. Defaults to False.
 
     Returns
     =======
@@ -758,14 +763,14 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
 
     if features:
         x = np.hstack((pr,
-                       get_features(acoustic, frame_num, state.get_priors()),
+                       get_features(acoustic, frame_num, state.get_priors(), no_mlm=no_mlm),
                        np.reshape(frame, (88, -1)),
-                       np.reshape(state.prior, (88, -1))))
+                       np.zeros((88, 1)) if no_mlm else np.reshape(state.prior, (88, -1))))
 
     else:
         x = np.hstack((pr,
                        np.reshape(frame, (88, -1)),
-                       np.reshape(state.prior, (88, -1))))
+                       np.zeros((88, 1)) if no_mlm else np.reshape(state.prior, (88, -1))))
 
     # Add prior and history contexts
     x_new = pad_x(x, frame, state.prior, pr, history, history_context, prior_context)
@@ -845,7 +850,7 @@ def pad_x(x, acoustic, language, pr, history, history_context, prior_context):
 
 
 
-def get_features(acoustic, frame_num, priors):
+def get_features(acoustic, frame_num, priors, no_mlm=False):
     """
     Get a features array from the given acoustic and language model priors.
 
@@ -859,6 +864,9 @@ def get_features(acoustic, frame_num, priors):
 
     language : np.ndarray
         The language priors from the entire piece.
+        
+    no_mlm : boolean
+        Whether to suppress MLM-based inputs. Defaults to False.
 
     Returns
     =======
@@ -901,6 +909,8 @@ def get_features(acoustic, frame_num, priors):
     num_features = 9
     frame = acoustic[frame_num, :]
     language = np.squeeze(priors[:, -1])
+    if no_mlm:
+        language = np.zeros(language.shape)
     features = np.zeros((88, num_features))
 
     features[:, 0] = uncertainty(acoustic)

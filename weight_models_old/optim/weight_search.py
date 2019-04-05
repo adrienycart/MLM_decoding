@@ -110,6 +110,7 @@ def weight_search(params, num=0, verbose=False):
     Y = pkl['Y']
     D = pkl['D']
     max_history = pkl['history']
+    no_mlm = pkl['no_mlm'] if 'no_mlm' in pkl else False
     
     if np.max(D) < min_diff:
         print("No training data generated")
@@ -166,7 +167,8 @@ def weight_search(params, num=0, verbose=False):
                          'weight' : is_weight,
                          'history_context' : history_context,
                          'prior_context' : prior_context,
-                         'use_lstm' : use_lstm}
+                         'use_lstm' : use_lstm,
+                         'no_mlm' : no_mlm}
     
     weight_model_name = "weight_model."
     weight_model_name += "gt" if gt else "b10"
@@ -179,6 +181,8 @@ def weight_search(params, num=0, verbose=False):
     weight_model_name += "_pc" + str(prior_context)
     if not use_lstm:
         weight_model_name += "_noLSTM"
+    if no_mlm:
+        weight_model_name += "_noMLM"
     weight_model_name += "_weight" if is_weight else "_prior"
     weight_model_name += "." + global_params['step'] + "." + str(num) + ".pkl"
     
@@ -201,7 +205,7 @@ def weight_search(params, num=0, verbose=False):
         pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=5,
                             beam_size=50, weight=[[0.8], [0.2]],
                             out=None, hash_length=12, weight_model=weight_model,
-                            verbose=verbose, weight_model_dict=most_recent_model)
+                            verbose=verbose, weight_model_dict=most_recent_model, no_mlm=no_mlm)
 
         if global_params['step'] != "time":
             pr = convert_note_to_time(pr,data.corresp,data.input_fs,max_len=max_len)
