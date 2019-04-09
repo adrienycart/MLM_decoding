@@ -14,6 +14,7 @@ parser.add_argument('target_folder',type=str)
 parser.add_argument("--step", type=str, choices=["time", "quant", "event"], help="Change the step type for frame timing. Either time (default), " +
                     "quant (for 16th notes), or event (for onsets).", default="time")
 parser.add_argument('--with_offset', help="use offset for framewise metrics", action='store_true')
+parser.add_argument('--gap', help="Fill gaps <50ms.", action="store_true")
 
 args = parser.parse_args()
 
@@ -46,7 +47,7 @@ for fn in os.listdir(input_folder):
             input_roll = convert_note_to_time(input_roll,data_quant.corresp,data_quant.input_fs,max_len=30)
 
         P_f,R_f,F_f = compute_eval_metrics_frame(input_roll,target_roll)
-        P_n,R_n,F_n = compute_eval_metrics_note(input_roll,target_roll,min_dur=0.05,with_offset=args.with_offset)
+        P_n,R_n,F_n = compute_eval_metrics_note(input_roll,target_roll,min_dur=0.05,with_offset=args.with_offset,min_gap=0.05 if args.gap else None)
 
         print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
         frame  += [[P_f,R_f,F_f]]
