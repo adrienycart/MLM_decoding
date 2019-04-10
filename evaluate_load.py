@@ -16,7 +16,7 @@ parser.add_argument("--step", type=str, choices=["time", "quant", "event"], help
 parser.add_argument('--with_offset', help="use offset for framewise metrics", action='store_true')
 parser.add_argument('--with_quant',help="post-quantise the outputs",action='store_true')
 parser.add_argument('--gap', help="Fill gaps <50ms.", action="store_true")
-
+parser.add_argument('--save', help="save values to destination", type=str)
 
 args = parser.parse_args()
 
@@ -29,7 +29,8 @@ note = []
 
 results = {}
 
-# safe_mkdir(save_folder)
+if args.save is not None:
+    safe_mkdir(args.save)
 
 for fn in os.listdir(input_folder):
     if fn.endswith('_pr.csv') and not fn.startswith('.'):
@@ -49,8 +50,8 @@ for fn in os.listdir(input_folder):
             input_roll = convert_note_to_time(input_roll,data_quant.corresp,data_quant.input_fs,max_len=30)
         if args.step == 'time' and args.with_quant:
             data_quant = DataMaps()
-            data_quant.make_from_file(filename_target,args.step,[0,30],acoustic_model='kelz')
-            input_roll = align_matrix(input_roll,data_quant.corresp,data_quant.input_fs,max_len=30,method='quant')
+            data_quant.make_from_file(filename_target,'quant',[0,30],acoustic_model='kelz')
+            input_roll = align_matrix(input_roll,data_quant.corresp,data_quant.input_fs,method='quant')
             input_roll = convert_note_to_time(input_roll,data_quant.corresp,data_quant.input_fs,max_len=30)
 
         P_f,R_f,F_f = compute_eval_metrics_frame(input_roll,target_roll)
@@ -70,4 +71,4 @@ P_n, R_n, F_n = np.mean(note, axis=0)
 print(f"Averages: Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
 sys.stdout.flush()
 
-# pickle.dump(results,open(os.path.join('results/baseline/raw','results.p'), "wb"))
+pickle.dump(results,open(os.path.join(args.save,'results.p'), "wb"))
