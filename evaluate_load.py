@@ -2,7 +2,7 @@ import numpy as np
 import os
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 from mlm_training.utils import safe_mkdir
-from dataMaps import DataMaps, convert_note_to_time
+from dataMaps import DataMaps, convert_note_to_time, align_matrix
 import pickle
 import argparse
 import sys
@@ -14,6 +14,7 @@ parser.add_argument('target_folder',type=str)
 parser.add_argument("--step", type=str, choices=["time", "quant", "event"], help="Change the step type for frame timing. Either time (default), " +
                     "quant (for 16th notes), or event (for onsets).", default="time")
 parser.add_argument('--with_offset', help="use offset for framewise metrics", action='store_true')
+parser.add_argument('--with_quant',help="post-quantise the outputs",action='store_true')
 
 args = parser.parse_args()
 
@@ -43,6 +44,11 @@ for fn in os.listdir(input_folder):
         if args.step in ['quant','event']:
             data_quant = DataMaps()
             data_quant.make_from_file(filename_target,args.step,[0,30],acoustic_model='kelz')
+            input_roll = convert_note_to_time(input_roll,data_quant.corresp,data_quant.input_fs,max_len=30)
+        if args.with_quant:
+            data_quant = DataMaps()
+            data_quant.make_from_file(filename_target,args.step,[0,30],acoustic_model='kelz')
+            input_roll = align_matrix(input_roll,data_quant.corresp,data_quant.input_fs,max_len=30,method='quant')
             input_roll = convert_note_to_time(input_roll,data_quant.corresp,data_quant.input_fs,max_len=30)
 
         P_f,R_f,F_f = compute_eval_metrics_frame(input_roll,target_roll)
