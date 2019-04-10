@@ -6,6 +6,12 @@ import pickle
 # MAPS_MUS-chpn-p4_ENSTDkAm.mid: very good for WM, less good for PM
 # MAPS_MUS-chpn_op35_1_ENSTDkAm.mid: our models get the rhythm right
 
+# Meh comparison:
+# MAPS_MUS-bor_ps6_ENSTDkCl.mid: WM much more conservative, PM gets rhythm that doesn't exist
+
+# Bad comparisons:
+# MAPS_MUS-scn16_3_ENSTDkCl.mid: WM remove lots of notes, also fragments notes, but somehow sounds better.  PM over-fragments notes, and adds an extra overtone at the beginning
+
 
 path_baseline = 'results/results-20/save/baseline-quant/results.p'
 path_hmm = 'results/results-20/save/hmm-quant/results.pkl'
@@ -56,5 +62,10 @@ for key in keys:
     diff+= all_results[3][1][key][1][-1]-all_results[0][1][key][1][-1]
     all_diffs += [[key,diff]]
 sort = sorted(all_diffs,key=lambda x:x[1])
+print('BEST')
 for filename,value in sort[-10:]:
+    print(filename,value)
+
+print("WORST")
+for filename,value in sort[:10]:
     print(filename,value)
