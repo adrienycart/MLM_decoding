@@ -61,7 +61,7 @@ for fn in os.listdir(input_folder):
         frame  += [[P_f,R_f,F_f]]
         note   += [[P_n,R_n,F_n]]
 
-        results[fn] = [[P_f,R_f,F_f],[P_n,R_n,F_n]]
+        results[fn.replace('_pr.csv','.mid')] = [[P_f,R_f,F_f],[P_n,R_n,F_n]]
         # print([[P_f,R_f,F_f],[P_n,R_n,F_n]])
 
 
