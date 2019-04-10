@@ -23,6 +23,16 @@ def filter_short_notes(data,thresh=1):
     return np.cumsum(diff_filtered,axis=1)[:,:-2].astype(int)
 
 
+def filter_short_gaps(data,thresh=1):
+    #Removes all gaps shorter than thresh
+    #thresh is in number of steps
+    for pitch in data:
+        for i, frame in enumerate(pitch):
+            if 0 < i < len(pitch)-1 and frame == 0 and pitch[i-1] == 1 and pitch[i+1] == 1:
+                pitch[i] = 1
+    return data
+
+
 def get_notes_intervals(data,fs):
     #Returns the list of note events from a piano-roll
 
@@ -105,7 +115,7 @@ def compute_eval_metrics_frame(input,target):
     F = Fmeasure(input,target)
     return prec, rec, F
 
-def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_offset=False):
+def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_offset=False, min_gap=None):
     #Compute evaluation metrics note-by-note
     #filter out all notes shorter than min_dur (in seconds, default 50ms)
     #A note is correctly detected if it has the right pitch and the inset is within tolerance parameter (default 50ms)
@@ -121,6 +131,10 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_off
         data_filt = input
     else:
         data_filt = filter_short_notes(input,thresh=int(round(fs*min_dur)))
+        
+    if min_gap is not None:
+        data_filt = filter_short_gaps(input,thresh=int(round(fs*min_gap)))
+        
     results = []
 
     if tolerance == None:
