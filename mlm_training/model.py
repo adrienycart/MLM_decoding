@@ -498,6 +498,28 @@ class Model:
                 self._cross_entropy2 = cross_entropy2
         return self._cross_entropy2
 
+    def split_steady(self, x,*args):
+        #x is one single input, same for all tensors in args
+        data_extended = tf.pad(x,[[1,1],[0,0]],'constant')
+        diff = data_extended[1:,:] - data_extended[:-1,:]
+        # diff = tf.split(diff,tf.shape(diff)[0])
+        trans_mask = tf.logical_or(tf.equal(diff,1), tf.equal(diff,-1))
+        steady = tf.where(tf.logical_not(trans_mask))
+        # lol = transitions[:,1,:]
+
+        steady_unique, _ ,count_steady = tf.unique_with_counts(steady[:,0])
+        steady_unique = tf.where(tf.equal(count_steady,self.n_notes))[:,0]
+        steady_unique_steps = tf.gather(steady_unique,tf.where(tf.logical_and(tf.logical_not(tf.equal(steady_unique,0)),tf.logical_not(tf.equal(steady_unique,tf.cast(tf.shape(x)[0],tf.int64)))))[:,0])
+        # steady_unique = steady_unique[:-1]
+        # steady_unique_steps = tf.Print(steady_unique_steps,[seq_len,tf.shape(x)[0]])
+        out = []
+        for tensor in args:
+            out += [tf.gather(tensor,tf.add(steady_unique_steps,-1))]
+        out += [count_steady]
+
+        return out
+
+    #def split_trans(self, x,y,pred):
     def split_trans(self, x,*args):
         #x is one single input, same for all tensors in args
         data_extended = tf.pad(x,[[1,1],[0,0]],'constant')
@@ -507,59 +529,396 @@ class Model:
         transitions= tf.where(trans_mask)
 
         transitions_unique, _ ,count_trans = tf.unique_with_counts(transitions[:,0])
-        #We drop the first onset and last offset
-        transitions_unique = transitions_unique[1:-1]
-        count_trans = count_trans[1:-1]
-
+        #We drop the first onset only if it is 0
+        idx_to_keep = tf.where(tf.logical_and(tf.logical_not(tf.equal(transitions_unique,0)),tf.logical_not(tf.equal(transitions_unique,tf.cast(tf.shape(x)[0],tf.int64)))))[:,0]
+        transitions_unique_trim = tf.gather(transitions_unique,idx_to_keep)
+        count_trans_trim = tf.gather(count_trans,idx_to_keep)
+        transitions_unique_trim = transitions_unique_trim
         out = []
 
         # pred_trans = tf.gather(pred,tf.add(transitions_unique,-1))
         # y_trans = tf.gather(y,tf.add(transitions_unique,-1))
         for tensor in args:
-            out += [tf.gather(tensor,tf.add(transitions_unique,-1))]
-        out += [count_trans]
+            out += [tf.gather(tensor,tf.add(transitions_unique_trim,-1))]
+        out += [count_trans_trim]
 
         #return pred_trans, y_trans, count_trans
         return out
 
     @property
-    def cross_entropy_transition(self):
-        if self._cross_entropy_transition is None:
+    def cross_entropy_transition2(self):
+        if self._cross_entropy_transition2 is None:
             with tf.device(self.device_name):
 
                 def compute_one(elems):
                     x = elems[0]
                     y = elems[1]
                     pred = elems[2]
+                    seq_len = elems[3]
+
+                    x = x[:seq_len,:]
+                    y = y[:seq_len-1,:]
+                    pred = pred[:seq_len-1,:]
 
                     y, pred, count = self.split_trans(x,y,pred)
 
 
-
                     cross_entropy_trans = tf.nn.sigmoid_cross_entropy_with_logits(logits=pred, labels=y)
-                    cross_entropy_trans = tf.reduce_mean(cross_entropy_trans,axis=[1])
+                    cross_entropy_trans = tf.reduce_mean(cross_entropy_trans,axis=1)
                     cross_entropy_trans = tf.reduce_mean(tf.div(cross_entropy_trans,tf.cast(count,tf.float32)))
 
                     #It is necessary that the output has the same dimensions as input (even if not used)
-                    return cross_entropy_trans, 0.0, 0.0
+                    return cross_entropy_trans, tf.cast(tf.shape(pred),tf.float32), 0.0,0
 
-                if self.scheduled_sampling:
-                    pred = self.prediction_sched_samp
-                else:
-                    pred = self.prediction
+                pred = self.prediction
                 xs = self.inputs
                 ys = self.labels
+                seq_lens = self.seq_lens
 
 
-                XEs = tf.map_fn(compute_one,[xs,ys,pred],dtype=(tf.float32,tf.float32,tf.float32))
-                XEs = tf.gather(XEs[0],tf.where(tf.logical_not(tf.is_nan(XEs[0]))))
-                cross_entropy_trans = tf.reduce_mean(XEs)
-
+                XEs = tf.map_fn(compute_one,[xs,ys,pred,seq_lens],dtype=(tf.float32,tf.float32,tf.float32,tf.int32))
+                cross_entropy_trans = XEs[0]
+                # cross_entropy_trans = tf.Print(cross_entropy_trans,[tf.where(tf.is_nan(cross_entropy_trans))],message="trans",summarize=1000000)
                 # pred_test, y_test , count_test = self.split_trans(xs[0],ys[0],pred[0])
                 # test1 = tf.identity([pred_test,y_test],name='test1')
 
+                self._cross_entropy_transition2 = cross_entropy_trans
+        return self._cross_entropy_transition2
+
+    @property
+    def cross_entropy_transition(self):
+        if self._cross_entropy_transition is None:
+            with tf.device(self.device_name):
+
+                XEs = self.cross_entropy_transition2
+                XEs = tf.gather(XEs,tf.where(tf.logical_not(tf.is_nan(XEs))))
+                cross_entropy_trans = tf.reduce_mean(XEs)
+
                 self._cross_entropy_transition = cross_entropy_trans
         return self._cross_entropy_transition
+
+
+    @property
+    def cross_entropy_steady2(self):
+        if self._cross_entropy_steady2 is None:
+            with tf.device(self.device_name):
+
+                def compute_one(elems):
+                    x = elems[0]
+                    y = elems[1]
+                    pred = elems[2]
+                    seq_len = elems[3]
+
+                    x = x[:seq_len,:]
+                    y = y[:seq_len-1,:]
+                    pred = pred[:seq_len-1,:]
+
+                    y, pred, _ = self.split_steady(x,y,pred)
+
+                    cross_entropy_steady = tf.nn.sigmoid_cross_entropy_with_logits(logits=pred, labels=y)
+                    cross_entropy_steady = tf.reduce_mean(cross_entropy_steady)
+                    # cross_entropy_steady = tf.Print(tf.reduce_mean(cross_entropy_steady),[tf.shape(cross_entropy_steady),tf.reduce_sum(cross_entropy_steady),tf.reduce_mean(cross_entropy_steady)],message="steady")
+                    # output = tf.cond(tf.equal(tf.reduce_sum(cross_entropy_steady),0),
+                    #         fn1 = lambda: tf.Print(0.0,[0],message='steady zero'),
+                    #         fn2 = lambda: tf.Print(cross_entropy_steady,[tf.shape(cross_entropy_steady),tf.reduce_sum(cross_entropy_steady),tf.reduce_mean(cross_entropy_steady)],message="steady"))
+
+
+                    #It is necessary that the output has the same dimensions as input (even if not used)
+                    return cross_entropy_steady, tf.cast(tf.shape(pred),tf.float32), 0.0, 0
+
+                pred = self.prediction
+                xs = self.inputs
+                ys = self.labels
+                seq_lens = self.seq_lens
+
+                XEs = tf.map_fn(compute_one,[xs,ys,pred,seq_lens],dtype=(tf.float32,tf.float32,tf.float32,tf.int32))
+                cross_entropy_steady = XEs[0]
+                # cross_entropy_steady = tf.Print(cross_entropy_steady,[tf.where(tf.is_nan(cross_entropy_steady))],message="steady",summarize=1000000)
+
+                self._cross_entropy_steady2 = cross_entropy_steady
+        return self._cross_entropy_steady2
+
+    @property
+    def cross_entropy_steady(self):
+        if self._cross_entropy_steady is None:
+            with tf.device(self.device_name):
+
+
+                XEs = self.cross_entropy_steady2
+                XEs_no_nan = tf.gather(XEs,tf.where(tf.logical_not(tf.is_nan(XEs))))
+                cross_entropy_steady = tf.reduce_mean(XEs_no_nan)
+
+
+                self._cross_entropy_steady = cross_entropy_steady
+        return self._cross_entropy_steady
+
+    @property
+    def cross_entropy_length2(self):
+        if self._cross_entropy_length2 is None:
+            with tf.device(self.device_name):
+                n_notes = self.n_notes
+                n_steps = self.n_steps
+                suffix = self.suffix
+                y = self.labels
+                seq_len = self.seq_lens
+
+                mask = tf.sequence_mask(seq_len-1,maxlen=n_steps-1)
+                mask = tf.expand_dims(mask,-1)
+                mask = tf.tile(mask,[1,1,n_notes])
+
+                cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.prediction, labels=y)
+                cross_entropy_masked = cross_entropy*tf.cast(mask,tf.float32)
+
+                cross_entropy_length = tf.reduce_mean(cross_entropy_masked*n_steps,axis=[1,2])/tf.cast(seq_len,tf.float32)
+
+                self._cross_entropy_length2 = cross_entropy_length
+        return self._cross_entropy_length2
+
+    @property
+    def cross_entropy_length(self):
+        if self._cross_entropy_length is None:
+            with tf.device(self.device_name):
+                cross_entropy_length = self.cross_entropy_length2
+                cross_entropy_length = tf.reduce_mean(cross_entropy_length)
+
+                self._cross_entropy_length = cross_entropy_length
+        return self._cross_entropy_length
+
+
+    @property
+    def thresh_key(self):
+        if self._thresh_key is None:
+            with tf.device(self.device_name):
+                thresh_key = tf.placeholder_with_default(0.05, shape=(), name="thresh_key"+self.suffix)
+                self._thresh_key = thresh_key
+        return self._thresh_key
+
+    @property
+    def thresh_active(self):
+        if self._thresh_active is None:
+            with tf.device(self.device_name):
+                thresh_active = tf.placeholder_with_default(0.05, shape=(), name="thresh_active"+self.suffix)
+                self._thresh_active = thresh_active
+        return self._thresh_active
+
+    @property
+    def cross_entropy_key2(self):
+        if self._cross_entropy_key2 is None:
+            with tf.device(self.device_name):
+
+                def transitions_one(elems):
+                    tensor,x,active_mask,key_mask,seq_len = elems
+
+                    x = x[:seq_len,:]
+                    tensor = tensor[:seq_len-1,:]
+                    active_mask = active_mask[:seq_len-1,:]
+                    key_mask = key_mask[:seq_len-1,:]
+
+                    tensor,active_mask,key_mask,_ = self.split_trans(x,tensor,active_mask,key_mask)
+                    XE = tf.nn.sigmoid_cross_entropy_with_logits(logits=tensor, labels=key_mask)*active_mask
+                    XE = tf.reduce_sum(XE)/tf.reduce_sum(active_mask)
+                    return XE, 0.0,0.0,0.0,0
+
+                def transitions_one_norm(elems):
+                    tensor,x,seq_len,active_mask,key_mask  = elems
+
+                    x = x[:seq_len,:]
+                    tensor = tensor[:seq_len-1,:]
+                    active_mask = active_mask[:seq_len-1,:]
+                    key_mask = key_mask[:seq_len-1,:]
+
+                    tensor_split,active_mask_split,key_mask_split,_ = self.split_trans(x,tensor,active_mask,key_mask)
+                    XE = tf.nn.sigmoid_cross_entropy_with_logits(logits=tensor_split, labels=key_mask_split)*active_mask_split
+                    norm_factor = tf.expand_dims(tf.reduce_sum(key_mask_split,axis=[1]),axis=1)
+                    XE = XE/norm_factor
+                    # XE = tf.where(tf.is_nan(XE), tf.zeros_like(XE), XE)
+                    XE= tf.reduce_sum(XE)/tf.reduce_sum(active_mask_split)
+                    # XE = tf.Print(XE,[tf.where(tf.equal(norm_factor,0)),tf.where(tf.equal(tf.reduce_sum(key_mask_split,axis=1),0)),tf.where(tf.equal(tf.reduce_sum(active_mask_split,axis=1),0)),tf.shape(norm_factor)],message="trans",summarize=1000)
+
+                    return XE, 0.0,0.0,0.0,0.0
+
+                def steady_one(elems):
+                    tensor,x,active_mask,key_mask,seq_len = elems
+
+                    x = x[:seq_len,:]
+                    tensor = tensor[:seq_len-1,:]
+                    active_mask = active_mask[:seq_len-1,:]
+                    key_mask = key_mask[:seq_len-1,:]
+
+                    tensor,active_mask,key_mask,_ = self.split_steady(x,tensor,active_mask,key_mask)
+                    XE = tf.nn.sigmoid_cross_entropy_with_logits(logits=tensor, labels=key_mask)*active_mask
+                    XE = tf.reduce_sum(XE)/tf.reduce_sum(active_mask)
+
+                    return XE, 0.0,0.0,0.0,0
+
+                def steady_one_norm(elems):
+                    tensor,x,seq_len,active_mask,key_mask = elems
+
+                    x = x[:seq_len,:]
+                    tensor = tensor[:seq_len-1,:]
+                    active_mask = active_mask[:seq_len-1,:]
+                    key_mask = key_mask[:seq_len-1,:]
+
+                    tensor_split,active_mask_split,key_mask_split,_ = self.split_steady(x,tensor,active_mask,key_mask)
+                    XE = tf.nn.sigmoid_cross_entropy_with_logits(logits=tensor_split, labels=key_mask_split)*active_mask_split
+                    norm_factor = tf.expand_dims(tf.reduce_sum(key_mask_split,axis=[1]),axis=1)
+                    XE = XE/norm_factor
+                    # XE = tf.where(tf.is_nan(XE), tf.zeros_like(XE), XE)
+                    XE= tf.reduce_sum(XE)/tf.reduce_sum(active_mask_split)
+                    # XE = tf.Print(XE,[tf.where(tf.equal(tf.reduce_sum(key_mask_split,axis=1),0)),tf.where(tf.equal(tf.reduce_sum(active_mask_split,axis=1),0)),tf.shape(norm_factor)],message="steady",summarize=1000)
+
+                    return XE, 0.0,0.0,0.0,0
+
+
+
+                n_notes = self.n_notes
+                n_steps = self.n_steps
+                x = self.inputs
+                y = self.labels
+                seq_lens = self.seq_lens
+                pred = self.prediction
+                key_masks = self.key_masks
+                thresh_key = self.thresh_key
+                thresh_active = self.thresh_active
+
+                key_lists = self.key_lists
+
+                key_masks = tf.cast(tf.greater(key_masks,thresh_key),tf.float32)
+
+                label_mask = tf.cast(tf.abs(1-y),tf.float32)
+                active_mask = tf.cast(tf.greater(pred,thresh_active),tf.float32)
+                # label_mask = label_mask*tf.cast(tf.abs(1-x[:,:-1,:]),tf.float32)
+                length_mask = tf.sequence_mask(seq_lens-1,maxlen=n_steps-1)
+                length_mask = tf.expand_dims(length_mask,-1)
+                length_mask = tf.cast(tf.tile(length_mask,[1,1,n_notes]),tf.float32)
+                XE_mask = label_mask*length_mask
+                pred_masked = pred*XE_mask
+
+
+                key_XE = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(logits=pred,labels=key_masks)*XE_mask,axis=[1,2])/tf.reduce_sum(XE_mask,axis=[1,2])
+
+
+                #Key cross_entropy on transitions
+                output = tf.map_fn(transitions_one,(pred_masked,x,XE_mask,key_masks,seq_lens),dtype=(tf.float32,tf.int32,tf.float32,tf.float32,tf.int32))
+                key_XE_tr = output[0]
+
+
+                #Key cross_entropy on steady state
+                output = tf.map_fn(steady_one,(pred_masked,x,XE_mask,key_masks,seq_lens),dtype=(tf.float32,tf.int32,tf.float32,tf.float32,tf.int32))
+                key_XE_ss = output[0]
+
+
+                #NORMALISED XE_k
+                norm_factor = tf.expand_dims(tf.reduce_sum(key_masks,axis=[2]),axis=2)
+                key_XE_n = tf.nn.sigmoid_cross_entropy_with_logits(logits=pred,labels=key_masks)*XE_mask/norm_factor
+                key_XE_n = tf.where(tf.is_nan(key_XE_n), tf.zeros_like(key_XE_n), key_XE_n)
+                key_XE_n = tf.reduce_sum(key_XE_n,axis=[1,2])/tf.reduce_sum(XE_mask,axis=[1,2])
+
+                #NORMALISED XE_k,tr
+                output = tf.map_fn(transitions_one_norm,(pred_masked,x,seq_lens,XE_mask,key_masks),dtype=(tf.float32,tf.int32,tf.float32,tf.float32,tf.float32))
+                key_XE_tr_n = output[0]
+
+
+                #NORMALISED XE_k,ss
+                output = tf.map_fn(steady_one_norm,(pred_masked,x,seq_lens,XE_mask,key_masks),dtype=(tf.float32,tf.int32,tf.float32,tf.float32,tf.float32))
+                key_XE_ss_n = output[0]
+
+
+                cross_entropy_key_masked = [key_XE,key_XE_tr,key_XE_ss,key_XE_n,key_XE_tr_n,key_XE_ss_n]
+
+                self._cross_entropy_key2 = cross_entropy_key_masked
+        return self._cross_entropy_key2
+
+    @property
+    def cross_entropy_key(self):
+        if self._cross_entropy_key is None:
+            with tf.device(self.device_name):
+
+
+                key_XE,key_XE_tr,key_XE_ss,key_XE_n,key_XE_tr_n,key_XE_ss_n = self.cross_entropy_key2
+
+                key_XE = tf.reduce_mean(key_XE)
+
+                #Key cross_entropy on transitions
+                key_XE_tr = tf.reduce_mean(tf.gather(key_XE_tr,tf.where(tf.logical_not(tf.is_nan(key_XE_tr)))))
+
+                #Key cross_entropy on steady state
+                key_XE_ss = tf.reduce_mean(tf.gather(key_XE_ss,tf.where(tf.logical_not(tf.is_nan(key_XE_ss)))))
+                # key_XE_ss = tf.where(tf.is_nan(key_XE_ss), tf.zeros_like(key_XE_ss), key_XE_ss)
+
+
+                #NORMALISED XE_k
+                key_XE_n = tf.reduce_mean(key_XE_n)
+
+                #NORMALISED XE_k,tr
+                key_XE_tr_n = tf.reduce_mean(tf.gather(key_XE_tr_n,tf.where(tf.logical_not(tf.is_nan(key_XE_tr_n)))))
+
+                #NORMALISED XE_k,ss
+                key_XE_ss_n = tf.reduce_mean(tf.gather(key_XE_ss_n,tf.where(tf.logical_not(tf.is_nan(key_XE_ss_n)))))
+
+
+                cross_entropy_key_masked = [key_XE,key_XE_tr,key_XE_ss,key_XE_n,key_XE_tr_n,key_XE_ss_n]
+
+                self._cross_entropy_key = cross_entropy_key_masked
+        return self._cross_entropy_key
+
+    @property
+    def combined_metric2(self):
+        if self._combined_metric2 is None:
+            with tf.device(self.device_name):
+                XE_tr = self.cross_entropy_transition2
+                XE_ss = self.cross_entropy_steady2
+                XE_k = self.cross_entropy_key2
+                XE_ktr = XE_k[2]
+                XE_kss = XE_k[3]
+
+                combined_metric = tf.sqrt((XE_tr+XE_ss)*(XE_ktr+XE_kss))
+
+
+                self._combined_metric2 = combined_metric
+        return self._combined_metric2
+
+    @property
+    def combined_metric(self):
+        if self._combined_metric is None:
+            with tf.device(self.device_name):
+                combined_metric = self.combined_metric2
+
+                combined_metric = tf.gather(combined_metric,tf.where(tf.logical_not(tf.is_nan(combined_metric))))
+                combined_metric = tf.reduce_mean(combined_metric)
+
+
+                self._combined_metric = combined_metric
+        return self._combined_metric
+
+    @property
+    def combined_metric_norm2(self):
+        if self._combined_metric_norm2 is None:
+            with tf.device(self.device_name):
+                XE_tr = self.cross_entropy_transition2
+                XE_ss = self.cross_entropy_steady2
+                XE_k = self.cross_entropy_key2
+                XE_ktr = XE_k[4]
+                XE_kss = XE_k[5]
+
+                combined_metric_norm = tf.sqrt((XE_tr+XE_ss)*(XE_ktr+XE_kss))
+
+
+                self._combined_metric_norm2 = combined_metric_norm
+        return self._combined_metric_norm2
+
+    @property
+    def combined_metric_norm(self):
+        if self._combined_metric_norm is None:
+            with tf.device(self.device_name):
+                combined_metric = self.combined_metric_norm2
+
+                combined_metric = tf.gather(combined_metric,tf.where(tf.logical_not(tf.is_nan(combined_metric))))
+                combined_metric = tf.reduce_mean(combined_metric)
+
+
+                self._combined_metric_norm = combined_metric
+        return self._combined_metric_norm
 
     @property
     def gamma(self):
@@ -596,21 +955,62 @@ class Model:
 
 
     @property
-    def optimize(self):
-        """
-        Optimiser. Evaluate that node to train the network.
-        """
-        if self._optimize is None:
+    def loss(self):
+        if self._loss is None:
             with tf.device(self.device_name):
-                cross_entropy = self.cross_entropy
-                if self.use_focal_loss:
+
+                XE = self.cross_entropy
+
+                if self.loss_type == 'focal_loss':
                     print('Use Focal Loss')
                     loss = self.focal_loss
-                else:
+                elif self.loss_type == 'XE':
                     print('Use Cross-Entropy Loss')
-                    loss = cross_entropy
-                optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(loss)
-                self._optimize = optimizer
+                    loss = XE #+ 0.1*cross_entropy_trans
+                elif self.loss_type == 'combined':
+                    print('Use Combined metric Loss')
+                    loss = self.combined_metric
+
+
+                elif self.loss_type == 'combined_norm':
+                    print('Use Normalised Combined metric Loss')
+                    loss = self.combined_metric_norm
+
+                elif self.loss_type == "XEtr_XEss":
+                    print('Use (XE_tr+XE_ss) Loss')
+                    XE_tr = self.cross_entropy_transition2
+                    XE_ss = self.cross_entropy_steady2
+
+                    no_nan_mask = tf.logical_or(tf.is_nan(XE_tr),tf.is_nan(XE_tr))
+                    no_nan_mask = tf.logical_not(no_nan_mask)
+
+                    XE_tr = tf.gather(XE_tr,tf.where(no_nan_mask))
+                    XE_ss = tf.gather(XE_ss,tf.where(no_nan_mask))
+
+                    loss = tf.reduce_mean(XE_tr+XE_ss)
+                else:
+                    raise ValueError("loss_type value not understood: "+str(self.loss_type) )
+
+                self._loss = loss
+        return self._loss
+
+
+
+    @property
+    def optimize(self):
+        if self._optimize is None:
+            with tf.device(self.device_name):
+
+                loss = self.loss
+
+                optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
+                gvs = optimizer.compute_gradients(loss)
+                if self.grad_clip is not None:
+                    capped_gvs = [(tf.clip_by_value(grad, -float(self.grad_clip), float(self.grad_clip)), var) for grad, var in gvs]
+                    train_op = optimizer.apply_gradients(capped_gvs)
+                else:
+                    train_op = optimizer.apply_gradients(gvs)
+                self._optimize = train_op
         return self._optimize
 
     def _run_by_batch(self,sess,op,feed_dict,batch_size,mean=True):
@@ -1262,7 +1662,8 @@ def make_model_param():
     model_param['learning_rate']=0.01
     model_param['n_notes']=88
     model_param['n_steps']=300
-    model_param['use_focal_loss']=False
+    model_param['loss_type']= 'XE'
+    model_param['grad_clip']=None
     model_param['pitchwise']=False
     model_param['scheduled_sampling'] = False
     model_param['sampl_mix_weight']= None
