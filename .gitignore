@@ -23,3 +23,8 @@ results/
 roadmap.pdf
 *.bbl
 *.blg
+*.png
+*.zip
+hmm_2
+listen_example copy.py
+script_train_mlm_3.bash

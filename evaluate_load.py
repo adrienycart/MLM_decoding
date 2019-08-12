@@ -64,11 +64,12 @@ for fn in os.listdir(input_folder):
         results[fn.replace('_pr.csv','.mid')] = [[P_f,R_f,F_f],[P_n,R_n,F_n]]
         # print([[P_f,R_f,F_f],[P_n,R_n,F_n]])
 
-
+print(np.array(frame).shape)
 P_f, R_f, F_f = np.mean(frame, axis=0)
 P_n, R_n, F_n = np.mean(note, axis=0)
 
 print(f"Averages: Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
 sys.stdout.flush()
 
-pickle.dump(results,open(os.path.join(args.save,'results.p'), "wb"))
+if args.save is not None:
+    pickle.dump(results,open(args.save, "wb"))
