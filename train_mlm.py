@@ -23,6 +23,7 @@ parser.add_argument('-epochs',type=int,default=1000,help="maximum number of epoc
 parser.add_argument('-early_stop_epochs',type=int,default=100,help="stop training after this number of epochs without improvement on valid set")
 parser.add_argument('-lr',type=float,default=0.01,help="learning rate")
 parser.add_argument('-loss_type',type=str,help="choose loss type (default='XE')",default='XE')
+parser.add_argument('-grad_clip',type=float,help="use gradient clipping (no clipping if not used)")
 parser.add_argument('-resume',action='store_true',help="resume training from latest checkpoint in save_path")
 parser.add_argument('-sched_sampl',type=str,help="type of sampling for scheduled sampling. If not specified, no scheduled sampling")
 parser.add_argument('-sched_sampl_load',type=str,help="path of the pretrained model to load. If not specified, the model will be trained from scratch")
@@ -50,8 +51,7 @@ elif args.event:
     max_len = 100
 else:
     timestep_type = 'time'
-    # max_len = 750
-    max_len = 100
+    max_len = 750
 
 
 
@@ -67,7 +67,10 @@ learning_rate = args.lr
 
 train_param = make_train_param()
 train_param['epochs']=args.epochs
-train_param['batch_size']=1
+if 'test' in args.data_path:
+    train_param['batch_size']=1
+else:
+    train_param['batch_size']=50
 train_param['display_per_epoch']=None
 train_param['save_step']=1
 train_param['max_to_keep']=1
@@ -92,7 +95,9 @@ else:
     data = Dataset(rand_transp=True)
     data.load_data(args.data_path,timestep_type=timestep_type,note_range=note_range,)
 
-
+# gen = data.get_dataset_generator('train',1,max_len,check_data=True,with_keys=True)
+# for input, output,length,keys in gen:
+#     print(input.shape, output.shape, length)
 
 # np.random.seed(0)
 # data.shuffle_one('train')
@@ -105,7 +110,7 @@ model_param['chunks']=max_len
 model_param['loss_type']=args.loss_type
 model_param['scheduled_sampling']=args.sched_sampl
 model_param['sampl_mix_weight'] = args.sampl_mix_weight
-model_param['grad_clip'] = None
+model_param['grad_clip'] = args.grad_clip
 if args.pitchwise is None:
     model_param['pitchwise']=False
 else:

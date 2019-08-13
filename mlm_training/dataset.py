@@ -262,7 +262,7 @@ class Dataset:
         return outputs
 
 
-    def get_dataset_generator(self,subset,batch_size,len_chunk=None,with_names=False,with_keys=False,check_data=True):
+    def get_dataset_generator(self,subset,batch_size,len_chunk=None,with_names=False,with_keys=False,check_data=False):
         seq_buff = []
         len_buff = []
         if with_names:
@@ -292,7 +292,9 @@ class Dataset:
                     if with_keys:
                         chunks, chunks_len,chunks_keys = piano_roll.cut(piano_roll.roll,len_chunk,keep_padding=False,as_list=True,with_keys=True)
                         if check_data:
+                            # print(piano_roll.name)
                             idx = self.check_data(chunks,chunks_len)
+
                             chunks = [chunks[i] for i in idx]
                             chunks_len = [chunks_len[i] for i in idx]
                             chunks_keys = [chunks_keys[i] for i in idx]
@@ -319,6 +321,7 @@ class Dataset:
                     del names_buff[:batch_size]
                 if with_keys:
                     output_keys = np.array(keys_buff[:batch_size])
+                    # print(output_keys.shape,output_roll.shape)
                     output += [output_keys[:,:,1:]]
                     del keys_buff[:batch_size]
 
@@ -370,10 +373,21 @@ class Dataset:
                 del len_buff[:batch_size]
                 yield output
 
-    def check_data(self,rolls,lengths):
+    def check_data(self,rolls,lengths,names=None):
         to_keep = []
-        for i,(roll,length) in enumerate(zip(rolls,lengths)):
-            length = int(length)
+        if names is None:
+            zip_list = zip(rolls,lengths)
+        else:
+            zip_list = zip(rolls,lengths,names)
+        for i,values in enumerate(zip(rolls,lengths)):
+            if names is None:
+                (roll,length) = values
+            else:
+                (roll,length,name) = values
+                # print(name)
+
+            #When exported, we do -1 to the lengths so this has to be the case here as well
+            length = int(length-1)
             pr = roll[:,:length]
 
             data_extended = np.pad(pr,[[0,0],[1,1]],'constant')
@@ -417,7 +431,9 @@ class Dataset:
                         pass
                     else:
                         trans_ok = True
-
+            # print(pr.shape,length)
+            # print(steady_ok,trans_ok)
+            # print(steady,trans)
             if steady_ok and trans_ok:
                 to_keep += [i]
         return to_keep

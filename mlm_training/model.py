@@ -585,8 +585,8 @@ class Model:
                     seq_len = elems[3]
 
                     x = x[:seq_len,:]
-                    y = y[:seq_len-1,:]
-                    pred = pred[:seq_len-1,:]
+                    y = y[:seq_len,:]
+                    pred = pred[:seq_len,:]
 
                     y, pred, count = self.split_trans(x,y,pred)
 
@@ -641,8 +641,8 @@ class Model:
                     seq_len = elems[3]
 
                     x = x[:seq_len,:]
-                    y = y[:seq_len-1,:]
-                    pred = pred[:seq_len-1,:]
+                    y = y[:seq_len,:]
+                    pred = pred[:seq_len,:]
 
                     y, pred, _ = self.split_steady(x,y,pred)
 
@@ -652,7 +652,7 @@ class Model:
                     # output = tf.cond(tf.equal(tf.reduce_sum(cross_entropy_steady),0),
                     #         fn1 = lambda: tf.Print(0.0,[0],message='steady zero'),
                     #         fn2 = lambda: tf.Print(cross_entropy_steady,[tf.shape(cross_entropy_steady),tf.reduce_sum(cross_entropy_steady),tf.reduce_mean(cross_entropy_steady)],message="steady"))
-                    # cross_entropy_steady = tf.Print(cross_entropy_steady,[cross_entropy_steady],message="steady",summarize=1000000)
+                    # cross_entropy_steady = tf.Print(cross_entropy_steady,[cross_entropy_steady,tf.shape(pred),tf.shape(x),seq_len],message="steady",summarize=1000000)
 
                     #It is necessary that the output has the same dimensions as input (even if not used)
                     return cross_entropy_steady, tf.cast(tf.shape(pred),tf.float32), 0.0, 0
@@ -701,7 +701,7 @@ class Model:
                 else:
                     pred = self.prediction
 
-                mask = tf.sequence_mask(seq_len-1,maxlen=n_steps-1)
+                mask = tf.sequence_mask(seq_len,maxlen=n_steps)
                 mask = tf.expand_dims(mask,-1)
                 mask = tf.tile(mask,[1,1,n_notes])
 
@@ -742,9 +742,9 @@ class Model:
                     tensor,x,active_mask,key_mask,seq_len = elems
 
                     x = x[:seq_len,:]
-                    tensor = tensor[:seq_len-1,:]
-                    active_mask = active_mask[:seq_len-1,:]
-                    key_mask = key_mask[:seq_len-1,:]
+                    tensor = tensor[:seq_len,:]
+                    active_mask = active_mask[:seq_len,:]
+                    key_mask = key_mask[:seq_len,:]
 
                     tensor,active_mask,key_mask,_ = self.split_trans(x,tensor,active_mask,key_mask)
                     XE = tf.nn.sigmoid_cross_entropy_with_logits(logits=tensor, labels=key_mask)*active_mask
@@ -755,9 +755,9 @@ class Model:
                     tensor,x,seq_len,active_mask,key_mask  = elems
 
                     x = x[:seq_len,:]
-                    tensor = tensor[:seq_len-1,:]
-                    active_mask = active_mask[:seq_len-1,:]
-                    key_mask = key_mask[:seq_len-1,:]
+                    tensor = tensor[:seq_len,:]
+                    active_mask = active_mask[:seq_len,:]
+                    key_mask = key_mask[:seq_len,:]
 
                     tensor_split,active_mask_split,key_mask_split,_ = self.split_trans(x,tensor,active_mask,key_mask)
                     XE = tf.nn.sigmoid_cross_entropy_with_logits(logits=tensor_split, labels=key_mask_split)*active_mask_split
@@ -773,9 +773,9 @@ class Model:
                     tensor,x,active_mask,key_mask,seq_len = elems
 
                     x = x[:seq_len,:]
-                    tensor = tensor[:seq_len-1,:]
-                    active_mask = active_mask[:seq_len-1,:]
-                    key_mask = key_mask[:seq_len-1,:]
+                    tensor = tensor[:seq_len,:]
+                    active_mask = active_mask[:seq_len,:]
+                    key_mask = key_mask[:seq_len,:]
 
                     tensor,active_mask,key_mask,_ = self.split_steady(x,tensor,active_mask,key_mask)
                     XE = tf.nn.sigmoid_cross_entropy_with_logits(logits=tensor, labels=key_mask)*active_mask
@@ -787,9 +787,9 @@ class Model:
                     tensor,x,seq_len,active_mask,key_mask = elems
 
                     x = x[:seq_len,:]
-                    tensor = tensor[:seq_len-1,:]
-                    active_mask = active_mask[:seq_len-1,:]
-                    key_mask = key_mask[:seq_len-1,:]
+                    tensor = tensor[:seq_len,:]
+                    active_mask = active_mask[:seq_len,:]
+                    key_mask = key_mask[:seq_len,:]
 
                     tensor_split,active_mask_split,key_mask_split,_ = self.split_steady(x,tensor,active_mask,key_mask)
                     XE = tf.nn.sigmoid_cross_entropy_with_logits(logits=tensor_split, labels=key_mask_split)*active_mask_split
@@ -821,7 +821,7 @@ class Model:
                 label_mask = tf.cast(tf.abs(1-y),tf.float32)
 
                 # label_mask = label_mask*tf.cast(tf.abs(1-x[:,:-1,:]),tf.float32)
-                length_mask = tf.sequence_mask(seq_lens-1,maxlen=n_steps)
+                length_mask = tf.sequence_mask(seq_lens,maxlen=n_steps)
                 length_mask = tf.expand_dims(length_mask,-1)
                 length_mask = tf.cast(tf.tile(length_mask,[1,1,n_notes]),tf.float32)
                 XE_mask = label_mask*length_mask
@@ -1326,8 +1326,11 @@ class Model:
                     feed_dict_optim.update({keys: batch_keys})
                     feed_dict_valid.update({keys: valid_keys})
 
-                sess.run([optimizer], feed_dict=feed_dict_optim)
 
+                loss, _ = sess.run([self.loss,optimizer], feed_dict=feed_dict_optim)
+                # print(metrics)
+                # if loss != loss:
+                #     return
 
                 if not display_step is None and j%display_step == 0 :
                     cross_batch = sess.run(cross_entropy, feed_dict=feed_dict_optim)
@@ -1338,7 +1341,7 @@ class Model:
                 n_batch += 1
 
 
-            cross = self._run_by_batch(sess,cross_entropy2,feed_dict_valid,batch_size)
+            cross = self._run_by_batch(sess,self.loss,feed_dict_valid,batch_size)
             if train_param['summarize']:
                 summary_e = sess.run(summary_epoch,feed_dict=feed_dict_valid)
                 train_writer.add_summary(summary_e, global_step=i)
