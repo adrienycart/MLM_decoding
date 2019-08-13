@@ -35,7 +35,10 @@ class Model:
         self._acoustic_outputs = None
         self._seq_lens = None
         self._labels = None
+        self._key_masks = None
         self._thresh = None
+        self._thresh_key = None
+        self._thresh_active = None
         self._sched_samp_p = None
         self._gamma = None
 
@@ -50,7 +53,21 @@ class Model:
         self._cross_entropy = None
         self._cross_entropy2 = None
         self._cross_entropy_transition = None
+        self._cross_entropy_transition2 = None
+        self._cross_entropy_length = None
+        self._cross_entropy_length2 = None
+        self._cross_entropy_steady = None
+        self._cross_entropy_steady2 = None
+        self._cross_entropy_key = None
+        self._cross_entropy_key2 = None
+
+        self._combined_metric = None
+        self._combined_metric2 = None
+        self._combined_metric_norm = None
+        self._combined_metric_norm2 = None
+
         self._focal_loss = None
+        self._loss = None
         self._optimize = None
         self._tp = None
         self._fp = None
@@ -61,7 +78,7 @@ class Model:
 
 
         #Call to create the graph
-        self.cross_entropy
+        # self.cross_entropy
 
 
     def _transpose_data(self, data):
@@ -463,6 +480,17 @@ class Model:
         return self._labels
 
     @property
+    def key_masks(self):
+        if self._key_masks is None:
+            suffix = self.suffix
+            n_steps = self.n_steps
+            n_classes = self.n_classes
+            key_masks = tf.placeholder('float',[None,n_steps,n_classes],name="key_masks"+suffix)
+
+            self._key_masks = key_masks
+        return self._key_masks
+
+    @property
     def cross_entropy(self):
         """
         Mean cross entropy
@@ -566,11 +594,14 @@ class Model:
                     cross_entropy_trans = tf.nn.sigmoid_cross_entropy_with_logits(logits=pred, labels=y)
                     cross_entropy_trans = tf.reduce_mean(cross_entropy_trans,axis=1)
                     cross_entropy_trans = tf.reduce_mean(tf.div(cross_entropy_trans,tf.cast(count,tf.float32)))
-
+                    # cross_entropy_trans = tf.Print(cross_entropy_trans,[cross_entropy_trans],message="trans",summarize=1000000)
                     #It is necessary that the output has the same dimensions as input (even if not used)
                     return cross_entropy_trans, tf.cast(tf.shape(pred),tf.float32), 0.0,0
 
-                pred = self.prediction
+                if hasattr(self, 'scheduled_sampling') and self.scheduled_sampling:
+                    pred = self.prediction_sched_samp
+                else:
+                    pred = self.prediction
                 xs = self.inputs
                 ys = self.labels
                 seq_lens = self.seq_lens
@@ -578,7 +609,7 @@ class Model:
 
                 XEs = tf.map_fn(compute_one,[xs,ys,pred,seq_lens],dtype=(tf.float32,tf.float32,tf.float32,tf.int32))
                 cross_entropy_trans = XEs[0]
-                # cross_entropy_trans = tf.Print(cross_entropy_trans,[tf.where(tf.is_nan(cross_entropy_trans))],message="trans",summarize=1000000)
+                # cross_entropy_trans = tf.Print(cross_entropy_trans,[tf.where(tf.is_nan(cross_entropy_trans)),XEs[1]],message="trans",summarize=1000000)
                 # pred_test, y_test , count_test = self.split_trans(xs[0],ys[0],pred[0])
                 # test1 = tf.identity([pred_test,y_test],name='test1')
 
@@ -621,19 +652,22 @@ class Model:
                     # output = tf.cond(tf.equal(tf.reduce_sum(cross_entropy_steady),0),
                     #         fn1 = lambda: tf.Print(0.0,[0],message='steady zero'),
                     #         fn2 = lambda: tf.Print(cross_entropy_steady,[tf.shape(cross_entropy_steady),tf.reduce_sum(cross_entropy_steady),tf.reduce_mean(cross_entropy_steady)],message="steady"))
-
+                    # cross_entropy_steady = tf.Print(cross_entropy_steady,[cross_entropy_steady],message="steady",summarize=1000000)
 
                     #It is necessary that the output has the same dimensions as input (even if not used)
                     return cross_entropy_steady, tf.cast(tf.shape(pred),tf.float32), 0.0, 0
 
-                pred = self.prediction
+                if hasattr(self, 'scheduled_sampling') and self.scheduled_sampling:
+                    pred = self.prediction_sched_samp
+                else:
+                    pred = self.prediction
                 xs = self.inputs
                 ys = self.labels
                 seq_lens = self.seq_lens
 
                 XEs = tf.map_fn(compute_one,[xs,ys,pred,seq_lens],dtype=(tf.float32,tf.float32,tf.float32,tf.int32))
                 cross_entropy_steady = XEs[0]
-                # cross_entropy_steady = tf.Print(cross_entropy_steady,[tf.where(tf.is_nan(cross_entropy_steady))],message="steady",summarize=1000000)
+                # cross_entropy_steady = tf.Print(cross_entropy_steady,[tf.where(tf.is_nan(cross_entropy_steady)),XEs[1]],message="steady",summarize=1000000)
 
                 self._cross_entropy_steady2 = cross_entropy_steady
         return self._cross_entropy_steady2
@@ -662,11 +696,16 @@ class Model:
                 y = self.labels
                 seq_len = self.seq_lens
 
+                if hasattr(self, 'scheduled_sampling') and self.scheduled_sampling:
+                    pred = self.prediction_sched_samp
+                else:
+                    pred = self.prediction
+
                 mask = tf.sequence_mask(seq_len-1,maxlen=n_steps-1)
                 mask = tf.expand_dims(mask,-1)
                 mask = tf.tile(mask,[1,1,n_notes])
 
-                cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.prediction, labels=y)
+                cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(logits=pred, labels=y)
                 cross_entropy_masked = cross_entropy*tf.cast(mask,tf.float32)
 
                 cross_entropy_length = tf.reduce_mean(cross_entropy_masked*n_steps,axis=[1,2])/tf.cast(seq_len,tf.float32)
@@ -693,13 +732,6 @@ class Model:
                 self._thresh_key = thresh_key
         return self._thresh_key
 
-    @property
-    def thresh_active(self):
-        if self._thresh_active is None:
-            with tf.device(self.device_name):
-                thresh_active = tf.placeholder_with_default(0.05, shape=(), name="thresh_active"+self.suffix)
-                self._thresh_active = thresh_active
-        return self._thresh_active
 
     @property
     def cross_entropy_key2(self):
@@ -776,19 +808,20 @@ class Model:
                 x = self.inputs
                 y = self.labels
                 seq_lens = self.seq_lens
-                pred = self.prediction
+                if hasattr(self, 'scheduled_sampling') and self.scheduled_sampling:
+                    pred = self.prediction_sched_samp
+                else:
+                    pred = self.prediction
                 key_masks = self.key_masks
                 thresh_key = self.thresh_key
-                thresh_active = self.thresh_active
 
-                key_lists = self.key_lists
 
                 key_masks = tf.cast(tf.greater(key_masks,thresh_key),tf.float32)
 
                 label_mask = tf.cast(tf.abs(1-y),tf.float32)
-                active_mask = tf.cast(tf.greater(pred,thresh_active),tf.float32)
+
                 # label_mask = label_mask*tf.cast(tf.abs(1-x[:,:-1,:]),tf.float32)
-                length_mask = tf.sequence_mask(seq_lens-1,maxlen=n_steps-1)
+                length_mask = tf.sequence_mask(seq_lens-1,maxlen=n_steps)
                 length_mask = tf.expand_dims(length_mask,-1)
                 length_mask = tf.cast(tf.tile(length_mask,[1,1,n_notes]),tf.float32)
                 XE_mask = label_mask*length_mask
@@ -869,11 +902,11 @@ class Model:
                 XE_tr = self.cross_entropy_transition2
                 XE_ss = self.cross_entropy_steady2
                 XE_k = self.cross_entropy_key2
-                XE_ktr = XE_k[2]
-                XE_kss = XE_k[3]
+                XE_ktr = XE_k[1]
+                XE_kss = XE_k[2]
 
                 combined_metric = tf.sqrt((XE_tr+XE_ss)*(XE_ktr+XE_kss))
-
+                # combined_metric = tf.Print(combined_metric,[XE_tr,XE_ss,XE_ktr,XE_kss,(XE_tr+XE_ss),(XE_ktr+XE_kss),combined_metric],message='combined')
 
                 self._combined_metric2 = combined_metric
         return self._combined_metric2
@@ -1006,10 +1039,15 @@ class Model:
                 optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
                 gvs = optimizer.compute_gradients(loss)
                 if self.grad_clip is not None:
+                    print("Gradient clipping",self.grad_clip)
                     capped_gvs = [(tf.clip_by_value(grad, -float(self.grad_clip), float(self.grad_clip)), var) for grad, var in gvs]
+                    # grad_check = tf.check_numerics([x[0] for x in capped_gvs])
+                    # with tf.control_dependencies([grad_check]):
                     train_op = optimizer.apply_gradients(capped_gvs)
                 else:
+                    print('No Gradient clipping')
                     train_op = optimizer.apply_gradients(gvs)
+                train_op = optimizer.minimize(loss)
                 self._optimize = train_op
         return self._optimize
 
@@ -1032,6 +1070,9 @@ class Model:
         if self.scheduled_sampling == 'mix':
             ac_out_ph = self.acoustic_outputs
             ac_out = feed_dict[ac_out_ph]
+        if self.loss_type in ['combined_norm','combined',"XEtr_XEss"]:
+            keys_ph = self.key_masks
+            keys = feed_dict[keys_ph]
 
 
         no_of_batches = int(np.ceil(float(len(dataset))/batch_size))
@@ -1043,11 +1084,14 @@ class Model:
             batch_x = dataset[ptr:ptr+batch_size]
             batch_y = target[ptr:ptr+batch_size]
             batch_len_list = len_list[ptr:ptr+batch_size]
+            feed_dict.update({x:batch_x,y:batch_y,seq_len:batch_len_list,batch_size_ph:batch_x.shape[0]})
             if self.scheduled_sampling == 'mix':
                 batch_ac_out = ac_out[ptr:ptr+batch_size]
-                feed_dict.update({x:batch_x,y:batch_y,ac_out_ph:batch_ac_out,seq_len:batch_len_list,batch_size_ph:batch_x.shape[0]})
-            else:
-                feed_dict.update({x:batch_x,y:batch_y,seq_len:batch_len_list,batch_size_ph:batch_x.shape[0]})
+                feed_dict.update({ac_out_ph:batch_ac_out})
+            if self.loss_type in ['combined_norm','combined',"XEtr_XEss"]:
+                batch_keys = keys[ptr:ptr+batch_size]
+                feed_dict.update({keys_ph:batch_keys})
+
 
             ptr += batch_size
             result_batch = sess.run(op, feed_dict=feed_dict)
@@ -1081,19 +1125,33 @@ class Model:
             data = np.transpose(data,[0,2,1])
 
             targets = np.transpose(targets,[0,2,1])
+            output = [data, targets, lengths]
 
         else:
             chunks = self.chunks
 
             if chunks:
-                data, targets, lengths  = dataset.get_dataset_chunks_no_pad(subset,chunks)
+                if self.loss_type in ['combined_norm','combined',"XEtr_XEss"]:
+                    data, targets, lengths, key_masks  = dataset.get_dataset_chunks_no_pad(subset,chunks,with_keys=True)
+                    idx = dataset.check_data(data,lengths)
+                    data = [data[i] for i in idx]
+                    targets = [targets[i] for i in idx]
+                    lengths = [lengths[i] for i in idx]
+                    key_masks = [key_masks[i] for i in idx]
+                else:
+                    data, targets, lengths  = dataset.get_dataset_chunks_no_pad(subset,chunks)
             else :
                 data, targets, lengths = dataset.get_dataset(subset)
 
+
             data = self._transpose_data(data)
             targets = self._transpose_data(targets)
+            output = [data, targets, lengths]
+            if self.loss_type in ['combined_norm','combined',"XEtr_XEss"]:
+                key_masks = self._transpose_data(key_masks)
+                output += [key_masks]
 
-        return data, targets, lengths
+        return output
 
     def initialize_training(self,save_path,train_param,sess=None):
         """
@@ -1112,6 +1170,7 @@ class Model:
         safe_mkdir(ckpt_save_path)
 
         init = tf.global_variables_initializer()
+        # check_op = tf.add_check_numerics_ops()
         if sess is None:
             init = tf.global_variables_initializer()
             sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
@@ -1151,7 +1210,7 @@ class Model:
         else:
             saver = tf.train.Saver(max_to_keep=train_param['max_to_keep'])
 
-        return sess, saver, train_writer, ckpt_save_path, summary_batch, summary_epoch
+        return sess, saver, train_writer, ckpt_save_path, summary_batch, summary_epoch#, check_op
 
 
     def perform_training(self,data,save_path,train_param,sess,saver,train_writer,
@@ -1173,6 +1232,8 @@ class Model:
         x = self.inputs
         y = self.labels
         seq_len = self.seq_lens
+        if self.loss_type in ['combined_norm','combined',"XEtr_XEss"]:
+            keys = self.key_masks
 
 
 
@@ -1190,7 +1251,11 @@ class Model:
         batch_size = train_param['batch_size']
         i = n_epoch
 
-        valid_data, valid_target, valid_lengths = self.extract_data(data,'valid')
+        if self.loss_type in ['combined_norm','combined',"XEtr_XEss"]:
+            valid_data, valid_target, valid_lengths,valid_keys = self.extract_data(data,'valid')
+
+        else:
+            valid_data, valid_target, valid_lengths = self.extract_data(data,'valid')
 
         ## scheduled sampling strategy
         if self.scheduled_sampling:
@@ -1212,14 +1277,25 @@ class Model:
             if self.pitchwise:
                 train_data_generator = data.get_pitchwise_dataset_generator('train',batch_size,int((self.n_notes-1)/2.0),self.chunks)
             else:
-                train_data_generator = data.get_dataset_generator('train',batch_size,self.chunks)
+                if self.loss_type in ['combined_norm','combined',"XEtr_XEss"]:
+                    train_data_generator = data.get_dataset_generator('train',batch_size,self.chunks,with_names=True,with_keys=True,check_data=True)
+                else:
+                    train_data_generator = data.get_dataset_generator('train',batch_size,self.chunks)
             display_step = None
 
 
 
-            for batch_x,batch_y, batch_lens in train_data_generator:
+            for batch_data in train_data_generator:
+                if self.loss_type in ['combined_norm','combined',"XEtr_XEss"]:
+                    batch_x,batch_y, batch_lens, batch_names,batch_keys = batch_data
+                    batch_keys = np.transpose(batch_keys,[0,2,1])
+                    # print(batch_names)
+                else:
+                    batch_x,batch_y, batch_lens = batch_data
                 batch_x = np.transpose(batch_x,[0,2,1])
                 batch_y = np.transpose(batch_y,[0,2,1])
+
+
 
                 ## Simple scheduled sampling
                 if self.scheduled_sampling:
@@ -1246,8 +1322,13 @@ class Model:
                 else:
                     feed_dict_optim = {x: batch_x, y: batch_y, seq_len: batch_lens, batch_size_ph:batch_x.shape[0]}
                     feed_dict_valid = {x: valid_data, y: valid_target, seq_len: valid_lengths,batch_size_ph:batch_size}
+                if  self.loss_type in ['combined_norm','combined',"XEtr_XEss"]:
+                    feed_dict_optim.update({keys: batch_keys})
+                    feed_dict_valid.update({keys: valid_keys})
 
-                sess.run(optimizer, feed_dict=feed_dict_optim)
+                sess.run([optimizer], feed_dict=feed_dict_optim)
+
+
                 if not display_step is None and j%display_step == 0 :
                     cross_batch = sess.run(cross_entropy, feed_dict=feed_dict_optim)
                     print("Batch "+str(j)+ ", Cross entropy = "+"{:.5f}".format(cross_batch))

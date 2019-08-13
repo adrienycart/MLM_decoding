@@ -16,12 +16,13 @@ parser.add_argument('save_path',type=str,help="folder to save the checkpoints (i
 parser.add_argument('data_path',type=str,help="folder containing the split dataset")
 timestep = parser.add_mutually_exclusive_group()
 timestep.add_argument('-quant',action='store_true',help="use quantised timesteps")
+timestep.add_argument('-quant_short',action='store_true',help="use quantised timesteps")
 timestep.add_argument('-event',action='store_true',help="use event timesteps")
 parser.add_argument('-n_hidden',type=int,default=256,help="number of hidden nodes (default=256)")
 parser.add_argument('-epochs',type=int,default=1000,help="maximum number of epochs")
 parser.add_argument('-early_stop_epochs',type=int,default=100,help="stop training after this number of epochs without improvement on valid set")
 parser.add_argument('-lr',type=float,default=0.01,help="learning rate")
-parser.add_argument('-use_focal_loss',action='store_true',help="use focal loss instead of usual cross-entropy loss")
+parser.add_argument('-loss_type',type=str,help="choose loss type (default='XE')",default='XE')
 parser.add_argument('-resume',action='store_true',help="resume training from latest checkpoint in save_path")
 parser.add_argument('-sched_sampl',type=str,help="type of sampling for scheduled sampling. If not specified, no scheduled sampling")
 parser.add_argument('-sched_sampl_load',type=str,help="path of the pretrained model to load. If not specified, the model will be trained from scratch")
@@ -41,12 +42,18 @@ if args.sched_sampl == 'mix' and (args.sched_sampl_load is None or args.sampl_mi
 if args.quant:
     timestep_type = 'quant'
     max_len = 300
+elif args.quant_short:
+    timestep_type='quant_short'
+    max_len = 900
 elif args.event:
     timestep_type = 'event'
     max_len = 100
 else:
     timestep_type = 'time'
-    max_len = 750
+    # max_len = 750
+    max_len = 100
+
+
 
 
 note_range = [21,109]
@@ -60,7 +67,7 @@ learning_rate = args.lr
 
 train_param = make_train_param()
 train_param['epochs']=args.epochs
-train_param['batch_size']=10
+train_param['batch_size']=1
 train_param['display_per_epoch']=None
 train_param['save_step']=1
 train_param['max_to_keep']=1
@@ -72,25 +79,33 @@ train_param['schedule_end_value']=args.sched_end_val
 
 
 
+
+
+
 print("Computation start : "+str(datetime.now()))
 
 if args.sched_sampl == 'mix':
     data= DatasetMaps(rand_transp=True)
-    data.load_data(args.data_path,timestep_type=timestep_type,subsets=['train','valid'],acoustic_model='bittner')
+    data.load_data(args.data_path,timestep_type=timestep_type,note_range=note_range,subsets=['train','valid'],acoustic_model='bittner')
 
 else:
     data = Dataset(rand_transp=True)
-    data.load_data(args.data_path,timestep_type=timestep_type)
-# data.transpose_all()
+    data.load_data(args.data_path,timestep_type=timestep_type,note_range=note_range,)
+
+
+
+# np.random.seed(0)
+# data.shuffle_one('train')
 
 
 model_param = make_model_param()
 model_param['n_hidden']=n_hidden
 model_param['learning_rate']=learning_rate
 model_param['chunks']=max_len
-model_param['use_focal_loss']=args.use_focal_loss
+model_param['loss_type']=args.loss_type
 model_param['scheduled_sampling']=args.sched_sampl
 model_param['sampl_mix_weight'] = args.sampl_mix_weight
+model_param['grad_clip'] = None
 if args.pitchwise is None:
     model_param['pitchwise']=False
 else:

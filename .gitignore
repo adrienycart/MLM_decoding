@@ -12,10 +12,14 @@ tests.py
 example_stepwise_prediction.py
 results/
 *.pkl
+*.png
+*.zip
+hmm_2
+listen_example copy.py
+script_train_mlm_3.bash
 
 
 # Latex
-
 *.aux
 *.log
 *.out
@@ -23,8 +27,3 @@ results/
 roadmap.pdf
 *.bbl
 *.blg
-*.png
-*.zip
-hmm_2
-listen_example copy.py
-script_train_mlm_3.bash

@@ -226,7 +226,7 @@ class Dataset:
 
         return dataset[:,:,:-1], dataset[:,:,1:], lengths
 
-    def get_dataset_chunks_no_pad(self,subset,len_chunk):
+    def get_dataset_chunks_no_pad(self,subset,len_chunk,with_keys=False):
         #Outputs an array containing all the pieces cut in chunks (3D-tensor)
         #and a list for the lengths
         pr_list = getattr(self,subset)
@@ -236,6 +236,8 @@ class Dataset:
 
         dataset = []
         lengths = []
+        if with_keys:
+            keys = []
 
         i = 0
         while i<n_files:
@@ -243,17 +245,30 @@ class Dataset:
             if self.rand_transp:
                 transp = np.random.randint(-7,6)
                 piano_roll = piano_roll.transpose(transp)
-            chunks, chunks_len = piano_roll.cut(piano_roll.roll,len_chunk,keep_padding=False)
+            if with_keys:
+                chunks, chunks_len, chunks_keys = piano_roll.cut(piano_roll.roll,len_chunk,keep_padding=False,with_keys = True)
+                keys += list(chunks_keys)
+            else:
+                chunks, chunks_len = piano_roll.cut(piano_roll.roll,len_chunk,keep_padding=False)
             dataset += list(chunks)
             lengths += list(chunks_len)
             i += 1
 
-        return np.asarray(dataset)[:,:,:-1],np.asarray(dataset)[:,:,1:], np.asarray(lengths)
+        if with_keys:
+            outputs = [np.asarray(dataset)[:,:,:-1],np.asarray(dataset)[:,:,1:], np.asarray(lengths),np.asarray(keys)[:,:,1:]]
+        else:
+            outputs = [np.asarray(dataset)[:,:,:-1],np.asarray(dataset)[:,:,1:], np.asarray(lengths)]
+
+        return outputs
 
 
-    def get_dataset_generator(self,subset,batch_size,len_chunk=None):
+    def get_dataset_generator(self,subset,batch_size,len_chunk=None,with_names=False,with_keys=False,check_data=True):
         seq_buff = []
         len_buff = []
+        if with_names:
+            names_buff = []
+        if with_keys:
+            keys_buff = []
         pr_list = getattr(self,subset)
         files_left = list(range(len(pr_list)))
 
@@ -274,21 +289,42 @@ class Dataset:
                     seq_buff.append(roll)
                     len_buff.append(length)
                 else:
-                    chunks, chunks_len = piano_roll.cut(piano_roll.roll,len_chunk,keep_padding=False,as_list=True)
-                    seq_buff.extend(chunks)
-                    len_buff.extend(chunks_len)
+                    if with_keys:
+                        chunks, chunks_len,chunks_keys = piano_roll.cut(piano_roll.roll,len_chunk,keep_padding=False,as_list=True,with_keys=True)
+                        if check_data:
+                            idx = self.check_data(chunks,chunks_len)
+                            chunks = [chunks[i] for i in idx]
+                            chunks_len = [chunks_len[i] for i in idx]
+                            chunks_keys = [chunks_keys[i] for i in idx]
+                        seq_buff.extend(chunks)
+                        len_buff.extend(chunks_len)
+                        keys_buff.extend(chunks_keys)
+                    else:
+                        chunks, chunks_len = piano_roll.cut(piano_roll.roll,len_chunk,keep_padding=False,as_list=True)
+                        seq_buff.extend(chunks)
+                        len_buff.extend(chunks_len)
+                    if with_names:
+                        n_chunks = len(chunks)
+                        name = piano_roll.name
+                        names_buff.extend([name+'_ch'+str(i) for i in range(n_chunks)])
             else:
-                if len_chunk is None:
-                    output_roll = np.zeros([batch_size,n_notes,self.max_len-1])
-                    for i,seq in enumerate(seq_buff[:batch_size]):
-                        output_roll[i,:,:seq.shape[1]]=seq
-                    output = (output_roll[:,:,:-1],output_roll[:,:,1:],np.array(len_buff[:batch_size]))
-                else:
-                    output_roll = np.array(seq_buff[:batch_size])
-                    output = (output_roll[:,:,:-1],output_roll[:,:,1:],np.array(len_buff[:batch_size]))
+                output_roll = np.array(seq_buff[:batch_size])
+                output = [output_roll[:,:,:-1],output_roll[:,:,1:],np.array(len_buff[:batch_size])-1]
                 del seq_buff[:batch_size]
                 del len_buff[:batch_size]
+
+                if with_names:
+                    output_names = names_buff[:batch_size]
+                    output += [output_names]
+                    del names_buff[:batch_size]
+                if with_keys:
+                    output_keys = np.array(keys_buff[:batch_size])
+                    output += [output_keys[:,:,1:]]
+                    del keys_buff[:batch_size]
+
+
                 yield output
+
 
     def get_pitchwise_dataset_generator(self,subset,batch_size,window_size,len_chunk=None):
         seq_buff = []
@@ -333,6 +369,58 @@ class Dataset:
                 del targ_buff[:batch_size]
                 del len_buff[:batch_size]
                 yield output
+
+    def check_data(self,rolls,lengths):
+        to_keep = []
+        for i,(roll,length) in enumerate(zip(rolls,lengths)):
+            length = int(length)
+            pr = roll[:,:length]
+
+            data_extended = np.pad(pr,[[0,0],[1,1]],'constant')
+            diff = data_extended[:,1:] - data_extended[:,:-1]
+            steady = np.where(np.sum(np.abs(diff),axis=0)==0)[0]
+            trans = np.where(np.sum(np.abs(diff),axis=0)!=0)[0]
+
+            steady_ok = False
+            trans_ok = False
+
+            try:
+                if steady[-1] == pr.shape[1]:
+                    steady = steady[:-1]
+            except IndexError:
+                assert steady.size == 0
+            else:
+                try:
+                    if steady[0] == 0:
+                        steady = steady[1:]
+                except IndexError:
+                    assert steady.size == 0
+                else:
+                    if steady.size == 0:
+                        pass
+                    else:
+                        steady_ok = True
+
+            try:
+                if trans[-1] == pr.shape[1]:
+                    trans = trans[:-1]
+            except IndexError:
+                assert trans.size == 0
+            else:
+                try:
+                    if trans[0] == 0:
+                        trans = trans[1:]
+                except IndexError:
+                    assert trans.size == 0
+                else:
+                    if trans.size == 0:
+                        pass
+                    else:
+                        trans_ok = True
+
+            if steady_ok and trans_ok:
+                to_keep += [i]
+        return to_keep
 
 
 

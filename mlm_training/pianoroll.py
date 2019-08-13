@@ -12,10 +12,13 @@ class Pianoroll:
         self.roll = []
         self.name = ""
         self.length = 0
+        self.end_time = 0
         self.note_range=[0,128]
         self.timestep_type = None
         self.key = 0
+        self.key_list_times = []
         self.key_list = []
+        self.key_profiles_list = []
 
     def make_from_file(self,filename,timestep_type,section=None,note_range=[0,128],key_method='main'):
         midi_data = pm.PrettyMIDI(filename)
@@ -24,13 +27,24 @@ class Pianoroll:
         return
 
     def make_from_pm(self,data,timestep_type,section=None,note_range=[0,128],key_method='main'):
+
+
         self.timestep_type = timestep_type
+
+        total_duration = data.get_piano_roll().shape[1]/100.0
+        end_time = min(section[1],total_duration) if section is not None else total_duration
+        self.end_time = end_time
+
+        steps = None
 
         #Get the roll matrix
         if timestep_type=="quant":
             self.roll = get_quant_piano_roll(data,4,section)
+        #Get the roll matrix
+        if timestep_type=="quant_short":
+            self.roll = get_quant_piano_roll(data,12,section)
         elif timestep_type=="event":
-            self.roll = get_event_roll(data,section)
+            self.roll, steps = get_event_roll(data,section)
         elif timestep_type=="time":
             piano_roll = data.get_piano_roll(25)
             if not section == None :
@@ -41,11 +55,92 @@ class Pianoroll:
                 self.roll = piano_roll
 
         self.length = self.roll.shape[1]-1
-        self.crop(note_range)
+
         self.binarize()
+        self.set_key_list(data,section,steps)
+        self.set_key_profile_list(data,section)
+
+        self.crop(note_range)
 
         return
 
+    def set_key_list(self,data,section,steps=None):
+        if section is None:
+            section = [0,self.end_time]
+
+        key_sigs = data.key_signature_changes
+
+        prev_key = 0
+        keys_section = []
+        times_section = []
+
+        for key_sig in key_sigs:
+            key = key_sig.key_number
+            time = key_sig.time
+            if time < section[0]:
+                prev_key = key
+            elif time==section[0]:
+                keys_section +=[key]
+                times_section += [time]
+            else: #time > section[0]
+                if keys_section == [] and times_section==[]:
+                    keys_section +=[prev_key]
+                    times_section += [section[0]]
+                if time <= section[1]:
+                    keys_section +=[key]
+                    times_section += [min(time,section[1])]
+                #if time > section[1], do nothing
+
+        self.key_list_times = list(zip(keys_section,times_section))
+
+        key_list = []
+
+        for key, time in zip(keys_section,times_section):
+            if self.timestep_type == "time":
+                new_time = int(round(time*float(25)))
+            else:
+                if self.timestep_type == "event":
+                    new_time = np.argmin(np.abs(steps-time))
+                else:
+                    if self.timestep_type == "quant":
+                        fs=4
+                    elif self.timestep_type == "quant_short":
+                        fs=12
+                    time_quant = data.time_to_tick(time)/float(data.resolution)
+                    new_time = int(round(time_quant*float(fs)))
+
+            key_list += [(key,new_time)]
+
+
+        self.key_list = key_list
+
+
+    def set_key_profile_list(self,data,section):
+
+        key_profiles=[]
+        note_range = self.note_range
+        roll = (data.get_piano_roll()>0).astype(int)
+
+        if section is None:
+            section = [0,self.end_time]
+
+        if self.key_list_times == []:
+            key_list = [(0,0)]
+        else:
+            key_list = self.key_list_times
+
+        times = [x[1] for x in key_list]
+        times += [section[1]]
+
+        for time1,time2 in zip(times[:-1],times[1:]):
+            idx1 = int(round(time1*100))
+            idx2 = int(round(time2*100))
+
+            key_profile = np.sum(roll[:,idx1:idx2],axis=1)/float(idx2-idx1)
+            key_profiles += [key_profile]
+
+
+        self.key_profiles_list = key_profiles
 
     def binarize(self):
         roll = self.roll
@@ -61,6 +156,8 @@ class Pianoroll:
             min2 = note_range[0]
             max2 = note_range[1]
 
+            key_profiles_cropped = []
+
             if min1<min2:
                 new_roll = roll[min2-min1:,:]
             else:
@@ -71,7 +168,21 @@ class Pianoroll:
             else:
                 new_roll = new_roll[:-(max1-max2),:]
 
+            #Crop key profiles
+            for k in self.key_profiles_list:
+                if min1<min2:
+                    new_k = k[min2-min1:]
+                else:
+                    new_k = np.append(np.zeros([min1-min2]),k,0)
+
+                if max1<=max2:
+                    new_k = np.append(new_k,np.zeros([max2-max1]),0)
+                else:
+                    new_k = new_k[:-(max1-max2)]
+                key_profiles_cropped+=[new_k]
+
             self.roll = new_roll
+            self.key_profiles_list = key_profiles_cropped
             self.note_range = note_range
         return
 
@@ -89,7 +200,7 @@ class Pianoroll:
         return
 
 
-    def cut(self,roll,len_chunk,keep_padding=True,as_list=False):
+    def cut(self,roll,len_chunk,keep_padding=True,as_list=False,with_keys=False):
         #Returns the roll cut in chunks of len_chunk elements, as well as
         #the list of lengths of the chunks
         #The last element is zero-padded to have len_chunk elements
@@ -100,37 +211,61 @@ class Pianoroll:
         else:
             size = self.length
 
+        if with_keys:
+            key_matrix = self.get_key_profile_matrix()
+
         if as_list:
             roll_cut = []
             lengths = []
+            if with_keys:
+                keys = []
         else:
             n_chunks = int(np.ceil(float(size)/len_chunk))
             roll_cut = np.zeros([n_chunks,roll.shape[0],len_chunk])
             lengths = np.zeros([n_chunks])
+            if with_keys:
+                keys = np.zeros([n_chunks,roll.shape[0],len_chunk])
 
         j = 0
         n = 0
         length = self.length
         while j < size:
-            if as_list:
-                lengths += [min(length,len_chunk)]
-            else:
-                lengths[n] = min(length,len_chunk)
-            length = max(0, length-len_chunk)
+
             if j + len_chunk < size:
                 if as_list:
                     roll_cut += [roll[:,j:j+len_chunk]]
+                    lengths += [min(length,len_chunk)]
+                    if with_keys:
+                        keys += [key_matrix[:,j:j+len_chunk]]
                 else:
                     roll_cut[n]= roll[:,j:j+len_chunk]
+                    lengths[n] = min(length,len_chunk)
+                    if with_keys:
+                        keys[n]= key_matrix[:,j:j+len_chunk]
                 j += len_chunk
                 n += 1
+
+                length = max(0, length-len_chunk)
             else : #Finishing clause : zero-pad the remaining
+
                 if as_list:
                     roll_cut += [np.pad(roll[:,j:size],pad_width=((0,0),(0,len_chunk-(size-j))),mode='constant')]
+                    lengths += [min(length,len_chunk)]
+                    if with_keys:
+                        keys += [np.pad(key_matrix[:,j:size],pad_width=((0,0),(0,len_chunk-(size-j))),mode='constant')]
                 else:
                     roll_cut[n,:,:]= np.pad(roll[:,j:size],pad_width=((0,0),(0,len_chunk-(size-j))),mode='constant')
+                    lengths[n] = min(length,len_chunk)
+                    if with_keys:
+                        keys[n,:,:]= np.pad(key_matrix[:,j:size],pad_width=((0,0),(0,len_chunk-(size-j))),mode='constant')
+
                 j += len_chunk
-        return roll_cut, lengths
+
+
+        outputs = [roll_cut, lengths] if not with_keys else [roll_cut, lengths,keys]
+
+
+        return outputs
 
     def transpose(self,diff):
         #Returns a copy of self, transposed of diff semitones
@@ -139,26 +274,23 @@ class Pianoroll:
         roll = self.roll
         if diff<0:
             pr_trans.roll = np.append(roll[-diff:,:],np.zeros([-diff,roll.shape[1]]),0)
+            new_profile_list = []
+            for profile in self.key_profiles_list:
+                new_profile_list += [np.append(profile[-diff:],np.zeros([-diff]))]
+            pr_trans.key_profiles_list = new_profile_list
         elif diff>0:
             pr_trans.roll = np.append(np.zeros([diff,roll.shape[1]]),roll[:-diff,:],0)
+            new_profile_list = []
+            for profile in self.key_profiles_list:
+                new_profile_list += [np.append(np.zeros([diff]),profile[:-diff])]
+            pr_trans.key_profiles_list = new_profile_list
         #if diff == 0 : do nothing
 
         pr_trans.key = (self.key+diff)%12
         pr_trans.key_list = [((key+diff)%12,time) for (key,time) in self.key_list]
+
         return pr_trans
 
-
-    def timestretch(self):
-        pr_stretch = copy.deepcopy(self)
-        roll = self.roll
-        length = roll.shape[1]
-        #duplicate each column by multiplying by a clever matrix
-        a = np.zeros([length,2*length])
-        i,j = np.indices(a.shape)
-        a[i==j//2]=1
-        pr_stretch.roll = np.matmul(roll,a)
-        pr_stretch.length = 2*self.length
-        return pr_stretch
 
     def split_pitchwise(self,window):
         seqs = []
@@ -179,6 +311,25 @@ class Pianoroll:
 
     def get_gt(self):
         return self.roll[:,1:]
+
+    def get_key_profile_matrix(self):
+        key_list = self.key_list
+
+        roll = self.roll
+        shape = roll.shape
+        length = min(roll.shape[1],self.length+1) #Allow 1 more timesteps just in case
+
+        if key_list == []:
+            key_list = [(0,0)]
+
+        times = [max(0,x[1]) for x in key_list]
+        times += [length]
+        key_profile_matrix = np.zeros(shape)
+        for time1,time2,key_profile in zip(times[:-1],times[1:],self.key_profiles_list):
+            key_profile_repeat = np.tile(key_profile,(time2-time1,1)).transpose()
+            key_profile_matrix[:,time1:time2]=key_profile_repeat
+
+        return key_profile_matrix
 
 
 def get_quant_piano_roll(midi_data,fs=4,section=None):
@@ -242,7 +393,7 @@ def get_event_roll(midi_data,section=None):
         end_index = np.argmin(np.abs(end-steps))
         pr = pr[:,begin_index:end_index]
 
-    return pr
+    return pr, steps
 
 
 
