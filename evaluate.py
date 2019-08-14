@@ -23,7 +23,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('model',type=str,help="location of the checkpoint to load (inside ckpt folder)")
 parser.add_argument('data_path',type=str,help="folder containing the split dataset")
-parser.add_argument("--step", type=str, choices=["time", "quant", "event"], help="Change the step type for frame timing. Either time (default), " +
+parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event"], help="Change the step type for frame timing. Either time (default), " +
                     "quant (for 16th notes), or event (for onsets).", default="time")
 parser.add_argument("--max_len",type=str,help="test on the first max_len seconds of each text file. Anything other than a number will evaluate on whole files. Default is 30s.",
                     default=30)

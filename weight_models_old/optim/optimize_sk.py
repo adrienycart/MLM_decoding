@@ -14,8 +14,8 @@ if __name__ == "__main__":
     parser.add_argument("--acoustic", type=str, choices=["kelz", "bittner"], help="Change the acoustic model " +
                         "used in the files. Either kelz (default), or bittner.",
                         default="kelz")
-    
-    parser.add_argument("--step", type=str, choices=["time", "quant", "event"], help="Change the step type " +
+
+    parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event"], help="Change the step type " +
                         "for frame timing. Either time (default), quant (for 16th notes), or event (for onsets).",
                         default="time")
     parser.add_argument("-o", "--output", help="The file to save the resulting optimization to. Defaults to optim.sko.",

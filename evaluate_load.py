@@ -11,7 +11,7 @@ import sys
 parser = argparse.ArgumentParser()
 parser.add_argument('input_folder',type=str)
 parser.add_argument('target_folder',type=str)
-parser.add_argument("--step", type=str, choices=["time", "quant", "event"], help="Change the step type for frame timing. Either time (default), " +
+parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event"], help="Change the step type for frame timing. Either time (default), " +
                     "quant (for 16th notes), or event (for onsets).", default="time")
 parser.add_argument('--with_offset', help="use offset for framewise metrics", action='store_true')
 parser.add_argument('--with_quant',help="post-quantise the outputs",action='store_true')
@@ -33,7 +33,7 @@ if args.save is not None:
     safe_mkdir(args.save)
 
 for fn in os.listdir(input_folder):
-    if fn.endswith('_pr.csv') and not fn.startswith('.'):
+    if fn.endswith('_pr.csv') and not fn.startswith('.') and not '':
         filename_input = os.path.join(input_folder,fn)
         filename_target = os.path.join(target_folder,fn).replace('_pr.csv','.mid')
         print(filename_input)

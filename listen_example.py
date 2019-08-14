@@ -92,7 +92,7 @@ if __name__ == '__main__':
                         " convert into MIDI.", required=True)
     parser.add_argument('-o', '--output', help="Directory to write out the generated MIDI files.", required=True)
     
-    parser.add_argument("--step", type=str, choices=["time", "quant", "event"], help="Change the step type " +
+    parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event"], help="Change the step type " +
                         "for frame timing. Either time (default), quant (for 16th notes), or event (for onsets).",
                         default="time")
     
