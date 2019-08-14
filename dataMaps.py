@@ -46,7 +46,7 @@ class DataMaps:
         pm_data = pm.PrettyMIDI(filename)
         input_matrix = self.get_input_matrix(filename)
 
-        if timestep_type == 'quant' or timestep_type == 'event':
+        if timestep_type == 'quant' or timestep_type == "quant_short" or timestep_type == 'event':
             self.set_corresp(pm_data,timestep_type)
             self.target = self.get_aligned_pianoroll(pm_data,section)
             self.input = align_matrix(input_matrix,self.corresp,self.input_fs,section,method)
@@ -172,6 +172,14 @@ class DataMaps:
             PPQ = float(pm_data.resolution)
             end_note = end_tick/PPQ
             note_steps = np.arange(0,end_note,0.25)
+            tick_steps = np.round(note_steps*PPQ).astype(int)
+            corresp = np.zeros_like(tick_steps,dtype=float)
+            for i,tick in enumerate(tick_steps):
+                corresp[i]=pm_data.tick_to_time(int(tick))
+        if timestep_type == "quant_short":
+            PPQ = float(pm_data.resolution)
+            end_note = end_tick/PPQ
+            note_steps = np.arange(0,end_note,1.0/12)
             tick_steps = np.round(note_steps*PPQ).astype(int)
             corresp = np.zeros_like(tick_steps,dtype=float)
             for i,tick in enumerate(tick_steps):
