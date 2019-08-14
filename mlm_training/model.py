@@ -1675,7 +1675,7 @@ class Model:
         return output
 
     def build_graph(self):
-        self.optimize
+        self.cross_entropy
         return
 
 
