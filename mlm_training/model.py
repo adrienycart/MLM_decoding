@@ -78,7 +78,7 @@ class Model:
 
 
         #Call to create the graph
-        # self.cross_entropy
+        self.build_graph()
 
 
     def _transpose_data(self, data):
