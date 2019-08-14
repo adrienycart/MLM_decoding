@@ -1593,7 +1593,7 @@ class Model:
 
 
 
-    def compute_eval_metrics_pred(self,data,targets,len_list,threshold,save_path,n_model=None,sess=None):
+    def compute_eval_metrics_pred(self,data,targets,len_list,threshold,save_path,keys=None,n_model=None,sess=None):
         """
         Compute averaged metrics over the dataset.
         If sess or saver are not provided (None), a model will be loaded from
@@ -1628,23 +1628,41 @@ class Model:
         if self.scheduled_sampling == 'mix':
             acoustic_outputs = self.acoustic_outputs
 
+        if keys is not None:
+            keys_ph = self.key_masks
+            Score = self.combined_metric
+            keys = self._transpose_data(keys)
+
         #Metrics with perfect input
 
         crosses = []
         crosses_tr = []
         F_measures = []
+        Scores = []
         for i in np.arange(1.0,0.0,-0.1):
             if self.scheduled_sampling == 'mix':
                 feed_dict = {x: targets[:,:-1,:], seq_len: len_list, y: targets[:,1:,:], acoustic_outputs:data[:,:-1,:],thresh: threshold,batch_size_ph:data.shape[0],sched_samp_p:i}
             else:
                 feed_dict = {x: data, seq_len: len_list, y: targets, thresh: threshold,batch_size_ph:data.shape[0],sched_samp_p:i}
 
-            cross_GT, cross_tr_GT, F_measure_GT = sess.run([cross, cross_tr, F0], feed_dict = feed_dict)
+            if keys is not None:
+                feed_dict.update({keys_ph:keys})
+                cross_GT, cross_tr_GT, F_measure_GT, Score_GT = sess.run([cross, cross_tr, F0,Score], feed_dict = feed_dict)
+            else:
+                cross_GT, cross_tr_GT, F_measure_GT = sess.run([cross, cross_tr, F0], feed_dict = feed_dict)
             crosses += [cross_GT]
             crosses_tr += [cross_tr_GT]
             F_measures += [F_measure_GT]
 
 
+            if keys is not None:
+                Scores += [Score_GT]
+
+
+        output = [crosses,crosses_tr,F_measures]
+
+        if keys is not None:
+            output += [Scores]
 
 
         # #Metrics with thresholded input
@@ -1654,7 +1672,11 @@ class Model:
 
 
 
-        return crosses,crosses_tr,F_measures#[cross_th, cross_tr_th, F_measure_th]
+        return output
+
+    def build_graph(self):
+        self.optimize
+        return
 
 
 
