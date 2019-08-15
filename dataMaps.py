@@ -176,7 +176,7 @@ class DataMaps:
             corresp = np.zeros_like(tick_steps,dtype=float)
             for i,tick in enumerate(tick_steps):
                 corresp[i]=pm_data.tick_to_time(int(tick))
-        if timestep_type == "quant_short":
+        elif timestep_type == "quant_short":
             PPQ = float(pm_data.resolution)
             end_note = end_tick/PPQ
             note_steps = np.arange(0,end_note,1.0/12)
