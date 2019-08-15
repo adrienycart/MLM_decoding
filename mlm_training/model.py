@@ -293,7 +293,12 @@ class Model:
                 W = tf.Variable(tf.truncated_normal([n_hidden,n_classes]),name="W"+suffix)
                 b = tf.Variable(tf.truncated_normal([n_classes]),name="b"+suffix)
 
-                cell = tf.contrib.rnn.LSTMCell(n_hidden,state_is_tuple=True,forget_bias = 1.0)
+                if self.cell_type=="LSTM":
+                    cell = tf.contrib.rnn.LSTMCell(n_hidden,state_is_tuple=True,forget_bias = 1.0)
+                elif self.cell_type=="diagLSTM":
+                    cell = ModLSTMCell(n_hidden,tf.truncated_normal_initializer())
+                else:
+                    raise ValueError("model_param['cell_type'] not understood!")
 
                 hidden_state_in = cell.zero_state(batch_size, dtype=tf.float32)
                 self.initial_state = hidden_state_in
@@ -336,7 +341,13 @@ class Model:
                 inputs_ta = inputs_ta.unstack(inputs)
 
 
-                cell = tf.contrib.rnn.LSTMCell(n_hidden,state_is_tuple=True,forget_bias = 1.0)
+                if self.cell_type=="LSTM":
+                    cell = tf.contrib.rnn.LSTMCell(n_hidden,state_is_tuple=True,forget_bias = 1.0)
+                elif self.cell_type=="diagLSTM":
+                    cell = ModLSTMCell(n_hidden,tf.truncated_normal_initializer())
+                else:
+                    raise ValueError("model_param['cell_type'] not understood!")
+
                 hidden_state_in = cell.zero_state(batch_size, dtype=tf.float32)
                 self.initial_state = hidden_state_in
                 sched_samp_p = self.sched_samp_p
@@ -1769,6 +1780,7 @@ def make_model_param():
     model_param['n_notes']=88
     model_param['n_steps']=300
     model_param['loss_type']= 'XE'
+    model_param['cell_type']= 'LSTM'
     model_param['grad_clip']=None
     model_param['pitchwise']=False
     model_param['scheduled_sampling'] = False
@@ -1820,3 +1832,130 @@ def make_train_param():
 
 # model.run_prediction(dataset="loul",save_path="./tmp/crop_unnorm/",n_model=19)
 # print model.run_cross_entropy(dataset="loul",save_path="./tmp/crop_unnorm/",n_model=99)
+
+
+
+
+
+class ModLSTMCell(tf.contrib.rnn.RNNCell):
+    """Modified LSTM Cell """
+
+    def __init__(self, num_units, initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32), wform = 'diagonal'):
+        self._num_units = num_units
+        self.init = initializer
+        self.wform = wform
+
+    @property
+    def state_size(self):
+        return tf.contrib.rnn.LSTMStateTuple(self._num_units, self._num_units)
+
+    @property
+    def output_size(self):
+        return self._num_units
+
+    def __call__(self, inputs, state, scope=None):
+        with tf.variable_scope(scope or type(self).__name__):  # "GRUCell"
+
+            c, h = state
+            init = self.init
+            self.L1 = inputs.get_shape().as_list()[1]
+
+            mats, biases = self.get_params_parallel()
+            if self.wform == 'full' or self.wform == 'diag_to_full':
+
+                res = tf.matmul(tf.concat([h,inputs],axis=1),mats)
+                res_wbiases = tf.nn.bias_add(res, biases)
+
+                i,j,f,o = tf.split(res_wbiases,num_or_size_splits=4,axis=1)
+            elif self.wform == 'diagonal':
+                h_concat = tf.concat([h,h,h,h],axis=1)
+
+                W_res = tf.multiply(h_concat,mats[0])
+
+                U_res = tf.matmul(inputs,mats[1])
+
+                res = tf.add(W_res,U_res)
+                res_wbiases = tf.nn.bias_add(res, biases)
+
+                i,j,f,o = tf.split(res_wbiases,num_or_size_splits=4,axis=1)
+
+            elif self.wform == 'constant':
+
+                h_concat = tf.concat([h,h,h,h],axis=1)
+
+                U_res = tf.matmul(inputs,mats)
+
+                res = tf.add(h_concat,U_res)
+                res_wbiases = tf.nn.bias_add(res, biases)
+
+                i,j,f,o = tf.split(res_wbiases,num_or_size_splits=4,axis=1)
+
+
+            new_c = (c * tf.nn.sigmoid(f) + tf.nn.sigmoid(i)*tf.nn.tanh(j))
+
+            new_h = tf.nn.tanh(new_c) * tf.nn.sigmoid(o)
+            new_state = tf.contrib.rnn.LSTMStateTuple(new_c, new_h)
+        return new_h, new_state
+
+
+    def get_params_parallel(self):
+        if self.wform == 'full':
+            mats = tf.get_variable("mats",
+                    shape = [self._num_units+self.L1,self._num_units*4],
+                    initializer = self.init )
+            biases = tf.get_variable("biases",
+                    shape = [self._num_units*4],
+                    initializer = self.init )
+        elif self.wform == 'diagonal':
+            Ws = tf.get_variable("Ws",
+                    shape = [1,self._num_units*4],
+                    initializer = self.init )
+            Umats = tf.get_variable("Umats",
+                    shape = [self.L1,self._num_units*4],
+                    initializer = self.init )
+            biases = tf.get_variable("biases",
+                    shape = [self._num_units*4],
+                    initializer = self.init )
+            mats = [Ws, Umats]
+        elif self.wform == 'constant':
+            mats = tf.get_variable("mats",
+                    shape = [self.L1,self._num_units*4],
+                    initializer = self.init )
+            biases = tf.get_variable("biases",
+                    shape = [self._num_units*4],
+                    initializer = self.init )
+        elif self.wform == 'diag_to_full':
+            #get the current variable scope
+            var_scope = tf.get_variable_scope().name.replace('rnn2/','')
+
+            #first filtering
+            vars_to_use = [var for var in self.init if var_scope in var[0]]
+
+            #next, assign the variables
+            for var in vars_to_use:
+                if '/Ws' in var[0]:
+                    Ws = np.split(var[1], indices_or_sections = 4, axis = 1)
+                    diag_Ws = np.concatenate([np.diag(w.squeeze()) for w in Ws], axis = 1)
+
+                elif '/Umats' in var[0]:
+                    Us = var[1]
+
+                elif '/biases' in var[0]:
+                    biases_np = var[1]
+
+            mats_np = np.concatenate([diag_Ws, Us], axis = 0)
+            mats_init = tf.constant_initializer(mats_np)
+
+            mats = tf.get_variable("mats",
+                    shape = [self._num_units+self.L1,self._num_units*4],
+                    initializer = mats_init )
+
+            biases_init = tf.constant_initializer(biases_np)
+            biases = tf.get_variable("biases",
+                    shape = [self._num_units*4],
+                    initializer = biases_init )
+
+
+
+
+        return mats, biases

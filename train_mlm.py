@@ -23,6 +23,7 @@ parser.add_argument('-epochs',type=int,default=1000,help="maximum number of epoc
 parser.add_argument('-early_stop_epochs',type=int,default=100,help="stop training after this number of epochs without improvement on valid set")
 parser.add_argument('-lr',type=float,default=0.01,help="learning rate")
 parser.add_argument('-loss_type',type=str,help="choose loss type (default='XE')",default='XE')
+parser.add_argument('-cell_type',type=str,help="choose cell type (default='LSTM')",default='LSTM')
 parser.add_argument('-grad_clip',type=float,help="use gradient clipping (no clipping if not used)")
 parser.add_argument('-resume',action='store_true',help="resume training from latest checkpoint in save_path")
 parser.add_argument('-sched_sampl',type=str,help="type of sampling for scheduled sampling. If not specified, no scheduled sampling")
@@ -108,6 +109,7 @@ model_param['n_hidden']=n_hidden
 model_param['learning_rate']=learning_rate
 model_param['chunks']=max_len
 model_param['loss_type']=args.loss_type
+model_param['cell_type']=args.cell_type
 model_param['scheduled_sampling']=args.sched_sampl
 model_param['sampl_mix_weight'] = args.sampl_mix_weight
 model_param['grad_clip'] = args.grad_clip
