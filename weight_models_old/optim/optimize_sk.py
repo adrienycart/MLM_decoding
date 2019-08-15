@@ -35,7 +35,7 @@ if __name__ == "__main__":
     parser.add_argument("--early_exit", help="Tell the model to quit the computation of a point if the value of any " +
                         "piece's notewise F-measure is below this amount. Defaults to 0.001.", type=float,
                         default=0.001)
-    parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="strore_true")
+    parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="store_true")
 
     args = parser.parse_args()
 

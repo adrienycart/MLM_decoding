@@ -208,7 +208,7 @@ if __name__ == '__main__':
 
     parser.add_argument("-v", "--verbose", help="Print frame updates", action="store_true")
 
-    parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="strore_true")
+    parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="store_true")
 
     args = parser.parse_args()
 
