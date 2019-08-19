@@ -50,7 +50,7 @@ parser.add_argument("--uncertainty", help="Add some uncertainty to the LSTM deco
                     type=float, default=0)
 parser.add_argument('--n_hidden', help="Number of hidden nodes for the LSTM", type=int, default=256)
 parser.add_argument('--with_offset', help="use offset for framewise metrics", action='store_true')
-
+parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="store_true")
 
 args = parser.parse_args()
 
@@ -106,6 +106,8 @@ if args.weight_model is not None or args.weight != 1.0:
     else:
         model_param['pitchwise']=True
         model_param['n_notes'] = 2*args.pitchwise+1
+    if args.diagRNN:
+        model_param['cell_type'] = "diagLSTM"
 
     # Build model object
     model = Model(model_param)
