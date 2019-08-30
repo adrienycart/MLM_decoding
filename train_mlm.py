@@ -77,9 +77,10 @@ train_param['save_step']=1
 train_param['max_to_keep']=1
 train_param['summarize']=True
 train_param['early_stop_epochs']=args.early_stop_epochs
-train_param['schedule_shape']=args.sched_shape
-train_param['schedule_duration']=args.sched_dur
-train_param['schedule_end_value']=args.sched_end_val
+if args.sched_sampl is not None:
+    train_param['schedule_shape']=args.sched_shape
+    train_param['schedule_duration']=args.sched_dur
+    train_param['schedule_end_value']=args.sched_end_val
 
 
 
