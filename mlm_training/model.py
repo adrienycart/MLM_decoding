@@ -1667,6 +1667,9 @@ class Model:
                 cross_GT, cross_tr_GT, F_measure_GT, Score_GT = sess.run([cross, cross_tr, F0,Score], feed_dict = feed_dict)
             else:
                 cross_GT, cross_tr_GT, F_measure_GT = sess.run([cross, cross_tr, F0], feed_dict = feed_dict)
+
+            # print(sess.run([cross, cross_tr, self.cross_entropy_steady, self.cross_entropy_length, self.cross_entropy_key, Score, F0], feed_dict = feed_dict ))
+
             crosses += [cross_GT]
             crosses_tr += [cross_tr_GT]
             F_measures += [F_measure_GT]
@@ -1813,8 +1816,9 @@ def make_train_param():
     train_param['summarize']=True
     train_param['early_stop']=True
     train_param['early_stop_epochs']=15
-    train_param['schedule_shape'] = None
-    train_param['scheduled_duration'] = 0
+    train_param['schedule_shape']=None
+    train_param['schedule_duration']=None
+    train_param['schedule_end_value']=None
 
 
     return train_param
