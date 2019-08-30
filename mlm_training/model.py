@@ -1604,7 +1604,7 @@ class Model:
 
 
 
-    def compute_eval_metrics_pred(self,data,targets,len_list,threshold,save_path,keys=None,n_model=None,sess=None):
+    def compute_eval_metrics_pred(self,data,targets,len_list,threshold,save_path,keys=None,n_model=None,sess=None,no_sched=False):
         """
         Compute averaged metrics over the dataset.
         If sess or saver are not provided (None), a model will be loaded from
@@ -1616,7 +1616,7 @@ class Model:
             sess, _ = self.load(save_path,n_model)
 
         pred = self.pred_sigm
-        cross = self.cross_entropy
+        cross = self.cross_entropy_length
         cross_tr = self.cross_entropy_transition
         F0 = tf.reduce_mean(self.f_measure)
 
@@ -1650,7 +1650,13 @@ class Model:
         crosses_tr = []
         F_measures = []
         Scores = []
-        for i in np.arange(1.0,0.0,-0.1):
+
+        if no_sched:
+            sched_values = [1]
+        else:
+            sched_values = np.arange(1.0,0.0,-0.1)
+
+        for i in sched_values:
             if self.scheduled_sampling == 'mix':
                 feed_dict = {x: targets[:,:-1,:], seq_len: len_list, y: targets[:,1:,:], acoustic_outputs:data[:,:-1,:],thresh: threshold,batch_size_ph:data.shape[0],sched_samp_p:i}
             else:

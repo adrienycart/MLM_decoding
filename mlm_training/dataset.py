@@ -171,7 +171,9 @@ class Dataset:
     def get_len_files(self):
         return self.max_len
 
-    def get_dataset(self,subset,with_names=False,with_key_masks=False):
+
+
+    def get_dataset(self,subset,with_names=False,with_keys=False):
         #Outputs an array containing all the piano-rolls (3D-tensor)
         #and the list of the actual lengths of the piano-rolls
         pr_list = getattr(self,subset)
@@ -183,6 +185,8 @@ class Dataset:
         lengths = np.zeros([n_files],dtype=int)
         if with_names:
             names = []
+        if with_keys:
+            key_masks = np.zeros([n_files,n_notes,len_file])
 
         for i, piano_roll in enumerate(pr_list):
             roll = piano_roll.roll
@@ -190,19 +194,14 @@ class Dataset:
             lengths[i] = piano_roll.length
             if with_names:
                 names += [piano_roll.name]
+            if with_keys:
+                key_masks[i] = piano_roll.get_key_profile_matrix()
 
-        output = [dataset, lengths]
+        output = [dataset[:,:,:-1], dataset[:,:,1:], lengths]
         if with_names:
             output += [names]
-        if with_key_masks:
-            output += [key_masks]
-            #Zero-pad the key_lists
-            max_len = max(list(map(len,key_lists)))
-            key_lists_array = np.zeros([n_files,max_len])
-            for i,key_list in enumerate(key_lists):
-                key_lists_array[i,:len(key_list)]=key_list
-                key_lists_array[i,len(key_list):]=key_list[-1]
-            output += [key_lists_array]
+        if with_keys:
+            output += [key_masks[:,:,1:]]
         return output
 
     def get_dataset_chunks(self,subset,len_chunk):
@@ -461,8 +460,6 @@ class Dataset:
     def zero_pad(self):
         if self.max_len is None:
             self.set_max_len()
-
-
         for subset in ["train","valid","test"]:
             self.zero_pad_one(subset,self.max_len)
 
