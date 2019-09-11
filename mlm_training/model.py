@@ -1437,11 +1437,19 @@ class Model:
         # Get variables in graph
         all_variables = tf.global_variables()
         var_list = dict(zip([var.name[:-2] for var in all_variables],all_variables)) #var.name[:-2] to remove ':0' at the end of the name
-        # print("before", var_list)
+
+        # print('before')
+        # for key, value in var_list.items():
+        #     print(key,value)
+
         # Get variables in checkpoint
         saved_vars = tf.train.list_variables(path)
         saved_vars_names = [v[0] for v in saved_vars]
-        # print(saved_vars_names)
+
+        # print('in_checkpoint')
+        # for item in saved_vars_names:
+        #     print(item)
+
         # Match names (if trained without scheduled sampling, tested with, or vice versa)
         if self.scheduled_sampling:
             if 'W' in saved_vars_names and 'b' in saved_vars_names:
@@ -1455,7 +1463,16 @@ class Model:
                                  'rnn/output_layer/kernel':var_list['W']})
                 var_list.pop('W')
                 var_list.pop('b')
-        # print("after", var_list)
+        if 'rnn/lstm_cell/weights' in saved_vars_names:
+            var_list.update({'rnn/lstm_cell/weights':var_list['rnn/lstm_cell/kernel'],
+                            'rnn/lstm_cell/biases':var_list['rnn/lstm_cell/bias']})
+            var_list.pop('rnn/lstm_cell/kernel')
+            var_list.pop('rnn/lstm_cell/bias')
+
+        # print('after')
+        # for key, value in var_list.items():
+        #     print(key,value)
+
         saver = tf.train.Saver(var_list=var_list)
 
         print("Loading "+path)
@@ -1668,7 +1685,7 @@ class Model:
             else:
                 cross_GT, cross_tr_GT, F_measure_GT = sess.run([cross, cross_tr, F0], feed_dict = feed_dict)
 
-            # print(sess.run([cross, cross_tr, self.cross_entropy_steady, self.cross_entropy_length, self.cross_entropy_key, Score, F0], feed_dict = feed_dict ))
+            print(sess.run([cross, cross_tr, self.cross_entropy_steady, self.cross_entropy_length, self.cross_entropy_key, Score, F0], feed_dict = feed_dict ))
 
             crosses += [cross_GT]
             crosses_tr += [cross_tr_GT]
