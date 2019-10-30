@@ -28,7 +28,9 @@ parser.add_argument('-diagRNN',action='store_true',help='use diagLSTM units')
 parser.add_argument('-no_sched',action='store_true',help='compute the results without scheduled sampling')
 parser.add_argument('-no_save',action='store_true',help='do not load, do not save results')
 parser.add_argument('-no_chunks',action='store_true',help='do not cut sequences into chunks')
+parser.add_argument('-plot',action='store_true',help='plot outputs of all compared models')
 args = parser.parse_args()
+
 
 if args.quant:
     timestep_type = 'quant'
@@ -52,6 +54,9 @@ note_max = note_range[1]
 
 
 n_hidden = 256 #number of features in hidden layer
+
+rolls_dict = {}
+
 
 def make_save_names(save_path):
     if args.sched_mix:
@@ -103,9 +108,9 @@ if not all([os.path.isfile(path) for path in all_save_names]) or args.no_save:
     model.build_graph()
 
     if args.no_chunks:
-        data, target, seq_lens, keys = data.get_dataset('test',with_keys=True)
+        dataset, target, seq_lens, keys = data.get_dataset('test',with_keys=True)
     else:
-        data, target, seq_lens, keys = data.get_dataset_chunks_no_pad('test',max_len,with_keys=True)
+        dataset, target, seq_lens, keys = data.get_dataset_chunks_no_pad('test',max_len,with_keys=True)
 
 
 
@@ -126,16 +131,29 @@ else:
     F_measures_list = []
     S_list = []
     sess,_ = model.load(save_path)
+
     if args.no_sched:
         repeats = [1]
     else:
         repeats = range(10)
     for i in repeats:
-        crosses,crosses_tr,F_measures,Scores = model.compute_eval_metrics_pred(data, target,seq_lens,0.5,None,keys=keys,sess=sess,no_sched=args.no_sched)
+        crosses,crosses_tr,F_measures,Scores = model.compute_eval_metrics_pred(dataset, target,seq_lens,0.5,None,keys=keys,sess=sess,no_sched=args.no_sched)
         crosses_list += [crosses]
         crosses_tr_list += [crosses_tr]
         F_measures_list += [F_measures]
         S_list += [Scores]
+
+        if args.plot:
+            for pr in data.test:
+                roll = np.array([pr.roll[:,:-1]])
+                pred = model.run_prediction(roll,[pr.length],None,sigmoid=True,sess=sess)
+                rolls_dict[pr.name] = {}
+                rolls_dict[pr.name]['input']=roll[0]
+                rolls_dict[pr.name]['pred_'+save_path]=pred[0]
+
+
+
+
 
     cross_mean = np.mean(crosses_list,axis=0)
     cross_tr_mean =np.mean(crosses_tr_list,axis=0)
@@ -168,12 +186,23 @@ if args.compare is not None:
             F_measures_list = []
             S_list = []
             sess,_ = model.load(save_path_compare)
-            for i in range(10):
-                crosses,crosses_tr,F_measures,Scores = model.compute_eval_metrics_pred(data, target,seq_lens,0.5,None,keys=keys,sess=sess,no_sched=args.no_sched)
+            if args.no_sched:
+                repeats = [1]
+            else:
+                repeats = range(10)
+            for i in repeats:
+                crosses,crosses_tr,F_measures,Scores = model.compute_eval_metrics_pred(dataset, target,seq_lens,0.5,None,keys=keys,sess=sess,no_sched=args.no_sched)
                 crosses_list += [crosses]
                 crosses_tr_list += [crosses_tr]
                 F_measures_list += [F_measures]
                 S_list += [Scores]
+
+            if args.plot:
+                for pr in data.test:
+                    roll = np.array([pr.roll[:,:-1]])
+                    pred = model.run_prediction(roll,[pr.length],None,sigmoid=True,sess=sess)
+                    rolls_dict[pr.name]['pred_'+save_path_compare]=pred[0]
+
 
             cross_mean = np.mean(crosses_list,axis=0)
             cross_tr_mean =np.mean(crosses_tr_list,axis=0)
@@ -192,6 +221,8 @@ if args.compare is not None:
         Scores_comp += [S_mean]
 
         model_names += [os.path.basename(save_path_compare)]
+
+
 
 
 if args.no_sched:
@@ -222,6 +253,23 @@ else:
     plt.legend()
 
     plt.show()
+
+
+if args.plot:
+    import matplotlib.pyplot as plt
+    for name,prs in rolls_dict.items():
+
+        # print(roll.shape,pred1.shape,pred2.shape)
+
+        fig, axes = plt.subplots(len(prs),1,figsize=(12,6))
+        axes[0].imshow(prs['input'][:,:400],origin='lower',aspect='auto')
+        axes[0].set_title('Input: '+name)
+        for path,ax in zip([args.save_path]+args.compare,axes[1:]):
+            ax.imshow(prs['pred_'+path][:,:400],origin='lower',aspect='auto')
+            ax.set_title(path)
+        plt.show()
+
+
 
 # print(f"XE_GT: {result_GT[0]},XE_tr_GT: {result_GT[1]},F0_GT: {result_GT[2]}")
 # print(f"XE_s: {result_s[0]},XE_tr_s: {result_s[1]},F0_s: {result_s[2]}")
