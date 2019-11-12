@@ -92,6 +92,7 @@ Finally, you can evaluate your model using ``evaluate.py``.
 - To compute baseline results, i.e. thresholding acoustic model outputs at 0.5, use ``-w 1.0``
 - To compute results with a fixed weight, use ``-w 0.8``
 - To compute results using a blending model, use ``-wm <path_to_the_model>``
+
 Other than that, we use default parameters.
 
 ## Contact
