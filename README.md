@@ -14,7 +14,7 @@ Additional material (figures, sound examples...) can be found on this webpage: [
 
 ## How to use
 
-### Step 1: perpare the data
+### Step 1: Perpare the data
 
 You need the following data for these experiments:
 
@@ -39,7 +39,7 @@ We used the following split: [MLM split](http://c4dm.eecs.qmul.ac.uk/datasets/yc
 You should then put the MIDI files inside a folder containing 3 subfolders called ``train``, ``valid`` and ``test``, and containing the training, validation and testing MIDI files, respectively.
 http://c4dm.eecs.qmul.ac.uk/datasets/ycart/ismir19/split_MAPS.zip
 
-### Step 2: train the MLM
+### Step 2: Train the MLM
 
 First, you need to create a folder named ``ckpt``.
 Any save path you then use will automatically create a folder inside ``ckpt`` (no need to specify the ``ckpt/`` prefix).
