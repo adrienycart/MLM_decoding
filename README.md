@@ -48,7 +48,7 @@ To train the model, use ``python train_mlm.py``.
 You can show arguments and options with ``python train_mlm.py -h``.
 In our experiments, we used default parameters.
 - To use 16th note timesteps, use ``-quant`` (otherwise: use 40ms timesteps)
-- To train the MLM with scheduled sampling, use ``-sched_sampl``
+- To train the MLM with scheduled sampling, use ``-sched_sampl self``
 
 At this stage, you can already evaluate your model using a fixed weight (see Step 4: Evaluate the model).
 
