@@ -26,7 +26,7 @@ You need the following data for these experiments:
 
 You will then need to compute the acoustic model outputs.
 To do so, follow the instructions from this repository: https://github.com/rainerkelz/framewise_2016
-We used the following split: [http://c4dm.eecs.qmul.ac.uk/datasets/ycart/ismir19/split_MAPS.zip](Acoustic model split)
+We used the following split: [Acoustic model split](http://c4dm.eecs.qmul.ac.uk/datasets/ycart/ismir19/split_MAPS.zip)
 
 Once the outputs have been computed, place the CSV files in a folder, along with the corresponding A-MAPS MIDI files.
 Every MIDI file should have one CSV file, name identically, with only the extension differing (<file>.csv and <file>.mid).
@@ -34,7 +34,7 @@ Every MIDI file should have one CSV file, name identically, with only the extens
 #### Music Language model (MLM)
 
 You should split the Piano-midi.de files similarly to the split used for the acoustic model, meaning that all the pieces in the MAPS test set are used for testing, all the pieces in the MAPS validation set are used for validation, and all the remaining pieces are used for training.
-We used the following split: [http://c4dm.eecs.qmul.ac.uk/datasets/ycart/ismir19/split_PM.zip](MLM split)
+We used the following split: [MLM split](http://c4dm.eecs.qmul.ac.uk/datasets/ycart/ismir19/split_PM.zip)
 
 You should then put the MIDI files inside a folder containing 3 subfolders called ``train``, ``valid`` and ``test``, and containing the training, validation and testing MIDI files, respectively.
 http://c4dm.eecs.qmul.ac.uk/datasets/ycart/ismir19/split_MAPS.zip
