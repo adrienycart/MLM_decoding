@@ -62,6 +62,7 @@ To do so, use ``python weight_models_old/optim/create_weight_data.py``
 Options can be displayed with ``-h``
 We used all default parameters except:
 - ``--min_diff`` is set to 0.0 for 16th note steps, and to 0.1 with 40ms timesteps (otherwise, the created data is too big)
+- ``--hist`` is set to 10 for 16th note steps, and 50 for 40ms timesteps, to capture a comparable time window in both cases.
 
 #### Run Bayesian Optimisation
 
@@ -73,6 +74,7 @@ Important options are:
 - ``--beam_data`` : should point to the file created in the previous step
 - ``--prior`` : use this to train a Prior Model (otherwise: train a Weight Model)
 - ``--model_dir``: point to a specific location where all the trained blending models will be kept
+- ``--features``: include to use handcrafted features (we did in our experiments)
 
 **IMPORTANT**: Save the output of this step!! For instance: ``python weight_models_old/optim/optimize_sk.py _options_ > out.txt ``
 You need that to be able to retrieve the best performing model at the end of the Bayesian Optimisation process.
