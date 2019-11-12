@@ -179,11 +179,11 @@ if __name__ == '__main__':
                         "used in the files. Either kelz (default), or bittner.",
                         default="kelz")
 
-    parser.add_argument("-b", "--beam", help="The beam size. Defaults to 100.", type=int, default=100)
-    parser.add_argument("-k", "--branch", help="The branching factor. Defaults to 20.", type=int, default=20)
+    parser.add_argument("-b", "--beam", help="The beam size. Defaults to 10.", type=int, default=10)
+    parser.add_argument("-k", "--branch", help="The branching factor. Defaults to 5.", type=int, default=5)
 
     parser.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
-                        "Defaults to 0.5", type=float, default=0.5)
+                        "Defaults to 0.8", type=float, default=0.8)
 
     parser.add_argument("--max_len",type=str,help="test on the first max_len seconds of each text file. " +
                         "Anything other than a number will evaluate on whole files. Default is 30s.",
@@ -192,8 +192,8 @@ if __name__ == '__main__':
     parser.add_argument("--hash", help="The hash length to use. Defaults to 10.",
                         type=int, default=10)
 
-    parser.add_argument("--history", help="The history length to use. Defaults to 5.",
-                        type=int, default=5)
+    parser.add_argument("--history", help="The history length to use. Defaults to 10.",
+                        type=int, default=10)
 
     parser.add_argument("--min_diff", help="The minimum difference (between language and acoustic) to " +
                         "save a data point.", type=float, default=0.01)
