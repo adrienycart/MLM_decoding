@@ -84,7 +84,7 @@ To get the best weight model, use ``grep "^0." out.txt | sort -n``
 The last line should be of the form : ``<notewise_f_measure> : [hyperparameters of the corresponding model]``
 
 For instance, the last line could be: ``0.8377122624376068: [False, 0.6336185697575645, 3, 3, False, True, 0, 0, True]``.
-This would correspond to a model named ``weight_model.b10_md0.6336185697575645_h3_l3_f_hc0_pc0_prior.quant.0.pkl`` if ``--prior`` and ``step quant`` were used.
+This would correspond to a model named ``weight_model.b10_md0.6336185697575645_h3_l3_f_hc0_pc0_prior.quant.0.pkl`` if ``--prior`` and ``--step quant`` were used.
 
 ### Step 4: Evaluate the model
 
