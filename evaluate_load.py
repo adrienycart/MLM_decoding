@@ -1,6 +1,6 @@
 import numpy as np
 import os
-from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
+from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note, out_key_errors_binary_mask
 from mlm_training.utils import safe_mkdir
 from dataMaps import DataMaps, convert_note_to_time, align_matrix
 import pickle
@@ -26,6 +26,7 @@ target_folder = args.target_folder
 
 frame = []
 note = []
+out_key = []
 
 results = {}
 
@@ -33,7 +34,7 @@ if args.save is not None:
     safe_mkdir(args.save)
 
 for fn in os.listdir(input_folder):
-    if fn.endswith('_pr.csv') and not fn.startswith('.') and not '':
+    if fn.endswith('_pr.csv') and not fn.startswith('.'):# and not 'chpn-e01' in fn:
         filename_input = os.path.join(input_folder,fn)
         filename_target = os.path.join(target_folder,fn).replace('_pr.csv','.mid')
         print(filename_input)
@@ -43,8 +44,15 @@ for fn in os.listdir(input_folder):
 
         input_roll = np.loadtxt(filename_input)
         target_roll = data.target
+        mask = data.get_key_profile()
+        mask_octave = data.get_key_profile_octave()
 
-        if args.step in ['quant','event']:
+        # import matplotlib.pyplot as plt
+        # plt.imshow(mask, aspect='auto')
+        # plt.show(block=[bool])
+
+
+        if args.step in ['quant','quant_short','event']:
             data_quant = DataMaps()
             data_quant.make_from_file(filename_target,args.step,[0,30],acoustic_model='kelz')
             input_roll = convert_note_to_time(input_roll,data_quant.corresp,data_quant.input_fs,max_len=30)
@@ -56,10 +64,16 @@ for fn in os.listdir(input_folder):
 
         P_f,R_f,F_f = compute_eval_metrics_frame(input_roll,target_roll)
         P_n,R_n,F_n = compute_eval_metrics_note(input_roll,target_roll,min_dur=0.05,with_offset=args.with_offset,min_gap=0.05 if args.gap else None)
+        err_FP, err_tot, err_FP_o, err_tot_o = out_key_errors_binary_mask(input_roll,target_roll,mask, mask_octave)
+
+
 
         print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
+        print(f"Out-key-errors FP: {err_FP:.3f}, Total: {err_tot:.3f}, OctaveFP: {err_FP_o:.3f}, OctaveTotal: {err_tot_o:.3f}")
         frame  += [[P_f,R_f,F_f]]
         note   += [[P_n,R_n,F_n]]
+        out_key += [[err_FP,err_tot,err_FP_o, err_tot_o ]]
+
 
         results[fn.replace('_pr.csv','.mid')] = [[P_f,R_f,F_f],[P_n,R_n,F_n]]
         # print([[P_f,R_f,F_f],[P_n,R_n,F_n]])
@@ -67,8 +81,10 @@ for fn in os.listdir(input_folder):
 print(np.array(frame).shape)
 P_f, R_f, F_f = np.mean(frame, axis=0)
 P_n, R_n, F_n = np.mean(note, axis=0)
+err_FP, err_tot, err_FP_o, err_tot_o= np.mean(out_key, axis=0)
 
 print(f"Averages: Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n:.3f},{R_n:.3f},{F_n:.3f}")
+print(f"Averages: Out-key-errors FP: {err_FP:.3f}, Total: {err_tot:.3f}, OctaveFP: {err_FP_o:.3f}, OctaveTotal: {err_tot_o:.3f}")
 sys.stdout.flush()
 
 if args.save is not None:

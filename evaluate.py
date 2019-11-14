@@ -133,7 +133,7 @@ frames = np.zeros((0, 3))
 notes = np.zeros((0, 3))
 
 for fn in os.listdir(folder):
-    if fn.endswith('.mid') and not fn.startswith('.'):
+    if fn.endswith('.mid') and not fn.startswith('.'):# and not 'chpn-e01' in fn:
         filename = os.path.join(folder,fn)
         print(filename)
         sys.stdout.flush()

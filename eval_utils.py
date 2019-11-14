@@ -131,10 +131,10 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_off
         data_filt = input
     else:
         data_filt = filter_short_notes(input,thresh=int(round(fs*min_dur)))
-        
+
     if min_gap is not None:
         data_filt = filter_short_gaps(input,thresh=int(round(fs*min_gap)))
-        
+
     results = []
 
     if tolerance == None:
@@ -156,6 +156,82 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_off
         notes_ref,intervals_est,notes_est,pitch_tolerance=0.25,offset_ratio=offset_ratio,
         onset_tolerance=tolerance,offset_min_tolerance=0.05)
         return P,R,F
+
+
+def out_key_errors_binary_mask(input,target,mask,mask_octave,min_dur=None,tolerance=None, with_offset=False, min_gap=None, mask_thresh=0.05):
+    #Compute evaluation metrics note-by-note
+    #filter out all notes shorter than min_dur (in seconds, default 50ms)
+    #A note is correctly detected if it has the right pitch and the inset is within tolerance parameter (default 50ms)
+    #Uses the mir_eval implementation
+
+    #All inputs should be with 40ms timesteps
+    fs = 25
+
+
+    if min_dur==None:
+        data_filt = filter_short_notes(input,thresh=int(round(fs*0.05)))
+    elif min_dur == 0:
+        data_filt = input
+    else:
+        data_filt = filter_short_notes(input,thresh=int(round(fs*min_dur)))
+
+    if min_gap is not None:
+        data_filt = filter_short_gaps(input,thresh=int(round(fs*min_gap)))
+
+    results = []
+
+    if tolerance == None:
+        tolerance = 0.05
+
+    if with_offset:
+        offset_ratio = 0.2
+    else:
+        offset_ratio = None
+
+
+    notes_est , intervals_est = get_notes_intervals(input, fs)
+    notes_ref , intervals_ref = get_notes_intervals(target, fs)
+
+    match = mir_eval.transcription.match_notes(intervals_ref, notes_ref, intervals_est, notes_est,offset_ratio=None, pitch_tolerance=0.25)
+
+
+
+    in_mask = mask>mask_thresh
+    in_mask_octave = mask_octave>mask_thresh
+
+
+    # import matplotlib.pyplot as plt
+    # fig, (ax0,ax1) = plt.subplots(2,1)
+    # ax0.plot(mask_octave)
+    # ax1.plot(in_mask_octave.astype(int))
+    # plt.show(block=True)
+
+
+    if len(match) == 0:
+        unmatched_outputs = list(range(len(notes_est)))
+    else:
+        matched_targets, matched_outputs = zip(*match)
+        unmatched_outputs= list(set(range(len(notes_est)))-set(matched_outputs))
+
+    if len(unmatched_outputs) == 0:
+        return 0.0,0.0
+    else:
+        out_key_unmatched = []
+        out_key_unmatched_octave = []
+        for i in unmatched_outputs:
+            # print(in_mask[notes_est[i]])
+            if not in_mask[notes_est[i]-1]: #-1 because we add +1 in get_notes_intervals
+                out_key_unmatched += [notes_est[i]]
+
+            if not in_mask_octave[(notes_est[i]-1)%12]:
+                out_key_unmatched_octave += [notes_est[i]]
+
+        tot_out_key = float(len(out_key_unmatched))
+        tot_out_key_o = float(len(out_key_unmatched_octave))
+        tot_err = len(unmatched_outputs)
+        tot_notes = len(notes_est)
+
+        return tot_out_key/tot_err, tot_out_key/tot_notes,tot_out_key_o/tot_err, tot_out_key_o/tot_notes
 
 
 def get_best_thresh(inputs, targets,lengths,model,save_path,verbose=False,max_thresh=1,step=0.01):

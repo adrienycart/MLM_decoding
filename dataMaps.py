@@ -432,6 +432,30 @@ class DataMaps:
         input_data = self.input
         self.input = (input_data-mean[:,np.newaxis])/var[:,np.newaxis]
 
+    def get_key_profile(self):
+
+        roll = self.target
+        shape = roll.shape
+
+        length = roll.shape[1]
+
+        key_profile = np.sum(self.target,axis=1)/float(length)
+        # key_profile_matrix = np.tile(key_profile,(length,1)).transpose()
+
+
+        return key_profile
+
+    def get_key_profile_octave(self):
+
+        roll = self.target
+        i = np.arange(roll.shape[0])
+        output = np.zeros([12],dtype=float)
+        for p in range(12):
+            active_pitch_class = np.max(roll[i%12==p,:],axis=0)
+            output[p] = np.mean(active_pitch_class)
+
+        return output
+
 
 
 def signature_to_metrical_grid(sig):
