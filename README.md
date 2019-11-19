@@ -7,7 +7,14 @@ In this branch, we make available the code to reproduce the experiments from the
 If you use any of this in your works, please cite:
 
 ``
-@inproceedings{ycartmcleod2019, Address = {Delft, Netherlands}, Author = {Ycart, Adrient and McLeod, Andrew and Benetos, Emmanouil and Yoshii, Kazuyoshi}, Booktitle = {18th International Society for Music Information Retrieval Conference}, Month = {Nov.}, Title = {Blending Acoustic and Language Model Predictions for Automatic Music Transcription}, Year = {2019}}
+@inproceedings{ycartmcleod2019,
+  Address = {Delft, Netherlands},
+  Author = {Ycart, Adrient and McLeod, Andrew and Benetos, Emmanouil and Yoshii, Kazuyoshi},
+  Booktitle = {18th International Society for Music Information Retrieval Conference},
+  Month = {Nov.},
+  Title = {Blending Acoustic and Language Model Predictions for Automatic Music Transcription},
+  Year = {2019}
+}
 ``
 
 Additional material (figures, sound examples...) can be found on this webpage: [http://c4dm.eecs.qmul.ac.uk/ycart/ismir19.html](http://c4dm.eecs.qmul.ac.uk/ycart/ismir19.html)
@@ -58,7 +65,7 @@ At this stage, you can already evaluate your model using a fixed weight (see Ste
 
 First you need to create training data for the blending model.
 The data should be created using the validation files.
-To do so, use ``python weight_models_old/optim/create_weight_data.py``
+To do so, use ``python weight_models/optim/create_weight_data.py``
 Options can be displayed with ``-h``
 We used all default parameters except:
 - ``--min_diff`` is set to 0.0 for 16th note steps, and to 0.1 with 40ms timesteps (otherwise, the created data is too big)
@@ -67,7 +74,7 @@ We used all default parameters except:
 #### Run Bayesian Optimisation
 
 Then, you need to run the Bayesian Optimisation.
-To do so, use ``python weight_models_old/optim/optimize_sk.py``.
+To do so, use ``python weight_models/optim/optimize_sk.py``.
 Options can be displayed with ``-h``.
 
 Important options are:
@@ -76,7 +83,7 @@ Important options are:
 - ``--model_dir``: point to a specific location where all the trained blending models will be kept
 - ``--features``: include to use handcrafted features (we did in our experiments)
 
-**IMPORTANT**: Save the output of this step!! For instance: ``python weight_models_old/optim/optimize_sk.py _options_ > out.txt ``
+**IMPORTANT**: Save the output of this step!! For instance: ``python weight_models/optim/optimize_sk.py _options_ > out.txt ``
 You need that to be able to retrieve the best performing model at the end of the Bayesian Optimisation process.
 
 To get the best weight model, use ``grep "^0." out.txt | sort -n``
