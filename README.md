@@ -10,7 +10,7 @@ If you use any of this in your works, please cite:
     @inproceedings{ycartmcleod2019, 
        Address = {Delft, Netherlands},     
        Author = {Ycart, Adrien and McLeod, Andrew and Benetos, Emmanouil and Yoshii, Kazuyoshi},    
-       Booktitle = {18th International Society for Music Information Retrieval Conference},    
+       Booktitle = {20th International Society for Music Information Retrieval Conference},    
        Month = {Nov.},    
        Title = {Blending Acoustic and Language Model Predictions for Automatic Music Transcription},    
        Year = {2019}    
