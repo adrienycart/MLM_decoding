@@ -21,7 +21,7 @@ Additional material (figures, sound examples...) can be found on this webpage: [
 
 ## How to use
 
-### Step 1: Perpare the data
+### Step 1: Prepare the data
 
 You need the following data for these experiments:
 
