@@ -8,6 +8,8 @@ min_dist: 0.5333703099791655
 history: 41
 layers (of dim 5): 4
 features: yes
+* This model is slightly better than the results from the paper:
+Averages: Frame P,R,F: 0.746,0.630,0.675, Note P,R,F: 0.668,0.609,0.628
 
 PM:
 min_dist: 0.4163731768142772
