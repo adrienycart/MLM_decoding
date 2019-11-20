@@ -1,0 +1,46 @@
+time
+----
+WM:
+
+
+WM+S:
+min_dist: 0.5333703099791655
+history: 41
+layers (of dim 5): 4
+features: yes
+
+PM:
+min_dist: 0.4163731768142772
+history: 7
+layers (of dim 5): 2
+features: yes
+
+PM+S:
+
+
+
+quant
+-----
+WM:
+min_dist: 0.5356586030220254
+history: 7
+layers (of dim 5): 4
+features: yes
+
+WM+S:
+min_dist: 0.34366505445407647
+history: 4
+layers (of dim 5): 3
+features: yes
+
+PM:
+min_dist: 0.6495261658434135
+history: 9
+layers (of dim 5): 3
+features: no
+
+PM+S:
+min_dist: 0.6336185697575645
+history: 3
+layers (of dim 5): 3
+features: yes
