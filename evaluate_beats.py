@@ -1,8 +1,14 @@
 import madmom
 import argparse
 import pretty_midi as pm
-import sounddevice as sd
+try:
+    import sounddevice as sd
+    SOUND = True
+except OSError:
+    print('Sound not available! All "play" options are disabled')
+    SOUND = False
 import os
+import warnings
 import numpy as np
 import mir_eval
 
@@ -123,6 +129,9 @@ args = parser.parse_args()
 
 input_folder = args.input_folder
 
+if not SOUND and (args.play_GT or args.play_estim):
+    warnings.warn("No sound can be played on this device! Ignoring --play options")
+
 
 try:
     max_len = float(args.max_len)
@@ -163,7 +172,7 @@ for fn in os.listdir(input_folder):
             fs = sig.sample_rate
             dur = sig.length
 
-            if args.play_GT:
+            if args.play_GT and SOUND:
                 sig_mix_ratio = 0.7
                 sig_beats = sonify_beats(beats_GT,downbeats_GT,subbeats_GT)
                 audio = mix_sounds(sig_beats,sig,sig_mix_ratio)
@@ -207,7 +216,7 @@ for fn in os.listdir(input_folder):
                     np.savetxt(os.path.join(save_path,fn.replace('.wav','_sb_est.csv')),subbeats)
 
 
-            if args.play_estim:
+            if args.play_estim  and SOUND:
                 sig_mix_ratio = 0.7
                 sig_beats = sonify_beats(beats,None,subbeats)
                 audio = mix_sounds(sig_beats,sig,sig_mix_ratio)
