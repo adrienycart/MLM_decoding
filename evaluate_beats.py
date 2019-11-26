@@ -155,10 +155,12 @@ for fn in os.listdir(input_folder):
             # Get ground truth beats
             midi_data = pm.PrettyMIDI(filename_input.replace('.wav','.mid'))
             beats_GT = midi_data.get_beats()
-            beats_GT = beats_GT[beats_GT<max_len]
+            if max_len is not None:
+                beats_GT = beats_GT[beats_GT<max_len]
 
             downbeats_GT = midi_data.get_downbeats()
-            downbeats_GT = downbeats_GT[downbeats_GT<max_len]
+            if max_len is not None:
+                downbeats_GT = downbeats_GT[downbeats_GT<max_len]
 
             if args.subbeats:
                 subbeats_ticks = np.arange(0,midi_data.time_to_tick(max_len),midi_data.resolution/2)
@@ -179,12 +181,15 @@ for fn in os.listdir(input_folder):
 
                 play_sound(audio)
 
+            if args.load:
+                beats = np.loadtxt(os.path.join(save_path,fn.replace('.wav','_b_est.csv')))
 
-            proc_beat = madmom.features.RNNBeatProcessor()
-            act_beat = proc_beat(sig)
+            else:
+                proc_beat = madmom.features.RNNBeatProcessor()
+                act_beat = proc_beat(sig)
 
-            proc_beattrack = madmom.features.BeatTrackingProcessor(fps=100)
-            beats = proc_beattrack(act_beat)
+                proc_beattrack = madmom.features.BeatTrackingProcessor(fps=100)
+                beats = proc_beattrack(act_beat)
 
             F = mir_eval.beat.f_measure(beats_GT,beats)
             all_Fs += [F]
@@ -193,7 +198,10 @@ for fn in os.listdir(input_folder):
             print(f"Est: {beats}")
 
             if args.subbeats:
-                n_subdivisions, subbeats = get_subbeat_divisions(beats,act_beat)
+                if args.load:
+                    subbeats = np.loadtxt(os.path.join(save_path,fn.replace('.wav','_sb_est.csv')))
+                else:
+                    n_subdivisions, subbeats = get_subbeat_divisions(beats,act_beat)
                 sub_F = mir_eval.beat.f_measure(subbeats_GT,subbeats)
                 all_Fs_sub += [sub_F]
                 print(f"Sub-beat F-measure: {sub_F}")
