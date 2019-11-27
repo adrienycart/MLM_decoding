@@ -182,7 +182,8 @@ for fn in os.listdir(input_folder):
             # Estimate beat positions
             if args.midi:
                 sig = midi_data.synthesize()
-                sig = sig[:int(max_len*44100)]
+                if max_len is not None:
+                    sig = sig[:int(max_len*44100)]
             else:
                 sig_proc = madmom.audio.signal.SignalProcessor(sample_rate=44100, num_channels=1, start=0, stop=max_len,dtype=np.float32)
                 sig = sig_proc(filename_input)
