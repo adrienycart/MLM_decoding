@@ -147,14 +147,25 @@ except:
 all_Fs = []
 all_Fs_sub = []
 
+if args.midi:
+    extension = '.mid'
+else:
+    extension = '.wav'
+
+
 for fn in os.listdir(input_folder):
-    if fn.endswith('.wav') and not fn.startswith('.'):
+    if fn.endswith(extension) and not fn.startswith('.'):
         if args.file is None or args.file in fn:
             filename_input = os.path.join(input_folder,fn)
             print(fn)
 
+            if args.midi:
+                midi_name = filename_input
+            else:
+                midi_name = filename_input.replace('.wav','.mid')
+
             # Get ground truth beats
-            midi_data = pm.PrettyMIDI(filename_input.replace('.wav','.mid'))
+            midi_data = pm.PrettyMIDI(midi_name)
             beats_GT = midi_data.get_beats()
             if max_len is not None:
                 beats_GT = beats_GT[beats_GT<max_len]
@@ -187,7 +198,7 @@ for fn in os.listdir(input_folder):
                 play_sound(audio)
 
             if args.load:
-                beats = np.loadtxt(os.path.join(save_path,fn.replace('.wav','_b_est.csv')))
+                beats = np.loadtxt(os.path.join(save_path,fn.replace(extension,'_b_est.csv')))
 
             else:
                 proc_beat = madmom.features.RNNBeatProcessor()
@@ -204,7 +215,7 @@ for fn in os.listdir(input_folder):
 
             if args.subbeats:
                 if args.load:
-                    subbeats = np.loadtxt(os.path.join(save_path,fn.replace('.wav','_sb_est.csv')))
+                    subbeats = np.loadtxt(os.path.join(save_path,fn.replace(extension,'_sb_est.csv')))
                 else:
                     n_subdivisions, subbeats = get_subbeat_divisions(beats,act_beat)
                 sub_F = mir_eval.beat.f_measure(subbeats_GT,subbeats)
@@ -221,12 +232,12 @@ for fn in os.listdir(input_folder):
                 else:
                     save_path = args.save
 
-                np.savetxt(os.path.join(save_path,fn.replace('.wav','_b_gt.csv')),beats_GT)
-                np.savetxt(os.path.join(save_path,fn.replace('.wav','_b_est.csv')),beats)
+                np.savetxt(os.path.join(save_path,fn.replace(extension,'_b_gt.csv')),beats_GT)
+                np.savetxt(os.path.join(save_path,fn.replace(extension,'_b_est.csv')),beats)
 
                 if args.subbeats:
-                    np.savetxt(os.path.join(save_path,fn.replace('.wav','_sb_gt.csv')),subbeats_GT)
-                    np.savetxt(os.path.join(save_path,fn.replace('.wav','_sb_est.csv')),subbeats)
+                    np.savetxt(os.path.join(save_path,fn.replace(extension,'_sb_gt.csv')),subbeats_GT)
+                    np.savetxt(os.path.join(save_path,fn.replace(extension,'_sb_est.csv')),subbeats)
 
 
             if args.play_estim  and SOUND:
