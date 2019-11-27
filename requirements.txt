@@ -2,5 +2,6 @@ pretty_midi
 mir_eval
 numpy
 tensorflow
+tensorflow-gpu
 scikit-learn
 scikit-optimize
