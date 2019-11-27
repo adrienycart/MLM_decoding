@@ -1,0 +1,6 @@
+pretty_midi
+mir_eval
+numpy
+tensorflow
+scikit-learn
+scikit-optimize
