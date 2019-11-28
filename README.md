@@ -33,7 +33,7 @@ We provide in this repository everything needed to reproduce the results from ou
 
 * [`data`](./data): MIDI files and acoustic model outputs as csvs, split into test, train, and validation sets.
 * [`MLMs`](./MLMs): Pre-trained Music Language Models, for 40ms and 16th note (quant) timesteps, both with and without scheduled sampling.
-* [`weight_models/models`](./weight_models/models): Pre-trained weight and prior models for each MLM.
+* [`blending_model/models`](./blending_model/models): Pre-trained weight and prior models for each MLM.
 
 Instructions for creating the data and re-training the models can be found in [Starting from Scratch](#starting-from-scratch).
 
@@ -51,7 +51,7 @@ python evaluate.py model data [--step {time,quant}] [-wm weight_model | -w FLOAT
 
 For example, to reproduce the results of the prior model with scheduled sampling and 16th-note timesteps, use the following command:
 ```
-python evaluate.py MLMs/scheduled/quant/best_model.ckpt-1194 data/test --step quant -wm weight_models/models/pm.quant-sched.pkl
+python evaluate.py MLMs/scheduled/quant/best_model.ckpt-1194 data/test --step quant -wm blending_model/models/pm.quant-sched.pkl
 ```
 
 **Important**: The results with 16th-note timesteps will be identical to those in the paper. For the 40ms timestep, we use an additional post-processing step to remove short gaps. To do this, run evaluate.py with `--save output_path`, and then evaluate with: `python evaluate_load.py output_path data/test --gap`
@@ -106,7 +106,7 @@ Our pre-trained MLMs are in [MLMs](./MLMs).
 
 First you need to create training data for the blending model.
 The data should be created using the validation files.
-To do so, use ``python weight_models/optim/create_weight_data.py data/valid -m MODEL --out out_file [ARGS]``
+To do so, use ``python blending_model/optim/create_weight_data.py data/valid -m MODEL --out out_file [ARGS]``
 Here, `MODEL` is a pointer to a trained MLM checkpoint, without any extension (like `MLMs/scheduled/quant/best_model.ckpt-1194`).
 
 Additional args can be displayed with ``-h``
@@ -123,19 +123,19 @@ We do not provide this data as it is quite large (>100MB each), and easy to gene
 #### Run Bayesian Optimisation
 
 Then, you need to run the Bayesian Optimisation.
-To do so, use ``python weight_models/optim/optimize_sk.py model data [ARGS]``.
+To do so, use ``python blending_model/optim/optimize_sk.py model data [ARGS]``.
 `model` is a pointer to a trained MLM checkpoint, without any extension (like `MLMs/scheduled/quant/best_model.ckpt-1194`).  
 `data` should be a pointer to the validation data (`data/valid`).
 
 Other options can be displayed with ``-h``.
 Important options are:
 * ``--step quant``: for 16th-note timesteps.
-- ``--beam_data`` : should point to the file created in the previous step
-- ``--prior`` : use this to train a Prior Model (otherwise: train a Weight Model)
+- ``--beam_data``: should point to the file created in the previous step
+- ``--prior``: use this to train a Prior Model (otherwise: train a Weight Model)
 - ``--model_dir``: point to a specific location where all the trained blending models will be saved
 
 
-**IMPORTANT**: Save the output of this step!! For instance: ``python weight_models/optim/optimize_sk.py ARGS > out.txt ``
+**IMPORTANT**: Save the output of this step!! For instance: ``python blending_model/optim/optimize_sk.py ARGS > out.txt ``
 You need that to be able to retrieve the best performing model at the end of the Bayesian Optimisation process.
 
 To get the best weight model, use ``grep "^0." out.txt | sort -n``
