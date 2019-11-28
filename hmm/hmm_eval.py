@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/..')
 
 from dataMaps import DataMaps, convert_note_to_time
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
+from mlm_training.utils import safe_mkdir
     
 
 
@@ -183,6 +184,7 @@ if __name__ == "__main__":
         
         # Save output
         if not args.save is None:
+            safe_mkdir(args.save)
             np.save(os.path.join(args.save, base.replace('.mid','_pr')), pr)
             np.savetxt(os.path.join(args.save, base.replace('.mid','_pr.csv')), pr)
         
