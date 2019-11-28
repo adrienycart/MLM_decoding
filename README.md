@@ -20,8 +20,7 @@ If you use any of this in your works, please cite:
 Additional material (figures, sound examples...) can be found on this webpage: [http://c4dm.eecs.qmul.ac.uk/ycart/ismir19.html](http://c4dm.eecs.qmul.ac.uk/ycart/ismir19.html)
 
 ## Installation
-
-The easiest way to install is using an environment manager like conda. We have tested the code with tensorflow 1.11, but other versions may work as well. Simply run the following commands:
+The easiest way to install is using an environment manager like conda. We have tested the code with tensorflow 1.11, but other versions may work as well. To install, run the following commands:
 
 ```
 conda create -n blending python=3.6 tensorflow=1.11 numpy=1.15.4
@@ -29,7 +28,36 @@ conda activate blending
 pip install -r requirements.txt
 ```
 
-## How to use
+## Using Pre-trained Models
+We provide in this repository everything needed to reproduce the results from our experiments, that includes:
+
+* [`data`](./data): MIDI files and acoustic model outputs as csvs, split into test, train, and validation sets.
+* [`MLMs`](./MLMs): Pre-trained Music Language Models, for 40ms and 16th note (quant) timesteps, both with and without scheduled sampling.
+* [`weight_models/models`](./weight_models/models): Pre-trained weight and prior models for each MLM.
+
+Instructions for creating the data and re-training the models can be found in [Starting from Scratch](#starting-from-scratch).
+
+Run tests with the following command:
+
+```
+python evaluate.py model data [--step {time,quant}] [-wm weight_model | -w FLOAT] [--save output_path]
+```
+
+* `model`: A saved MLM, without its file extension.
+* `data`: A data directory, usually `data/test`
+* `--step {time,quant}`: `time` (default) to use 40ms timesteps, `quant` to use 16th-note timesteps.
+* `-wm weight_model`: The weight or prior model to use during testing.
+* `-w FLOAT`: The weight to use for a constant weight model. Use `-w 1.0` to use the acoustic model only.
+* `--save output_path`: Save results in the given directory.
+
+For example, to reproduce the results of the prior model with scheduled sampling and 16th-note timesteps, use the following command:
+```
+python evaluate.py MLMs/scheduled/quant/best_model.ckpt-1194 data/test --step quant -wm weight_models/models/pm.quant-sched.pkl
+```
+
+**Important** The results with 16th-note timesteps will be identical to those in the paper. For the 40ms timestep, we use an additional post-processing step to remove short gaps. To do this, run evaluate.py with `--save output_path`, and then evaluate with: `python evaluate_load.py output_path data/test --gap`
+
+## Starting from Scratch
 
 ### Step 1: Prepare the data
 
