@@ -177,7 +177,7 @@ if __name__ == "__main__":
         sys.stdout.flush()
         
         data = DataMaps()
-        data.make_from_file(file, args.step, section, acoustic_model="bittner")
+        data.make_from_file(file, args.step, section, acoustic_model="kelz")
         
         pr = decode_all_pitches(data.input, priors, transitions)
         
@@ -190,7 +190,7 @@ if __name__ == "__main__":
             pr = convert_note_to_time(pr, data.corresp, data.input_fs, max_len=max_len)
 
         data = DataMaps()
-        data.make_from_file(file, "time", section=section, acoustic_model="bittner")
+        data.make_from_file(file, "time", section=section, acoustic_model="kelz")
         target = data.target
 
         #Evaluate
