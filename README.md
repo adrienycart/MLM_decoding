@@ -37,8 +37,7 @@ We provide in this repository everything needed to reproduce the results from ou
 
 Instructions for creating the data and re-training the models can be found in [Starting from Scratch](#starting-from-scratch).
 
-Run tests with the following command:
-
+Evaluate the model with the following command:
 ```
 python evaluate.py model data [--step {time,quant}] [-wm weight_model | -w FLOAT] [--save output_path]
 ```
@@ -47,7 +46,7 @@ python evaluate.py model data [--step {time,quant}] [-wm weight_model | -w FLOAT
 * `data`: A data directory, usually `data/test`
 * `--step {time,quant}`: `time` (default) to use 40ms timesteps, `quant` to use 16th-note timesteps.
 * `-wm weight_model`: The weight or prior model to use during testing.
-* `-w FLOAT`: The weight to use for a constant weight model. Use `-w 1.0` to use the acoustic model only.
+* `-w FLOAT`: The weight to use for a constant weight model. Use `-w 1.0` to use the acoustic model only, thresholding at 0.5.
 * `--save output_path`: Save results in the given directory.
 
 For example, to reproduce the results of the prior model with scheduled sampling and 16th-note timesteps, use the following command:
@@ -55,7 +54,7 @@ For example, to reproduce the results of the prior model with scheduled sampling
 python evaluate.py MLMs/scheduled/quant/best_model.ckpt-1194 data/test --step quant -wm weight_models/models/pm.quant-sched.pkl
 ```
 
-**Important** The results with 16th-note timesteps will be identical to those in the paper. For the 40ms timestep, we use an additional post-processing step to remove short gaps. To do this, run evaluate.py with `--save output_path`, and then evaluate with: `python evaluate_load.py output_path data/test --gap`
+**Important**: The results with 16th-note timesteps will be identical to those in the paper. For the 40ms timestep, we use an additional post-processing step to remove short gaps. To do this, run evaluate.py with `--save output_path`, and then evaluate with: `python evaluate_load.py output_path data/test --gap`
 
 ## Starting from Scratch
 
@@ -75,6 +74,8 @@ We used the following split: [Acoustic model split](http://c4dm.eecs.qmul.ac.uk/
 
 Once the outputs have been computed, place the CSV files in a folder, along with the corresponding A-MAPS MIDI files.
 Every MIDI file should have one CSV file, name identically, with only the extension differing (<file>.csv and <file>.mid).
+
+Our aligned CSV and MIDI data is provided in [data](./data).
 
 #### Music Language model (MLM)
 
@@ -97,32 +98,44 @@ In our experiments, we used default parameters.
 
 At this stage, you can already evaluate your model using a fixed weight (see Step 4: Evaluate the model).
 
+Our pre-trained MLMs are in [MLMs](./MLMs).
+
 ### Step 3: Train the blending model
 
 #### Create training data
 
 First you need to create training data for the blending model.
 The data should be created using the validation files.
-To do so, use ``python weight_models/optim/create_weight_data.py``
-Options can be displayed with ``-h``
+To do so, use ``python weight_models/optim/create_weight_data.py data/valid -m MODEL --out out_file [ARGS]``
+Here, `MODEL` is a pointer to a trained MLM checkpoint, without any extension (like `MLMs/scheduled/quant/best_model.ckpt-1194`).
+
+Additional args can be displayed with ``-h``
 We used all default parameters except:
-- ``--min_diff`` is set to 0.0 for 16th note steps, and to 0.1 with 40ms timesteps (otherwise, the created data is too big)
-- ``--hist`` is set to 10 for 16th note steps, and 50 for 40ms timesteps, to capture a comparable time window in both cases.
-- ``--features``: include to use handcrafted features (we did in our experiments)
+* ``--step quant`` for 16th-note timesteps.
+* ``--min_diff`` is set to 0.0 for 16th note steps, and to 0.1 with 40ms timesteps (otherwise, the created data is too big)
+* ``--hist`` is set to 10 for 16th note steps, and 50 for 40ms timesteps, to capture a comparable time window in both cases.
+* ``--features``: include to use handcrafted features (we did in our experiments)
+
+NOTE: This step takes some time (20-30 minutes with 40ms timesteps), but it works.
+
+We do not provide this data as it is quite large (>100MB each), and easy to generate.
 
 #### Run Bayesian Optimisation
 
 Then, you need to run the Bayesian Optimisation.
-To do so, use ``python weight_models/optim/optimize_sk.py``.
-Options can be displayed with ``-h``.
+To do so, use ``python weight_models/optim/optimize_sk.py model data [ARGS]``.
+`model` is a pointer to a trained MLM checkpoint, without any extension (like `MLMs/scheduled/quant/best_model.ckpt-1194`).  
+`data` should be a pointer to the validation data (`data/valid`).
 
+Other options can be displayed with ``-h``.
 Important options are:
+* ``--step quant``: for 16th-note timesteps.
 - ``--beam_data`` : should point to the file created in the previous step
 - ``--prior`` : use this to train a Prior Model (otherwise: train a Weight Model)
-- ``--model_dir``: point to a specific location where all the trained blending models will be kept
+- ``--model_dir``: point to a specific location where all the trained blending models will be saved
 
 
-**IMPORTANT**: Save the output of this step!! For instance: ``python weight_models/optim/optimize_sk.py _options_ > out.txt ``
+**IMPORTANT**: Save the output of this step!! For instance: ``python weight_models/optim/optimize_sk.py ARGS > out.txt ``
 You need that to be able to retrieve the best performing model at the end of the Bayesian Optimisation process.
 
 To get the best weight model, use ``grep "^0." out.txt | sort -n``
@@ -134,12 +147,19 @@ This would correspond to a model named ``weight_model.b10_md0.6336185697575645_h
 
 ### Step 4: Evaluate the model
 
-Finally, you can evaluate your model using ``evaluate.py``.
-- To compute baseline results, i.e. thresholding acoustic model outputs at 0.5, use ``-w 1.0``
-- To compute results with a fixed weight, use ``-w 0.8``
-- To compute results using a blending model, use ``-wm <path_to_the_model>``
+Evaluate the model with the following command:
+```
+python evaluate.py model data [--step {time,quant}] [-wm weight_model | -w FLOAT] [--save output_path]
+```
 
-Other than that, we use default parameters.
+* `model`: A saved MLM, without its file extension.
+* `data`: A data directory, usually `data/test`
+* `--step {time,quant}`: `time` (default) to use 40ms timesteps, `quant` to use 16th-note timesteps.
+* `-wm weight_model`: The weight or prior model to use during testing.
+* `-w FLOAT`: The weight to use for a constant weight model. Use `-w 1.0` to use the acoustic model only, thresholding at 0.5.
+* `--save output_path`: Save results in the given directory.
+
+**Important**: The results with 16th-note timesteps will be comparable to those in the paper. For the 40ms timestep, we use an additional post-processing step to remove short gaps. To do this, run evaluate.py with `--save output_path`, and then evaluate with: `python evaluate_load.py output_path data_path --gap`
 
 ## Contact
 
