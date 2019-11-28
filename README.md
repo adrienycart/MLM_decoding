@@ -19,6 +19,16 @@ If you use any of this in your works, please cite:
 
 Additional material (figures, sound examples...) can be found on this webpage: [http://c4dm.eecs.qmul.ac.uk/ycart/ismir19.html](http://c4dm.eecs.qmul.ac.uk/ycart/ismir19.html)
 
+## Installation
+
+The easiest way to install is using an environment manager like conda. We have tested the code with tensorflow 1.11, but other versions may work as well. Simply run the following commands:
+
+```
+conda create -n blending python=3.6 tensorflow=1.11 numpy=1.15.4
+conda activate blending
+pip install -r requirements.txt
+```
+
 ## How to use
 
 ### Step 1: Prepare the data
