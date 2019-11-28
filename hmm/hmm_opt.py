@@ -17,6 +17,8 @@ order = None
 priors = None
 step = None
 with_offset = None
+data_dir = None
+save_dir = None
 
 def test(params):
     global priors
@@ -33,7 +35,7 @@ def test(params):
     frames = np.zeros((0, 3))
     notes = np.zeros((0, 3))
     
-    folder = "data/outputs-20/valid"
+    folder = data_dir
     for file in glob.glob(os.path.join(folder, "*.mid")):
         print(file)
         sys.stdout.flush()
@@ -67,7 +69,7 @@ def test(params):
     print(str(F_n) + ": " + str(params))
     sys.stdout.flush()
     
-    out = "hmm/models/" + step + "." + str(order) + "." + str(F_n) + ".pkl"
+    out = save_dir + "/" + step + "." + str(order) + "." + str(F_n) + ".pkl"
     with open(out, "wb") as file:
         pickle.dump({"priors" : priors,
                      "transitions" : transitions}, file)
@@ -80,6 +82,8 @@ def test(params):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("priors", help="The pickle file to get the hmm priors from.")
+    parser.add_argument("data", help="The directory of the validation data to use.")
+    parser.add_argument("save_dir", help="The directory to save trained models into.")
     parser.add_argument("--step", type=str, choices=["time", "quant", "event"], help="Change the step type " +
                         "for frame timing. Either time (default), quant (for 16th notes), or event (for onsets).",
                         default="time")
@@ -97,6 +101,8 @@ if __name__ == "__main__":
     step = args.step
     order = args.order
     with_offset = args.with_offset
+    save_dir = args.save_dir
+    data_dir = args.data
     
     print("Running for " + str(args.iters) + " iterations.")
     print("step type: " + args.step)
