@@ -6,3 +6,4 @@ scikit-learn==0.20.1
 scikit-optimize
 librosa
 tqdm
+matplotlib

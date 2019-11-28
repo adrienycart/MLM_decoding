@@ -1,7 +1,10 @@
 time
 ----
 WM:
-
+min_dist: 0.6253581081313313
+history: 19
+layers (of dim 5): 2
+features: yes
 
 WM+S:
 min_dist: 0.5333703099791655
@@ -18,7 +21,10 @@ layers (of dim 5): 2
 features: yes
 
 PM+S:
-
+min_dist: 0.493231356712571
+history: 9
+layers (of dim 5): 2
+features: yes
 
 
 quant
