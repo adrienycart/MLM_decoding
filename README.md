@@ -58,6 +58,9 @@ python evaluate.py MLMs/scheduled/quant/best_model.ckpt-1194 data/test --step qu
 
 **Important**: The results with 16th-note timesteps will be identical to those in the paper. For the 40ms timestep, we use an additional post-processing step to remove short gaps. To do this, run evaluate.py with `--save output_path`, and then evaluate with: `python evaluate_load.py output_path data/test --gap`
 
+#### With Offset Evaluation
+To evaluate model notewise model performance including offsets, add `--with_offset` to the call to `evaluate.py` (for 16th-note timestep) or `evaluate_load.py` (for 40ms timesteps).
+
 ## Starting from Scratch
 
 ### Step 1: Prepare the data
@@ -161,7 +164,10 @@ python evaluate.py model data [--step {time,quant}] [-wm weight_model | -w FLOAT
 * `-w FLOAT`: The weight to use for a constant weight model. Use `-w 1.0` to use the acoustic model only, thresholding at 0.5.
 * `--save output_path`: Save results in the given directory.
 
-**Important**: The results with 16th-note timesteps will be comparable to those in the paper. For the 40ms timestep, we use an additional post-processing step to remove short gaps. To do this, run evaluate.py with `--save output_path`, and then evaluate with: `python evaluate_load.py output_path data_path --gap`
+**Important**: The results with 16th-note timesteps will be comparable to those in the paper. For the 40ms timestep, we use an additional post-processing step to remove short gaps. To do this, run evaluate.py with `--save output_path`, and then evaluate with: `python evaluate_load.py output_path data/test --gap`
+
+#### With Offset Evaluation
+To evaluate model notewise model performance including offsets, add `--with_offset` to the call to `evaluate.py` (for 16th-note timestep) or `evaluate_load.py` (for 40ms timesteps).
 
 ## HMM
 
@@ -174,7 +180,7 @@ To make your own, create the base data using `python hmm/hmm_trainer.py data out
 Here, `data` points to the data directory, with test, train, and valid directories, and the base data is saved in `out.pkl`.
 
 ### 2. Train HMM
-We provide our pre-trained HMMs in [hmm/best](./hmm/best).
+We provide our pre-trained HMMs in [hmm/models](./hmm/models).
 
 Train an HMM using Bayesian Optimization with the command `python hmm/hmm_opt.py out.pkl data/valid save_dir --step {time,quant}`  
 Here, `out.pkl` refers to the data created in the previous step, and models will be saved in `save_dir`.
@@ -192,9 +198,22 @@ python hmm/hmm_eval.py data hmm [--step {time,quant}] [--save output_path]
 * `--step {time,quant}`: `time` (default) to use 40ms timesteps, `quant` to use 16th-note timesteps.
 * `--save output_path`: Save results in the given directory.
 
-For example, to evaluate our pre-trained HMM with 16th-note timesteps, use the command `python hmm/hmm_eval.py data/test hmm/best/quant.pkl --step quant`
+For example, to evaluate our pre-trained HMM with 16th-note timesteps, use the command `python hmm/hmm_eval.py data/test hmm/models/quant.pkl --step quant`
 
-**Important**: The results with 16th-note timesteps will be comparable to those in the paper. For the 40ms timestep, we use an additional post-processing step to remove short gaps. To do this, run hmm_eval.py with `--save output_path`, and then evaluate with: `python evaluate_load.py output_path data_path --gap`
+**Important**: The results with 16th-note timesteps will be comparable to those in the paper. For the 40ms timestep, we use an additional post-processing step to remove short gaps. To do this, run hmm_eval.py with `--save output_path`, and then evaluate with: `python evaluate_load.py output_path data/test --gap`
+
+#### With Offset Evaluation
+To evaluate note-wise HMM performance including offsets, run the `python hmm/hmm_eval.py` program with `--save output_path`, and then run the following command:
+
+For 16th-note timesteps:
+```
+python evaluate_load.py output_path data/test --step quant --with_offset
+```
+
+For 40ms timesteps:
+```
+python evaluate_load.py output_path data/test --step time --gap --with_offset
+```
 
 ## Contact
 
