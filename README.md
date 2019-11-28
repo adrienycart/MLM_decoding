@@ -192,6 +192,8 @@ python hmm/hmm_eval.py data hmm [--step {time,quant}] [--save output_path]
 * `--step {time,quant}`: `time` (default) to use 40ms timesteps, `quant` to use 16th-note timesteps.
 * `--save output_path`: Save results in the given directory.
 
+For example, to evaluate our pre-trained HMM with 16th-note timesteps, use the command `python hmm/hmm_eval.py data/test hmm/best/quant.pkl --step quant`
+
 **Important**: The results with 16th-note timesteps will be comparable to those in the paper. For the 40ms timestep, we use an additional post-processing step to remove short gaps. To do this, run hmm_eval.py with `--save output_path`, and then evaluate with: `python evaluate_load.py output_path data_path --gap`
 
 ## Contact
