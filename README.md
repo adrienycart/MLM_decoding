@@ -28,6 +28,8 @@ conda activate blending
 pip install -r requirements.txt
 ```
 
+For HMM instructions, see [HMM](#hmm).
+
 ## Using Pre-trained Models
 We provide in this repository everything needed to reproduce the results from our experiments, that includes:
 
@@ -160,6 +162,37 @@ python evaluate.py model data [--step {time,quant}] [-wm weight_model | -w FLOAT
 * `--save output_path`: Save results in the given directory.
 
 **Important**: The results with 16th-note timesteps will be comparable to those in the paper. For the 40ms timestep, we use an additional post-processing step to remove short gaps. To do this, run evaluate.py with `--save output_path`, and then evaluate with: `python evaluate_load.py output_path data_path --gap`
+
+## HMM
+
+The code for training and evaluating our HMMs, including pre-trained models, is found in the [hmm](./hmm) folder.
+
+### 1. Create Training Data
+We provide pre-made data in [hmm/data](./hmm/data).
+
+To make your own, create the base data using `python hmm/hmm_trainer.py data out.pkl --step {time,quant}`  
+Here, `data` points to the data directory, with test, train, and valid directories, and the base data is saved in `out.pkl`.
+
+### 2. Train HMM
+We provide our pre-trained HMMs in [hmm/best](./hmm/best).
+
+Train an HMM using Bayesian Optimization with the command `python hmm/hmm_opt.py out.pkl data/valid save_dir --step {time,quant}`  
+Here, `out.pkl` refers to the data created in the previous step, and models will be saved in `save_dir`.
+
+The models will be saved in files called `step.1.F_measure.pkl` (where step will be either time or quant), so just look for the model with the highest F_measure, and use that one for the following step.
+
+### 3. Evaluate
+Evaluate the model with the following command:
+```
+python hmm/hmm_eval.py data hmm [--step {time,quant}] [--save output_path]
+```
+
+* `data`: A data directory, usually `data/test`
+* `hmm`: The trained pickle file from the previous step.
+* `--step {time,quant}`: `time` (default) to use 40ms timesteps, `quant` to use 16th-note timesteps.
+* `--save output_path`: Save results in the given directory.
+
+**Important**: The results with 16th-note timesteps will be comparable to those in the paper. For the 40ms timestep, we use an additional post-processing step to remove short gaps. To do this, run hmm_eval.py with `--save output_path`, and then evaluate with: `python evaluate_load.py output_path data_path --gap`
 
 ## Contact
 
