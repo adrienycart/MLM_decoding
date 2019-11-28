@@ -91,7 +91,7 @@ if __name__ == "__main__":
                         default="optim.sko")
     parser.add_argument("--iters", help="The number of iterations to run optimization for (after the initial 10 " +
                         "random points). Defaults to 200.", type=int, default=200)
-    parser.add_argument("--order", help="The order of the HMM to train (unigram, bigram, etc)", type=int, default=1)
+    parser.add_argument("--order", help="The order of the HMM to train (unigram, bigram, etc)", type=int, default=2)
     parser.add_argument("--with_offset", help="Train the HMM for F-measure with offsets.", action="store_true")
     args = parser.parse_args()
     
