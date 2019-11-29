@@ -332,6 +332,108 @@ class Pianoroll:
         return key_profile_matrix
 
 
+class PianorollBeats(Pianoroll):
+
+    def make_from_file(self,filename,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],section=None,note_range=[0,128],key_method='main'):
+        midi_data = pm.PrettyMIDI(filename)
+        beats_filename = filename.replace('.mid','_b_gt.csv') if gt_beats else filename.replace('.mid','_b_est.csv')
+        beats = np.loadtxt(beats_filename)
+        self.make_from_pm(midi_data,beats,beat_subdiv,section,note_range,key_method)
+        self.name = os.path.splitext(os.path.basename(filename))[0]
+        return
+
+    def make_from_pm(self,data,beats,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],section=None,note_range=[0,128],key_method='main'):
+
+        # Check that beat_subdiv is correct
+        beat_subdiv = sorted(beat_subdiv)
+
+        for i,val in enumerate(beat_subdiv):
+            if type(val) is not float:
+                raise ValueError('All the beat_subdiv values should be floats!')
+
+        beat_subdiv = np.array(beat_subdiv)
+        if beat_subdiv[0] != 0:
+            raise ValueError('beat_subdiv[0] should be 0.0!')
+        if np.any(np.logical_or(beat_subdiv<0,beat_subdiv>=1)):
+            raise ValueError('All beat_subdiv values should be between 0 and 1 (excluded)!')
+        if np.any(beat_subdiv[1:]-beat_subdiv[:-1]==0):
+            raise ValueError('All beat_subdiv values should be different!')
+
+        # Make step times from beats and beat_subdiv
+        n_subdiv=len(beat_subdiv)
+        n_beats = len(beats)-1 #Only take beat intervals that have an end
+
+        beat_duration = beats[1:]-beats[:-1]
+        offset_to_beat = np.tile(beat_subdiv,n_beats)*np.repeat(beat_duration,n_subdiv)
+        times = np.repeat(beats[:-1],n_subdiv) + offset_to_beat
+
+        total_duration = data.get_piano_roll().shape[1]/100.0
+        end_time = min(section[1],total_duration) if section is not None else total_duration
+        self.end_time = end_time
+
+        self.roll = get_roll_from_times(data,times,section)
+
+        self.length = self.roll.shape[1]-1
+
+        self.binarize()
+        self.set_key_list(data,section,times)
+        self.set_key_profile_list(data,section)
+
+        self.crop(note_range)
+
+        return
+
+    def set_key_list(self,data,section,steps):
+        if section is None:
+            section = [0,self.end_time]
+
+        key_sigs = data.key_signature_changes
+
+        prev_key = 0
+        keys_section = []
+        times_section = []
+
+        for key_sig in key_sigs:
+            key = key_sig.key_number
+            time = key_sig.time
+            if time < section[0]:
+                prev_key = key
+            elif time==section[0]:
+                keys_section +=[key]
+                times_section += [time]
+            else: #time > section[0]
+                if keys_section == [] and times_section==[]:
+                    keys_section +=[prev_key]
+                    times_section += [section[0]]
+                if time <= section[1]:
+                    keys_section +=[key]
+                    times_section += [min(time,section[1])]
+                #if time > section[1], do nothing
+
+        self.key_list_times = list(zip(keys_section,times_section))
+
+        key_list = []
+
+        for key, time in zip(keys_section,times_section):
+            new_time = np.argmin(np.abs(steps-time))
+            key_list += [(key,new_time)]
+
+        self.key_list = key_list
+
+def get_roll_from_times(midi_data,times,section=None):
+    quant_piano_roll = midi_data.get_piano_roll(fs=500,times=times)
+    quant_piano_roll = (quant_piano_roll>=7).astype(int)
+
+    if not section == None:
+        begin = section[0]
+        end = section[1]
+        assert begin < end
+        begin_index = np.argmin(np.abs(begin-times))
+        end_index = np.argmin(np.abs(end-times))
+        quant_piano_roll = quant_piano_roll[:,begin_index:end_index]
+
+    return quant_piano_roll
+
 def get_quant_piano_roll(midi_data,fs=4,section=None):
     data = copy.deepcopy(midi_data)
 
@@ -380,18 +482,7 @@ def get_event_roll(midi_data,section=None):
             print(s1, s2, s2-s1)
             print(round(s1*20)/20, round(s2*20)/20)
 
-    pr = midi_data.get_piano_roll(fs=500,times=steps)
-
-    pr = (pr>=7).astype(int)
-
-    if not section is None:
-        #Select the relevant portion of the pianoroll
-        begin = section[0]
-        end = section[1]
-        assert begin < end
-        begin_index = np.argmin(np.abs(begin-steps))
-        end_index = np.argmin(np.abs(end-steps))
-        pr = pr[:,begin_index:end_index]
+    pr = get_piano_roll_from_times(midi_data,steps,section)
 
     return pr, steps
 
@@ -428,7 +519,16 @@ def scale_template(scale,note_range=[21,109]):
     return output
 
 
-
+# pr=PianorollBeats()
+# pr.make_from_file('data/piano-midi-ttv-20p/test/bor_ps6.mid',gt_beats=False,section=[0,30],note_range=[21,109])
+#
+# import matplotlib.pyplot as plt
+#
+# plt.imshow(pr.roll,aspect='auto',origin='lower')
+# ax = plt.gca()
+# ax.set_xticks(np.arange(0,pr.roll.shape[1]))
+# ax.grid(linestyle='-', linewidth=0.5)
+# plt.show()
 
 
 

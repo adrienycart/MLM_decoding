@@ -5,7 +5,7 @@ from random import shuffle
 import pickle as pickle
 from datetime import datetime
 import copy
-from mlm_training.pianoroll import Pianoroll
+from mlm_training.pianoroll import Pianoroll, PianorollBeats
 # from pianoroll import Pianoroll
 from tqdm import tqdm
 
@@ -494,6 +494,75 @@ def ground_truth(data):
 
 
 
+class DatasetBeats(Dataset):
+
+    def load_data_one(self,folder,subset,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],max_len=None,note_range=[0,128],length_of_chunks=None,key_method='main'):
+        dataset = []
+        subfolder = os.path.join(folder,subset)
+
+        #Set up progress bar
+        filecounter = 0
+        for filepath in self.walkdir(subfolder):
+            filecounter += 1
+        print("Now loading: "+subset.upper())
+        pbar = tqdm(self.walkdir(subfolder), total=filecounter, unit="files")
+        for fn in pbar:
+            pbar.set_postfix(file=fn[:10], refresh=False)
+            filename = os.path.join(subfolder,fn)
+            # print filename
+            midi_data = pm.PrettyMIDI(filename)
+            beats_filename = filename.replace('.mid','_b_gt.csv') if gt_beats else filename.replace('.mid','_b_est.csv')
+            beats = np.loadtxt(beats_filename)
+            if length_of_chunks == None:
+                piano_roll = PianorollBeats()
+                if max_len == None:
+                    piano_roll.make_from_pm(midi_data,beats,beat_subdiv,None,note_range,key_method)
+                else:
+                    piano_roll.make_from_pm(midi_data,beats,beat_subdiv,[0,max_len],note_range,key_method)
+                piano_roll.name = os.path.splitext(os.path.basename(filename))[0]
+                dataset += [piano_roll]
+            else :
+                if max_len == None:
+                    end_file = midi_data.get_piano_roll().shape[1]/100.0
+                else :
+                    end_file = max_len
+                begin = 0
+                end = 0
+                i = 0
+                pr_list = []
+                while end < end_file:
+                    end = min(end_file,end+length_of_chunks)
+                    piano_roll = PianorollBeats()
+                    piano_roll.make_from_pm(midi_data,beats,beat_subdiv,[begin,end],note_range,key_method)
+                    piano_roll.name = os.path.splitext(os.path.basename(filename))[0]+"_"+str(i)
+                    pr_list += [piano_roll]
+                    begin = end
+                    i += 1
+                dataset += pr_list
+
+        if subset in ["train","valid","test"]:
+            setattr(self,subset,dataset)
+        return dataset
+
+    def load_data(self,folder,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],max_len=None,note_range=[0,128],length_of_chunks=None,key_method='main'):
+        self.note_range = note_range
+        for subset in ["train","valid","test"]:
+            self.load_data_one(folder,subset,gt_beats,beat_subdiv,max_len,note_range,length_of_chunks,key_method)
+        # self.zero_pad()
+        print("Dataset loaded ! "+str(datetime.now()))
+
+    def load_data_custom(self,folder,train,valid,test,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],max_len=None,note_range=[0,128],length_of_chunks=None):
+        self.note_range = note_range
+
+        for subset in train:
+            self.train += self.load_data_one(folder,subset,gt_beats,beat_subdiv,max_len,note_range,length_of_chunks)
+        for subset in valid:
+            self.valid += self.load_data_one(folder,subset,gt_beats,beat_subdiv,max_len,note_range,length_of_chunks)
+        for subset in test:
+            self.test += self.load_data_one(folder,subset,gt_beats,beat_subdiv,max_len,note_range,length_of_chunks)
+
+        print("Dataset loaded ! "+str(datetime.now()))
+
 
 #
 # folder = "data/Piano-midi.de/"
@@ -511,9 +580,7 @@ def ground_truth(data):
 
 
 
-# data = Dataset()
-# data.load_data('data/test_dataset/',
-#         timestep_type='quant',max_len=None,note_range=[21,109])
+
 # #
 # # # for pr in data.test:
 # #     # print pr.name
