@@ -20,13 +20,13 @@ class Pianoroll:
         self.key_list = []
         self.key_profiles_list = []
 
-    def make_from_file(self,filename,timestep_type,section=None,note_range=[0,128],key_method='main'):
+    def make_from_file(self,filename,timestep_type,section=None,note_range=[0,128],key_method='main',with_onsets=False):
         midi_data = pm.PrettyMIDI(filename)
-        self.make_from_pm(midi_data,timestep_type,section,note_range,key_method)
+        self.make_from_pm(midi_data,timestep_type,section,note_range,key_method,with_onsets)
         self.name = os.path.splitext(os.path.basename(filename))[0]
         return
 
-    def make_from_pm(self,data,timestep_type,section=None,note_range=[0,128],key_method='main'):
+    def make_from_pm(self,data,timestep_type,section=None,note_range=[0,128],key_method='main',with_onsets=False):
 
 
         self.timestep_type = timestep_type
@@ -39,14 +39,21 @@ class Pianoroll:
 
         #Get the roll matrix
         if timestep_type=="quant":
-            self.roll = get_quant_piano_roll(data,4,section)
+            self.roll = get_quant_piano_roll(data,4,section,with_onsets)
         #Get the roll matrix
         if timestep_type=="quant_short":
-            self.roll = get_quant_piano_roll(data,12,section)
+            self.roll = get_quant_piano_roll(data,12,section,with_onsets)
         elif timestep_type=="event":
             self.roll, steps = get_event_roll(data,section)
         elif timestep_type=="time":
             piano_roll = data.get_piano_roll(25)
+            piano_roll = (piano_roll!=0).astype(int)
+            if with_onsets:
+                for instr in data.instruments:
+                    for note in instr.notes:
+                        onset_idx = int(note.start*25)
+                        piano_roll[note.pitch,onset_idx] = 2
+
             if not section == None :
                 min_time_step = int(round(section[0]*25))
                 max_time_step = int(round(section[1]*25))
@@ -56,7 +63,7 @@ class Pianoroll:
 
         self.length = self.roll.shape[1]-1
 
-        self.binarize()
+
         self.set_key_list(data,section,steps)
         self.set_key_profile_list(data,section)
 
@@ -332,6 +339,8 @@ class Pianoroll:
         return key_profile_matrix
 
 
+
+
 class PianorollBeats(Pianoroll):
 
     def make_from_file(self,filename,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],section=None,note_range=[0,128],key_method='main'):
@@ -420,9 +429,16 @@ class PianorollBeats(Pianoroll):
 
         self.key_list = key_list
 
-def get_roll_from_times(midi_data,times,section=None):
+def get_roll_from_times(midi_data,times,section=None,with_onsets=False):
     quant_piano_roll = midi_data.get_piano_roll(fs=500,times=times)
     quant_piano_roll = (quant_piano_roll>=7).astype(int)
+
+    if with_onsets:
+        for instr in data.instruments:
+            for note in instr.notes:
+                onset_idx = np.argmin(np.abs(times-note.start))
+                quant_piano_roll[note.pitch,onset_idx] = 2
+
 
     if not section == None:
         begin = section[0]
@@ -434,7 +450,7 @@ def get_roll_from_times(midi_data,times,section=None):
 
     return quant_piano_roll
 
-def get_quant_piano_roll(midi_data,fs=4,section=None):
+def get_quant_piano_roll(midi_data,fs=4,section=None,with_onsets=False):
     data = copy.deepcopy(midi_data)
 
     PPQ = float(data.resolution)
@@ -451,6 +467,12 @@ def get_quant_piano_roll(midi_data,fs=4,section=None):
     length = data.get_piano_roll().shape[1]/100.0
     quant_piano_roll = data.get_piano_roll(times=np.arange(0,length,1/float(fs)))
     quant_piano_roll = (quant_piano_roll>=7).astype(int)
+
+    if with_onsets:
+        for instr in data.instruments:
+            for note in instr.notes:
+                onset_idx = int(round(note.start*fs))
+                quant_piano_roll[note.pitch,onset_idx] = 2
 
 
     if not section == None:
@@ -518,6 +540,21 @@ def scale_template(scale,note_range=[21,109]):
     output = [x + key for x in single_notes]
     return output
 
+def check_correct_onsets(roll):
+    diff = roll[:,1:]-roll[:,:-1]
+
+    if np.all(np.logical_or.reduce((diff==2,diff==-1,diff==0))):
+        pass
+    else:
+        incorrect= np.where(np.logical_not(np.logical_or.reduce((diff==2,diff==-1,diff==0))))
+        for idx in zip(incorrect[0],incorrect[1]):
+            print idx
+        import matplotlib.pyplot as plt
+        plt.imshow(pr.roll,aspect='auto',origin='lower')
+        plt.show(block=[bool])
+
+
+
 
 # pr=PianorollBeats()
 # pr.make_from_file('data/piano-midi-ttv-20p/test/bor_ps6.mid',gt_beats=False,section=[0,30],note_range=[21,109])
@@ -530,6 +567,14 @@ def scale_template(scale,note_range=[21,109]):
 # ax.grid(linestyle='-', linewidth=0.5)
 # plt.show()
 
+folder = 'data/piano-midi-ttv-20p/train'
+for fn in os.listdir(folder):
+    if fn.endswith('.mid') and not fn.startswith('.'):
+        filename = os.path.join(folder,fn)
+        print filename
+        pr = Pianoroll()
+        pr.make_from_file(filename,'time',note_range=[21,109],with_onsets=True)
+        check_correct_onsets(pr.roll)
 
 
 # pr = Pianoroll()
