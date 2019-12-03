@@ -456,7 +456,58 @@ class DataMaps:
 
         return output
 
+class DataMapsBeats(DataMaps):
+    def make_from_file(self,filename,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],section=None,method='avg',si_target=False,acoustic_model='benetos'):
+        self.acoustic_model = acoustic_model
+        if acoustic_model == 'benetos':
+            self.input_fs = 100
+            note_range = [21,109]
+        elif acoustic_model == 'kelz':
+            self.input_fs = 25
+            note_range = [21,109]
+        elif acoustic_model == 'bittner':
+            self.input_fs = 22050.0/256.0
+            # note_range = [24,97]
+            note_range = [21,109]
 
+        self.set_name_from_maps(filename)
+
+        pm_data = pm.PrettyMIDI(filename)
+        input_matrix = self.get_input_matrix(filename)
+        beats_filename = filename.replace('.mid','_b_gt.csv') if gt_beats else filename.replace('.mid','_b_est.csv')
+        beats = np.loadtxt(beats_filename)
+
+        self.set_corresp(pm_data,beats,timestep_type)
+        self.target = self.get_aligned_pianoroll(pm_data,section)
+        self.input = align_matrix(input_matrix,self.corresp,self.input_fs,section,method)
+
+
+
+        #Target has to be binarized because the pretty_midi get_piano_roll function
+        #returns a real-value piano-roll.
+        self.binarize_target()
+        self.set_sigs_and_keys(pm_data)
+        self.crop_target(note_range)
+        self.even_up_rolls()
+
+        return
+
+    def set_corresp(self,pm_data,beats,beat_subdiv):
+        #Set the correspondance table from pm_data (should be a properly annotated MIDI file)
+
+        end_time = pm_data.get_end_time()
+        end_tick = pm_data.time_to_tick(end_time)
+
+        # Make step times from beats and beat_subdiv
+        n_subdiv=len(beat_subdiv)
+        n_beats = len(beats)-1 #Only take beat intervals that have an end
+
+        beat_duration = beats[1:]-beats[:-1]
+        offset_to_beat = np.tile(beat_subdiv,n_beats)*np.repeat(beat_duration,n_subdiv)
+        corresp = np.repeat(beats[:-1],n_subdiv) + offset_to_beat
+
+        self.corresp = corresp
+        return
 
 def signature_to_metrical_grid(sig):
     num = sig[0]
