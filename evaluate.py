@@ -30,15 +30,15 @@ parser.add_argument('--beat_subdiv',type=str,help="with beat timesteps, beat sub
 parser.add_argument("--max_len",type=str,help="test on the first max_len seconds of each text file. Anything other than a number will evaluate on whole files. Default is 30s.",
                     default=30)
 parser.add_argument('--save',type=str,help="location to save the computed results. If not provided, results are not saved")
-parser.add_argument("-b", "--beam", type=int, help="The beam size. Defaults to 100.", default=100)
-parser.add_argument("-k", "--branch", type=int, help="The branching factor. Defaults to 20.", default=20)
+parser.add_argument("-b", "--beam", type=int, help="The beam size. Defaults to 50.", default=50)
+parser.add_argument("-k", "--branch", type=int, help="The branching factor. Defaults to 5.", default=5)
 weight = parser.add_mutually_exclusive_group()
 weight.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
                     "If -1, priors are multiplied (only with --it). Defaults to 0.5", type=float, default=0.5)
 weight.add_argument("-wm", "--weight_model", help="Load the given sklearn model using pickle, to dynamically " +
                     "set weights. Defaults to None, which uses the static weight from -w instead.",
                     default=None)
-parser.add_argument("--hash", help="The hash length to use. Defaults to 10.", type=int, default=10)
+parser.add_argument("--hash", help="The hash length to use. Defaults to 12.", type=int, default=12)
 parser.add_argument("-v", "--verbose", help="Use verbose printing.", action="store_true")
 parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
 parser.add_argument("--gt", help="Use the gt to use the best possible weight_model results.", action="store_true")
