@@ -548,7 +548,7 @@ def check_correct_onsets(roll):
     else:
         incorrect= np.where(np.logical_not(np.logical_or.reduce((diff==2,diff==-1,diff==0))))
         for idx in zip(incorrect[0],incorrect[1]):
-            print idx
+            print(idx)
         import matplotlib.pyplot as plt
         plt.imshow(pr.roll,aspect='auto',origin='lower')
         plt.show(block=[bool])
@@ -567,14 +567,14 @@ def check_correct_onsets(roll):
 # ax.grid(linestyle='-', linewidth=0.5)
 # plt.show()
 
-folder = 'data/piano-midi-ttv-20p/train'
-for fn in os.listdir(folder):
-    if fn.endswith('.mid') and not fn.startswith('.'):
-        filename = os.path.join(folder,fn)
-        print filename
-        pr = Pianoroll()
-        pr.make_from_file(filename,'time',note_range=[21,109],with_onsets=True)
-        check_correct_onsets(pr.roll)
+# folder = 'data/piano-midi-ttv-20p/train'
+# for fn in os.listdir(folder):
+#     if fn.endswith('.mid') and not fn.startswith('.'):
+#         filename = os.path.join(folder,fn)
+#         print filename
+#         pr = Pianoroll()
+#         pr.make_from_file(filename,'time',note_range=[21,109],with_onsets=True)
+#         check_correct_onsets(pr.roll)
 
 
 # pr = Pianoroll()

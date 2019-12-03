@@ -477,7 +477,7 @@ class DataMapsBeats(DataMaps):
         beats_filename = filename.replace('.mid','_b_gt.csv') if gt_beats else filename.replace('.mid','_b_est.csv')
         beats = np.loadtxt(beats_filename)
 
-        self.set_corresp(pm_data,beats,timestep_type)
+        self.set_corresp(pm_data,beats,beat_subdiv)
         self.target = self.get_aligned_pianoroll(pm_data,section)
         self.input = align_matrix(input_matrix,self.corresp,self.input_fs,section,method)
 
@@ -494,6 +494,21 @@ class DataMapsBeats(DataMaps):
 
     def set_corresp(self,pm_data,beats,beat_subdiv):
         #Set the correspondance table from pm_data (should be a properly annotated MIDI file)
+
+        # Check that beat_subdiv is correct
+        beat_subdiv = sorted(beat_subdiv)
+
+        for i,val in enumerate(beat_subdiv):
+            if type(val) is not float:
+                raise ValueError('All the beat_subdiv values should be floats!')
+
+        beat_subdiv = np.array(beat_subdiv)
+        if beat_subdiv[0] != 0:
+            raise ValueError('beat_subdiv[0] should be 0.0!')
+        if np.any(np.logical_or(beat_subdiv<0,beat_subdiv>=1)):
+            raise ValueError('All beat_subdiv values should be between 0 and 1 (excluded)!')
+        if np.any(beat_subdiv[1:]-beat_subdiv[:-1]==0):
+            raise ValueError('All beat_subdiv values should be different!')
 
         end_time = pm_data.get_end_time()
         end_tick = pm_data.time_to_tick(end_time)
@@ -639,7 +654,7 @@ def align_matrix(input_matrix,corresp,input_fs,section=None,method='avg'):
         begin = corresp[i]
         end = corresp[i+1]
         begin_index = int(round(begin*input_fs)) #input_fs is the sampling frequency of the input
-        end_index = max(int(round(end*input_fs)),int(round(begin*input_fs))+1) #We want to select at least 1 frame of the input
+        end_index = max(int(round(end*input_fs)),begin_index+1) #We want to select at least 1 frame of the input
         sub_input = input_matrix[:,begin_index:end_index]
 
         if sub_input.shape[1]==0:

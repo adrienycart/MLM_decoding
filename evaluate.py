@@ -1,4 +1,4 @@
-from dataMaps import DataMaps,convert_note_to_time, align_matrix
+from dataMaps import DataMaps, DataMapsBeats, convert_note_to_time, align_matrix
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
@@ -23,8 +23,10 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('model',type=str,help="location of the checkpoint to load (inside ckpt folder)")
 parser.add_argument('data_path',type=str,help="folder containing the split dataset")
-parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event","beats"], help="Change the step type for frame timing. Either time (default), " +
+parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event","beat"], help="Change the step type for frame timing. Either time (default), " +
                     "quant (for 16th notes), or event (for onsets).", default="time")
+parser.add_argument('--beat_gt',action='store_true',help="with beat timesteps, use ground-truth beat positions")
+parser.add_argument('--beat_subdiv',type=str,help="with beat timesteps, beat subdivisions to use (comma separated list, without brackets)",default='0,1/4,1/3,1/2,2/3,3/4')
 parser.add_argument("--max_len",type=str,help="test on the first max_len seconds of each text file. Anything other than a number will evaluate on whole files. Default is 30s.",
                     default=30)
 parser.add_argument('--save',type=str,help="location to save the computed results. If not provided, results are not saved")
@@ -138,8 +140,21 @@ for fn in os.listdir(folder):
         print(filename)
         sys.stdout.flush()
 
-        data = DataMaps()
-        data.make_from_file(filename,args.step,section, acoustic_model='kelz')
+        if args.step == "beat":
+            beat_subdiv_str = args.beat_subdiv
+            beat_subdiv_str=beat_subdiv_str.split(',')
+            beat_subdiv = []
+            for beat_str in beat_subdiv_str:
+                if '/' in beat_str:
+                    beat_str_split = beat_str.split('/')
+                    beat_subdiv += [float(beat_str_split[0])/float(beat_str_split[1])]
+                else:
+                    beat_subdiv += [float(beat_str)]
+            data = DataMapsBeats()
+            data.make_from_file(filename,args.beat_gt,beat_subdiv,section, acoustic_model='kelz')
+        else:
+            data = DataMaps()
+            data.make_from_file(filename,args.step,section, acoustic_model='kelz')
 
         # Decode
         if args.it > 0:
@@ -168,7 +183,7 @@ for fn in os.listdir(folder):
                 np.save(os.path.join(args.save,fn.replace('.mid','_combined_priors')), combined_priors)
                 np.savetxt(os.path.join(args.save,fn.replace('.mid','_priors.csv')), priors)
 
-        if args.step in ['quant','event','quant_short']:
+        if args.step in ['quant','event','quant_short','beat']:
             pr = convert_note_to_time(pr,data.corresp,data.input_fs,max_len=max_len)
 
         data = DataMaps()
