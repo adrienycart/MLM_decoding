@@ -35,31 +35,38 @@ class Pianoroll:
         end_time = min(section[1],total_duration) if section is not None else total_duration
         self.end_time = end_time
 
-        steps = None
+        times = None
 
         #Get the roll matrix
-        if timestep_type=="quant":
-            self.roll = get_quant_piano_roll(data,4,section,with_onsets)
-        #Get the roll matrix
-        if timestep_type=="quant_short":
-            self.roll = get_quant_piano_roll(data,12,section,with_onsets)
+        if timestep_type=="quant" or "quant_short":
+            if timestep_type == "quant":
+                fs=4
+            elif timestep_type == "quant_short":
+                fs=12
+
+            end_tick = data.time_to_tick(end_time)
+            PPQ = float(data.resolution)
+            end_note = end_tick/PPQ
+            note_steps = np.arange(0,end_note,1.0/fs)
+            tick_steps = np.round(note_steps*PPQ).astype(int)
+            times = np.zeros_like(tick_steps,dtype=float)
+            for i,tick in enumerate(tick_steps):
+                times[i]=data.tick_to_time(int(tick))
         elif timestep_type=="event":
-            self.roll, steps = get_event_roll(data,section)
+            times = np.unique(midi_data.get_onsets())
+            #Remove onsets that are within 50ms of each other (keep first one only)
+            diff = times[1:] - times[:-1]
+            close = diff<0.05
+            while np.any(close):
+                to_keep = np.where(np.logical_not(close))
+                times = times[to_keep[0]+1]
+                diff = times[1:] - times[:-1]
+                close = diff<0.05
         elif timestep_type=="time":
-            piano_roll = data.get_piano_roll(25)
-            piano_roll = (piano_roll!=0).astype(int)
-            if with_onsets:
-                for instr in data.instruments:
-                    for note in instr.notes:
-                        onset_idx = int(note.start*25)
-                        piano_roll[note.pitch,onset_idx] = 2
+            fs=25
+            times = np.arange(0,end_time,1.0/fs)
 
-            if not section == None :
-                min_time_step = int(round(section[0]*25))
-                max_time_step = int(round(section[1]*25))
-                self.roll = piano_roll[:,min_time_step:max_time_step]
-            else:
-                self.roll = piano_roll
+        self.roll = get_roll_from_times(midi_data,times,section)
 
         self.length = self.roll.shape[1]-1
 
@@ -71,7 +78,7 @@ class Pianoroll:
 
         return
 
-    def set_key_list(self,data,section,steps=None):
+    def set_key_list(self,data,section,steps):
         if section is None:
             section = [0,self.end_time]
 
@@ -103,19 +110,7 @@ class Pianoroll:
         key_list = []
 
         for key, time in zip(keys_section,times_section):
-            if self.timestep_type == "time":
-                new_time = int(round(time*float(25)))
-            else:
-                if self.timestep_type == "event":
-                    new_time = np.argmin(np.abs(steps-time))
-                else:
-                    if self.timestep_type == "quant":
-                        fs=4
-                    elif self.timestep_type == "quant_short":
-                        fs=12
-                    time_quant = data.time_to_tick(time)/float(data.resolution)
-                    new_time = int(round(time_quant*float(fs)))
-
+            new_time = np.argmin(np.abs(steps-time))
             key_list += [(key,new_time)]
 
 
@@ -430,14 +425,20 @@ class PianorollBeats(Pianoroll):
         self.key_list = key_list
 
 def get_roll_from_times(midi_data,times,section=None,with_onsets=False):
-    quant_piano_roll = midi_data.get_piano_roll(fs=500,times=times)
-    quant_piano_roll = (quant_piano_roll>=7).astype(int)
+    # quant_piano_roll = midi_data.get_piano_roll(fs=500,times=times)
+    # quant_piano_roll = (quant_piano_roll>=7).astype(int)
+    roll = np.zeros([128,len(times)])
 
-    if with_onsets:
-        for instr in data.instruments:
-            for note in instr.notes:
-                onset_idx = np.argmin(np.abs(times-note.start))
-                quant_piano_roll[note.pitch,onset_idx] = 2
+    for instr in midi_data.instruments:
+        for note in instr.notes:
+            start = np.argmin(np.abs(times-note.start))
+            end = np.argmin(np.abs(times-note.end))
+            if start == end:
+                end = start+1
+            roll[note.pitch,start:end]=1
+
+            if with_onsets:
+                roll[note.pitch,onset_idx] = 2
 
 
     if not section == None:
@@ -446,11 +447,12 @@ def get_roll_from_times(midi_data,times,section=None,with_onsets=False):
         assert begin < end
         begin_index = np.argmin(np.abs(begin-times))
         end_index = np.argmin(np.abs(end-times))
-        quant_piano_roll = quant_piano_roll[:,begin_index:end_index]
+        roll = roll[:,begin_index:end_index]
 
-    return quant_piano_roll
+    return roll
 
 def get_quant_piano_roll(midi_data,fs=4,section=None,with_onsets=False):
+    # DEPRECATED!!!
     data = copy.deepcopy(midi_data)
 
     PPQ = float(data.resolution)
@@ -487,6 +489,7 @@ def get_quant_piano_roll(midi_data,fs=4,section=None,with_onsets=False):
     return quant_piano_roll
 
 def get_event_roll(midi_data,section=None):
+    # DEPRECATED!!!
     steps = np.unique(midi_data.get_onsets())
 
     #Remove onsets that are within 50ms of each other (keep first one only)
