@@ -333,15 +333,15 @@ class Pianoroll:
 
 class PianorollBeats(Pianoroll):
 
-    def make_from_file(self,filename,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],section=None,note_range=[0,128],key_method='main'):
+    def make_from_file(self,filename,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],section=None,note_range=[0,128],key_method='main',with_onsets=False):
         midi_data = pm.PrettyMIDI(filename)
         beats_filename = filename.replace('.mid','_b_gt.csv') if gt_beats else filename.replace('.mid','_b_est.csv')
         beats = np.loadtxt(beats_filename)
-        self.make_from_pm(midi_data,beats,beat_subdiv,section,note_range,key_method)
+        self.make_from_pm(midi_data,beats,beat_subdiv,section,note_range,key_method,with_onsets)
         self.name = os.path.splitext(os.path.basename(filename))[0]
         return
 
-    def make_from_pm(self,data,beats,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],section=None,note_range=[0,128],key_method='main'):
+    def make_from_pm(self,data,beats,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],section=None,note_range=[0,128],key_method='main',with_onsets=False):
 
         # Check that beat_subdiv is correct
         beat_subdiv = sorted(beat_subdiv)
@@ -370,7 +370,7 @@ class PianorollBeats(Pianoroll):
         end_time = min(section[1],total_duration) if section is not None else total_duration
         self.end_time = end_time
 
-        self.roll = get_roll_from_times(data,times,section)
+        self.roll = get_roll_from_times(data,times,section,with_onsets)
 
         self.length = self.roll.shape[1]-1
 
