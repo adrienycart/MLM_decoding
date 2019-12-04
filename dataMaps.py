@@ -28,7 +28,7 @@ class DataMaps:
         self.timestep_type = None
         self.acoutic_model = ""
 
-    def make_from_file(self,filename,timestep_type,section=None,method='avg',si_target=False,acoustic_model='benetos'):
+    def make_from_file(self,filename,timestep_type,section=None,method='avg',si_target=False,acoustic_model='benetos',with_onsets=False):
         self.acoustic_model = acoustic_model
         if acoustic_model == 'benetos':
             self.input_fs = 100
@@ -46,38 +46,11 @@ class DataMaps:
         pm_data = pm.PrettyMIDI(filename)
         input_matrix = self.get_input_matrix(filename)
 
-        if timestep_type == 'quant' or timestep_type == "quant_short" or timestep_type == 'event':
-            self.set_corresp(pm_data,timestep_type)
-            self.target = self.get_aligned_pianoroll(pm_data,section)
-            self.input = align_matrix(input_matrix,self.corresp,self.input_fs,section,method)
 
-        elif timestep_type == 'time':
+        self.set_corresp(pm_data,timestep_type)
+        self.target = self.get_roll_from_times(pm_data,section,with_onsets)
+        self.input = align_matrix(input_matrix,self.corresp,self.input_fs,section,method)
 
-            fs=self.input_fs
-            piano_roll = pm_data.get_piano_roll(fs)
-            if not section == None :
-                #Select the relevant portion of the piano-roll and input
-                min_time_step_target = int(round(section[0]*fs))
-                max_time_step_target = int(round(section[1]*fs))
-                min_time_step_input = int(round(section[0]*fs))
-                max_time_step_input = int(round(section[1]*fs))
-                self.target = piano_roll[:,min_time_step_target:max_time_step_target]
-                self.input = input_matrix[:,min_time_step_input:max_time_step_input]
-                self.begin = section[0]
-                self.end = min([section[1],piano_roll.shape[1]/25.0,input_matrix.shape[1]/25.0])
-            else:
-                #Keep the whole piano-roll
-                self.target = piano_roll
-                self.input = input_matrix
-                self.begin = 0
-                self.end = min([piano_roll.shape[1]/25.0,input_matrix.shape[1]/25.0])
-        else:
-            raise ValueError('Timestep type not understood: '+str(timestep_type))
-
-
-        #Target has to be binarized because the pretty_midi get_piano_roll function
-        #returns a real-value piano-roll.
-        self.binarize_target()
         self.set_sigs_and_keys(pm_data)
         self.crop_target(note_range)
         self.even_up_rolls()
@@ -128,19 +101,22 @@ class DataMaps:
         name=os.path.splitext(filename)[0]
         return name+'_corresp.txt'
 
-    def get_aligned_pianoroll(self,pm_data,section=None):
+    def get_roll_from_times(self,pm_data,section=None,with_onsets=False):
         #Makes a quantised piano-roll
         corresp = self.corresp
 
-        # c_prev = corresp[0]
-        # for c in corresp[1:]:
-        #     if c-c_prev < 0.04:
-        #         print(c_prev,c,c-c_prev)
-        #     c_prev=c
+        roll = np.zeros([128,len(corresp)])
 
+        for instr in midi_data.instruments:
+            for note in instr.notes:
+                start = np.argmin(np.abs(corresp-note.start))
+                end = np.argmin(np.abs(corresp-note.end))
+                if start == end:
+                    end = start+1
+                roll[note.pitch,start:end]=1
 
-        pr = pm_data.get_piano_roll(fs=500,times=corresp)
-        pr = (pr>=7).astype(int)
+                if with_onsets:
+                    roll[note.pitch,onset_idx] = 2
 
         if not section==None:
             #Select the relevant portion of the pianoroll
@@ -194,6 +170,9 @@ class DataMaps:
                 corresp = corresp[to_keep[0]+1]
                 diff = corresp[1:] - corresp[:-1]
                 close = diff<0.04
+        elif timestep_type == "time":
+            fs=25
+            corresp = np.arange(0,end_time,1.0/fs)
         else:
             raise  ValueError('Timestep type not understood: '+str(timestep_type))
 
@@ -304,10 +283,6 @@ class DataMaps:
         else:
             self.meter_grid = meter_grid
 
-    def binarize_target(self):
-        roll = self.target
-        self.target = np.not_equal(roll,np.zeros(roll.shape)).astype(int)
-        return
 
     def even_up_rolls(self):
         #Makes input and target of same size.
@@ -457,7 +432,7 @@ class DataMaps:
         return output
 
 class DataMapsBeats(DataMaps):
-    def make_from_file(self,filename,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],section=None,method='avg',si_target=False,acoustic_model='benetos'):
+    def make_from_file(self,filename,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],section=None,method='avg',si_target=False,acoustic_model='benetos',with_onsets=False):
         self.acoustic_model = acoustic_model
         if acoustic_model == 'benetos':
             self.input_fs = 100
@@ -478,14 +453,10 @@ class DataMapsBeats(DataMaps):
         beats = np.loadtxt(beats_filename)
 
         self.set_corresp(pm_data,beats,beat_subdiv)
-        self.target = self.get_aligned_pianoroll(pm_data,section)
+        self.target = self.get_roll_from_times(pm_data,section,with_onsets)
         self.input = align_matrix(input_matrix,self.corresp,self.input_fs,section,method)
 
 
-
-        #Target has to be binarized because the pretty_midi get_piano_roll function
-        #returns a real-value piano-roll.
-        self.binarize_target()
         self.set_sigs_and_keys(pm_data)
         self.crop_target(note_range)
         self.even_up_rolls()
@@ -914,7 +885,7 @@ def get_name_from_maps(filename):
 # input_data = data.get_aligned_input(csv_matrix,corresp,method='avg',section = None)
 # # print input_data[:,-1]
 #
-# roll = data.get_aligned_pianoroll(pm_data,corresp,section =None)
+# roll = data.get_roll_from_times(pm_data,corresp,section =None)
 # print roll.shape
 # print corresp.shape
 
