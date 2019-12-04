@@ -75,6 +75,9 @@ except:
     print(f"Evaluate on whole files")
 
 print(f"Step: {args.step}")
+if args.step == "beat":
+    print(f"Use GT beats: {args.beat_gt}")
+    print(f"Beat subdivisions: {args.beat_subdiv}")
 print(f"Beam size: {args.beam}")
 print(f"Branching factor: {args.branch}")
 print(f"Hash size: {args.hash}")

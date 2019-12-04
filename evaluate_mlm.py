@@ -1,4 +1,4 @@
-from mlm_training.dataset import Dataset, ground_truth
+from mlm_training.dataset import Dataset, DatasetBeats, ground_truth
 from datasetMaps import DatasetMaps
 from mlm_training.utils import safe_mkdir
 from mlm_training.model import Model, make_model_from_dataset, make_save_path, make_model_param, make_train_param
@@ -18,32 +18,35 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('save_path',type=str,help="folder to save the checkpoints (inside ckpt folder)")
 parser.add_argument('data_path',type=str,help="folder containing the split dataset")
-timestep = parser.add_mutually_exclusive_group()
-timestep.add_argument('-quant',action='store_true',help="use quantised timesteps")
-timestep.add_argument('-event',action='store_true',help="use event timesteps")
-timestep.add_argument('-quant_short',action='store_true',help="use quant_short timesteps")
-parser.add_argument('-compare',type=str,nargs='*',help="compare with following models (can have several values)")
-parser.add_argument('-sched_mix',action='store_true',help='evaluate by sampling from acoustic outputs')
-parser.add_argument('-diagRNN',action='store_true',help='use diagLSTM units')
-parser.add_argument('-no_sched',action='store_true',help='compute the results without scheduled sampling')
-parser.add_argument('-no_save',action='store_true',help='do not load, do not save results')
-parser.add_argument('-no_chunks',action='store_true',help='do not cut sequences into chunks')
-parser.add_argument('-plot',action='store_true',help='plot outputs of all compared models')
+parser.add_argument('--step',type=str,choices=['time','quant','event','quant_short','beat'],help="timestep to use")
+parser.add_argument('--beat_gt',action='store_true',help="with beat timesteps, use ground-truth beat positions")
+parser.add_argument('--beat_subdiv',type=str,help="with beat timesteps, beat subdivisions to use (comma separated list, without brackets)",default='0,1/4,1/3,1/2,2/3,3/4')
+parser.add_argument('--compare',type=str,nargs='*',help="compare with following models (can have several values)")
+parser.add_argument('--sched_mix',action='store_true',help='evaluate by sampling from acoustic outputs')
+parser.add_argument('--diagRNN',action='store_true',help='use diagLSTM units')
+parser.add_argument('--no_sched',action='store_true',help='compute the results without scheduled sampling')
+parser.add_argument('--no_save',action='store_true',help='do not load, do not save results')
+parser.add_argument('--no_chunks',action='store_true',help='do not cut sequences into chunks')
+parser.add_argument('--plot',action='store_true',help='plot outputs of all compared models')
 args = parser.parse_args()
 
 
-if args.quant:
-    timestep_type = 'quant'
+timestep_type = args.step
+
+if    timestep_type == 'quant':
     max_len = 300
-elif args.event:
-    timestep_type = 'event'
-    max_len = 100
-elif args.quant_short:
-    timestep_type = 'quant_short'
+
+elif    timestep_type=='quant_short':
     max_len = 900
-else:
-    timestep_type = 'time'
+
+elif    timestep_type == 'event':
+    max_len = 100
+
+elif    timestep_type == 'time':
     max_len = 750
+
+elif    timestep_type == 'beat':
+    max_len = 300
 
 if args.no_chunks:
     max_len = 60
@@ -81,6 +84,22 @@ if not all([os.path.isfile(path) for path in all_save_names]) or args.no_save:
         data= DatasetMaps()
         data.load_data(args.data_path,timestep_type=timestep_type,subsets=['test'],acoustic_model='bittner')
 
+    elif timestep_type == "beat":
+        beat_subdiv_str = args.beat_subdiv
+        beat_subdiv_str=beat_subdiv_str.split(',')
+        beat_subdiv = []
+        for beat_str in beat_subdiv_str:
+            if '/' in beat_str:
+                beat_str_split = beat_str.split('/')
+                beat_subdiv += [float(beat_str_split[0])/float(beat_str_split[1])]
+            else:
+                beat_subdiv += [float(beat_str)]
+        data = DatasetBeats(rand_transp=True)
+        if args.no_chunks:
+            data.load_data_one(args.data_path,subset='test',gt_beats=args.beat_gt,beat_subdiv=beat_subdiv,note_range=note_range,max_len=max_len)
+            data.zero_pad()
+        else:
+            data.load_data_one(args.data_path,subset='test',gt_beats=args.beat_gt,beat_subdiv=beat_subdiv,note_range=note_range)
     else:
         data = Dataset()
         if args.no_chunks:
