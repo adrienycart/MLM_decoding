@@ -53,7 +53,7 @@ class Pianoroll:
             for i,tick in enumerate(tick_steps):
                 times[i]=data.tick_to_time(int(tick))
         elif timestep_type=="event":
-            times = np.unique(midi_data.get_onsets())
+            times = np.unique(data.get_onsets())
             #Remove onsets that are within 50ms of each other (keep first one only)
             diff = times[1:] - times[:-1]
             close = diff<0.05
@@ -66,19 +66,19 @@ class Pianoroll:
             fs=25
             times = np.arange(0,end_time,1.0/fs)
 
-        self.roll = get_roll_from_times(midi_data,times,section)
+        self.roll = get_roll_from_times(data,times,section)
 
         self.length = self.roll.shape[1]-1
 
 
-        self.set_key_list(data,section,steps)
+        self.set_key_list(data,section,times)
         self.set_key_profile_list(data,section)
 
         self.crop(note_range)
 
         return
 
-    def set_key_list(self,data,section,steps):
+    def set_key_list(self,data,section,times):
         if section is None:
             section = [0,self.end_time]
 
@@ -110,7 +110,7 @@ class Pianoroll:
         key_list = []
 
         for key, time in zip(keys_section,times_section):
-            new_time = np.argmin(np.abs(steps-time))
+            new_time = np.argmin(np.abs(times-time))
             key_list += [(key,new_time)]
 
 
@@ -143,11 +143,6 @@ class Pianoroll:
 
 
         self.key_profiles_list = key_profiles
-
-    def binarize(self):
-        roll = self.roll
-        self.roll = np.not_equal(roll,np.zeros(roll.shape)).astype(int)
-        return
 
     def crop(self,note_range):
         if self.note_range != note_range:
@@ -387,7 +382,7 @@ class PianorollBeats(Pianoroll):
 
         return
 
-    def set_key_list(self,data,section,steps):
+    def set_key_list(self,data,section,times):
         if section is None:
             section = [0,self.end_time]
 
@@ -419,7 +414,7 @@ class PianorollBeats(Pianoroll):
         key_list = []
 
         for key, time in zip(keys_section,times_section):
-            new_time = np.argmin(np.abs(steps-time))
+            new_time = np.argmin(np.abs(times-time))
             key_list += [(key,new_time)]
 
         self.key_list = key_list

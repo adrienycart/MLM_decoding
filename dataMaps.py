@@ -107,7 +107,7 @@ class DataMaps:
 
         roll = np.zeros([128,len(corresp)])
 
-        for instr in midi_data.instruments:
+        for instr in pm_data.instruments:
             for note in instr.notes:
                 start = np.argmin(np.abs(corresp-note.start))
                 end = np.argmin(np.abs(corresp-note.end))
@@ -126,7 +126,7 @@ class DataMaps:
             [begin_index, begin_val],[index2, val2] = get_closest(begin,corresp)
             [end_index, end_val],[index2, val2] = get_closest(end,corresp)
 
-            pr = pr[:,begin_index:end_index]
+            roll = roll[:,begin_index:end_index]
             self.begin = begin_val
             self.end = end_val
         else:
@@ -134,7 +134,7 @@ class DataMaps:
             self.begin = 0
             self.end = corresp[-1]
 
-        return pr
+        return roll
 
 
 
