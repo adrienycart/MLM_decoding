@@ -144,17 +144,8 @@ for fn in os.listdir(folder):
         sys.stdout.flush()
 
         if args.step == "beat":
-            beat_subdiv_str = args.beat_subdiv
-            beat_subdiv_str=beat_subdiv_str.split(',')
-            beat_subdiv = []
-            for beat_str in beat_subdiv_str:
-                if '/' in beat_str:
-                    beat_str_split = beat_str.split('/')
-                    beat_subdiv += [float(beat_str_split[0])/float(beat_str_split[1])]
-                else:
-                    beat_subdiv += [float(beat_str)]
             data = DataMapsBeats()
-            data.make_from_file(filename,args.beat_gt,beat_subdiv,section, acoustic_model='kelz')
+            data.make_from_file(filename,args.beat_gt,args.beat_subdiv,section, acoustic_model='kelz')
         else:
             data = DataMaps()
             data.make_from_file(filename,args.step,section, acoustic_model='kelz')

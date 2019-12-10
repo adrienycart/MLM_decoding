@@ -343,6 +343,20 @@ class PianorollBeats(Pianoroll):
 
     def make_from_pm(self,data,beats,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],section=None,note_range=[0,128],key_method='main',with_onsets=False):
 
+
+        if type(beat_subdiv) is str:
+            beat_subdiv_str = beat_subdiv
+            beat_subdiv_str=beat_subdiv_str.split(',')
+            beat_subdiv = []
+            for beat_str in beat_subdiv_str:
+                if '/' in beat_str:
+                    beat_str_split = beat_str.split('/')
+                    beat_subdiv += [float(beat_str_split[0])/float(beat_str_split[1])]
+                else:
+                    beat_subdiv += [float(beat_str)]
+        else:
+            pass
+
         # Check that beat_subdiv is correct
         beat_subdiv = sorted(beat_subdiv)
 

@@ -85,18 +85,9 @@ if not all([os.path.isfile(path) for path in all_save_names]) or args.no_save:
         data.load_data(args.data_path,timestep_type=timestep_type,subsets=['test'],acoustic_model='bittner')
 
     elif timestep_type == "beat":
-        beat_subdiv_str = args.beat_subdiv
-        beat_subdiv_str=beat_subdiv_str.split(',')
-        beat_subdiv = []
-        for beat_str in beat_subdiv_str:
-            if '/' in beat_str:
-                beat_str_split = beat_str.split('/')
-                beat_subdiv += [float(beat_str_split[0])/float(beat_str_split[1])]
-            else:
-                beat_subdiv += [float(beat_str)]
         data = DatasetBeats(rand_transp=True)
         if args.no_chunks:
-            data.load_data_one(args.data_path,subset='test',gt_beats=args.beat_gt,beat_subdiv=beat_subdiv,note_range=note_range,max_len=max_len)
+            data.load_data_one(args.data_path,subset='test',gt_beats=args.beat_gt,beat_subdiv=args.beat_subdiv,note_range=note_range,max_len=max_len)
             data.zero_pad()
         else:
             data.load_data_one(args.data_path,subset='test',gt_beats=args.beat_gt,beat_subdiv=beat_subdiv,note_range=note_range)
