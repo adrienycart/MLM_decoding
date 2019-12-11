@@ -2,7 +2,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/../..')
 
-from dataMaps import DataMaps,convert_note_to_time, align_matrix
+from dataMaps import DataMaps,convert_note_to_time, align_matrix, DataMapsBeats
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
@@ -31,7 +31,7 @@ data_dict = {'gt'    : None,
              'beam'  : None,
              'valid' : None}
 
-def load_data_info(gt=None, beam=None, valid=None, model_path=None, n_hidden=256, step=None, model_out=".",
+def load_data_info(gt=None, beam=None, valid=None, model_path=None, n_hidden=256, step=None, beat_gt=None, beat_subdiv=None, model_out=".",
                    acoustic='kelz', early_exit=0.001, diagRNN=False):
     global global_params
     global data_dict
@@ -58,6 +58,8 @@ def load_data_info(gt=None, beam=None, valid=None, model_path=None, n_hidden=256
     model_dict['sess'],_ = model_dict['model'].load(model_path, model_path=model_path)
 
     global_params['step'] = step
+    global_params['beat_gt'] = beat_gt
+    global_params['beat_subdiv'] = beat_subdiv
     global_params['model_out'] = model_out
     global_params['acoustic'] = acoustic
     global_params['early_exit'] = early_exit
@@ -200,8 +202,12 @@ def weight_search(params, num=0, verbose=False):
         print(filename)
         sys.stdout.flush()
 
-        data = DataMaps()
-        data.make_from_file(filename,global_params['step'],section,acoustic_model=global_params['acoustic'])
+        if global_params['step'] == 'beat':
+            data=DataMapsBeats()
+            data.make_from_file(file,global_params['beat_gt'],global_params['beat_subdiv'],section, acoustic_model=global_params['acoustic'])
+        else:
+            data = DataMaps()
+            data.make_from_file(filename,global_params['step'],section,acoustic_model=global_params['acoustic'])
 
         # Decode
         pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=5,

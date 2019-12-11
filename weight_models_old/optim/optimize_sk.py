@@ -15,9 +15,12 @@ if __name__ == "__main__":
                         "used in the files. Either kelz (default), or bittner.",
                         default="kelz")
 
-    parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event"], help="Change the step type " +
+    parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event", "beat"], help="Change the step type " +
                         "for frame timing. Either time (default), quant (for 16th notes), or event (for onsets).",
                         default="time")
+    parser.add_argument('--beat_gt',action='store_true',help="with beat timesteps, use ground-truth beat positions")
+    parser.add_argument('--beat_subdiv',type=str,help="with beat timesteps, beat subdivisions to use (comma separated list, without brackets)",default='0,1/4,1/3,1/2,2/3,3/4')
+
     parser.add_argument("-o", "--output", help="The file to save the resulting optimization to. Defaults to optim.sko.",
                         default="optim.sko")
     parser.add_argument("--iters", help="The number of iterations to run optimization for (after the initial 10 " +
