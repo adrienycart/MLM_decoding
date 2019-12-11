@@ -11,6 +11,7 @@ import os
 import warnings
 import numpy as np
 import mir_eval
+from scipy import stats
 
 
 def play_sound(sig, fs=44100):
@@ -113,6 +114,25 @@ def get_subbeat_divisions(beats,beat_activ):
     return 2, new_beats
 
 
+def get_confidence(activ):
+    fs = 100
+    window_dur = 10
+    overlap = 0.5
+
+    window_len = int(round(window_dur*fs))
+    hop = int(round(window_len*(1-overlap)))
+    confidence = []
+    i = 0
+    while i+window_len < len(activ):
+        chunk = activ[i:i+window_len]
+
+        spectral_flatness = stats.gmean(chunk) / np.mean(chunk)
+        confidence += [spectral_flatness]
+
+        i+=hop
+
+    return confidence
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('input_folder',type=str)
@@ -125,12 +145,13 @@ parser.add_argument('--subbeats',action='store_true',help='also compute subbeat 
 parser.add_argument('--file',type=str,help="analyse one specific file only (or any file containing the string)")
 parser.add_argument('--play_GT', action='store_true',help="play audio with ground-truth beat and downbeat positions (and subbeats if --subbeat is used)")
 parser.add_argument('--play_estim',action='store_true',help="play audio with estimated beat and downbeat positions (and subbeats if --subbeat is used)" )
+parser.add_argument('--play_both',action='store_true',help="play audio with both ground-truth and estimated beat and downbeat positions (and subbeats if --subbeat is used)" )
 
 args = parser.parse_args()
 
 input_folder = args.input_folder
 
-if not SOUND and (args.play_GT or args.play_estim):
+if not SOUND and (args.play_GT or args.play_estim or args.play_both):
     warnings.warn("No sound can be played on this device! Ignoring --play options")
 
 
@@ -177,11 +198,13 @@ for fn in os.listdir(input_folder):
             if args.subbeats:
                 subbeats_ticks = np.arange(0,midi_data.time_to_tick(max_len),midi_data.resolution/2)
                 subbeats_GT = np.array([midi_data.tick_to_time(tick) for tick in subbeats_ticks])
-
+            else:
+                subbeats_GT = None
 
             # Estimate beat positions
             if args.midi:
-                sig = midi_data.synthesize()
+                sig = midi_data.fluidsynth()
+                # print(midi_data.instruments)
                 if max_len is not None:
                     sig = sig[:int(max_len*44100)]
             else:
@@ -191,19 +214,22 @@ for fn in os.listdir(input_folder):
                 fs = sig.sample_rate
                 dur = sig.length
 
-            if args.play_GT and SOUND:
-                sig_mix_ratio = 0.7
-                sig_beats = sonify_beats(beats_GT,downbeats_GT,subbeats_GT)
-                audio = mix_sounds(sig_beats,sig,sig_mix_ratio)
-
-                play_sound(audio)
 
             if args.load:
-                beats = np.loadtxt(os.path.join(save_path,fn.replace(extension,'_b_est.csv')))
+                beats = np.loadtxt(filename_input.replace(extension,'_b_est.csv'))
+                if max_len is not None:
+                    beats = beats[beats<max_len]
 
             else:
                 proc_beat = madmom.features.RNNBeatProcessor()
                 act_beat = proc_beat(sig)
+
+                confidence = get_confidence(act_beat)
+                print(confidence)
+                print(np.mean(confidence))
+                import matplotlib.pyplot as plt
+                plt.plot(act_beat)
+                plt.show(block=False)
 
                 proc_beattrack = madmom.features.BeatTrackingProcessor(fps=100)
                 beats = proc_beattrack(act_beat)
@@ -211,12 +237,12 @@ for fn in os.listdir(input_folder):
             F = mir_eval.beat.f_measure(beats_GT,beats)
             all_Fs += [F]
             print(f"Beat F-measure: {F}")
-            print(f"GT: {beats_GT}")
-            print(f"Est: {beats}")
+            # print(f"GT: {beats_GT}")
+            # print(f"Est: {beats}")
 
             if args.subbeats:
                 if args.load:
-                    subbeats = np.loadtxt(os.path.join(save_path,fn.replace(extension,'_sb_est.csv')))
+                    subbeats = np.loadtxt(filename_input.replace(extension,'_sb_est.csv'))
                 else:
                     n_subdivisions, subbeats = get_subbeat_divisions(beats,act_beat)
                 sub_F = mir_eval.beat.f_measure(subbeats_GT,subbeats)
@@ -240,12 +266,20 @@ for fn in os.listdir(input_folder):
                     np.savetxt(os.path.join(save_path,fn.replace(extension,'_sb_gt.csv')),subbeats_GT)
                     np.savetxt(os.path.join(save_path,fn.replace(extension,'_sb_est.csv')),subbeats)
 
+            if (args.play_GT or args.play_both) and SOUND:
+                sig_mix_ratio = 0.7
+                sig_beats = sonify_beats(beats_GT,None,subbeats_GT)
+                if max_len is not None:
+                    sig_beats = sig_beats[:int(max_len*44100)]
+                audio = mix_sounds(sig_beats,sig,sig_mix_ratio)
+                play_sound(audio)
 
-            if args.play_estim  and SOUND:
+            if (args.play_estim  or args.play_both)  and SOUND:
                 sig_mix_ratio = 0.7
                 sig_beats = sonify_beats(beats,None,subbeats)
+                if max_len is not None:
+                    sig_beats = sig_beats[:int(max_len*44100)]
                 audio = mix_sounds(sig_beats,sig,sig_mix_ratio)
-
                 play_sound(audio)
 
 print(f"Average beat F-measure: {sum(all_Fs)/len(all_Fs)}")
