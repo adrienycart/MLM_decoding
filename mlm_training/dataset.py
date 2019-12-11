@@ -512,6 +512,7 @@ class DatasetBeats(Dataset):
             # print filename
             midi_data = pm.PrettyMIDI(filename)
             beats_filename = filename.replace('.mid','_b_gt.csv') if gt_beats else filename.replace('.mid','_b_est.csv')
+            # print(beats_filename)
             beats = np.loadtxt(beats_filename)
             if length_of_chunks == None:
                 piano_roll = PianorollBeats()

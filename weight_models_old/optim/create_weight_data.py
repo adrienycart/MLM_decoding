@@ -171,9 +171,11 @@ if __name__ == '__main__':
     parser.add_argument("--hidden", help="The number of hidden layers in the language model. Defaults to 256",
                         type=int, default=256)
 
-    parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event"], help="Change the step type " +
+    parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event", "beat"], help="Change the step type " +
                         "for frame timing. Either time (default), quant (for 16th notes), or event (for onsets).",
                         default="time")
+    parser.add_argument('--beat_gt',action='store_true',help="with beat timesteps, use ground-truth beat positions")
+    parser.add_argument('--beat_subdiv',type=str,help="with beat timesteps, beat subdivisions to use (comma separated list, without brackets)",default='0,1/4,1/3,1/2,2/3,3/4')
 
     parser.add_argument("--acoustic", type=str, choices=["kelz", "bittner"], help="Change the acoustic model " +
                         "used in the files. Either kelz (default), or bittner.",
@@ -239,8 +241,12 @@ if __name__ == '__main__':
 
     # Load data
     if args.MIDI.endswith(".mid"):
-        data = dataMaps.DataMaps()
-        data.make_from_file(args.MIDI, args.step, section=section, acoustic_model=args.acoustic)
+        if args.step == "beat":
+            data = dataMaps.DataMapsBeats()
+            data.make_from_file(args.MIDI,args.beat_gt,args.beat_subdiv,section, acoustic_model=args.acoustic)
+        else:
+            data = dataMaps.DataMaps()
+            data.make_from_file(args.MIDI, args.step, section=section, acoustic_model=args.acoustic)
 
         # Decode
         X, Y, D = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
@@ -255,8 +261,12 @@ if __name__ == '__main__':
         for file in glob.glob(os.path.join(args.MIDI, "*.mid")):
             if args.verbose:
                 print(file)
-            data = dataMaps.DataMaps()
-            data.make_from_file(file, args.step, section=section, acoustic_model=args.acoustic)
+            if args.step == "beat":
+                data = DataMapsBeats()
+                data.make_from_file(file,args.beat_gt,args.beat_subdiv,section, acoustic_model=args.acoustic)
+            else:
+                data = dataMaps.DataMaps()
+                data.make_from_file(file, args.step, section=section, acoustic_model=args.acoustic)
 
             # Decode
             x, y, d = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
