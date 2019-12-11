@@ -262,7 +262,7 @@ if __name__ == '__main__':
             if args.verbose:
                 print(file)
             if args.step == "beat":
-                data = DataMapsBeats()
+                data = dataMaps.DataMapsBeats()
                 data.make_from_file(file,args.beat_gt,args.beat_subdiv,section, acoustic_model=args.acoustic)
             else:
                 data = dataMaps.DataMaps()
