@@ -14,7 +14,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('save_path',type=str,help="folder to save the checkpoints (inside ckpt folder)")
 parser.add_argument('data_path',type=str,help="folder containing the split dataset")
-parser.add_argument('--step',type=str,choices=['time','quant','event','quant_short','beat'],help="timestep to use")
+parser.add_argument('--step',type=str,choices=['time','quant','event','quant_short','beat'],help="timestep to use",required=True)
 parser.add_argument('--beat_gt',action='store_true',help="with beat timesteps, use ground-truth beat positions")
 parser.add_argument('--beat_subdiv',type=str,help="with beat timesteps, beat subdivisions to use (comma separated list, without brackets)",default='0,1/4,1/3,1/2,2/3,3/4')
 parser.add_argument('--n_hidden',type=int,default=256,help="number of hidden nodes (default=256)")
@@ -30,7 +30,7 @@ parser.add_argument('--sched_shape',type=str,default="linear",help="shape of the
 parser.add_argument('--sched_dur',type=int,default=500,help="duration in epochs of the schedule (if lower than epochs, sampling will always be applied after the end of schedule)")
 parser.add_argument('--sched_end_val',type=float,default=0.7,help="end value of sampling likelihood")
 parser.add_argument('--pitchwise',type=int,help='to train a pitch-wise model; value gives width of pitch window.')
-
+parser.add_argument('--with_onsets',action='store_true',help='use a 3-classes representation : onset,continuation,silence')
 
 args = parser.parse_args()
 
@@ -94,10 +94,10 @@ if args.sched_sampl == 'mix':
 
 elif timestep_type == "beat":
     data = DatasetBeats(rand_transp=True)
-    data.load_data(args.data_path,gt_beats=args.beat_gt,beat_subdiv=args.beat_subdiv,note_range=note_range)
+    data.load_data(args.data_path,gt_beats=args.beat_gt,beat_subdiv=args.beat_subdiv,note_range=note_range,with_onsets=args.with_onsets)
 else:
     data = Dataset(rand_transp=True)
-    data.load_data(args.data_path,timestep_type=timestep_type,note_range=note_range)
+    data.load_data(args.data_path,timestep_type=timestep_type,note_range=note_range,with_onsets=args.with_onsets)
 
 # gen = data.get_dataset_generator('train',1,max_len,check_data=True,with_keys=True)
 # for input, output,length,keys in gen:
@@ -114,6 +114,7 @@ model_param['chunks']=max_len
 model_param['scheduled_sampling']=args.sched_sampl
 model_param['sampl_mix_weight'] = args.sampl_mix_weight
 model_param['grad_clip'] = args.grad_clip
+model_param['with_onsets'] = args.with_onsets
 if args.pitchwise is None:
     model_param['pitchwise']=False
 else:

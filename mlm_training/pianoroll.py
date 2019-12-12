@@ -388,7 +388,6 @@ class PianorollBeats(Pianoroll):
 
         self.length = self.roll.shape[1]-1
 
-        self.binarize()
         self.set_key_list(data,section,times)
         self.set_key_profile_list(data,section)
 

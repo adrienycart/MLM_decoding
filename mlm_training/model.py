@@ -98,13 +98,16 @@ class Model:
         """
         Number of true positives per sequence
         """
-
         if self._tp is None:
             with tf.device(self.device_name):
                 pred = self.pred_thresh
 
                 y = self.labels
-                bool_matrix = tf.logical_and(tf.equal(pred,1),tf.equal(y,1))
+
+                if self.with_onsets:
+                    bool_matrix = tf.logical_and(tf.greater_equal(pred,1),tf.greater_equal(y,1))
+                else:
+                    bool_matrix = tf.logical_and(tf.equal(pred,1),tf.equal(y,1))
                 reduced = tf.reduce_sum(tf.cast(bool_matrix,tf.float32),[1,2])
                 self._tp = reduced
         return self._tp
@@ -119,7 +122,10 @@ class Model:
                 pred = self.pred_thresh
 
                 y = self.labels
-                bool_matrix = tf.logical_and(tf.equal(pred,1),tf.equal(y,0))
+                if self.with_onsets:
+                    bool_matrix = tf.logical_and(tf.greater_equal(pred,1),tf.equal(y,0))
+                else:
+                    bool_matrix = tf.logical_and(tf.equal(pred,1),tf.equal(y,0))
                 reduced = tf.reduce_sum(tf.cast(bool_matrix,tf.float32),[1,2])
                 self._fp = reduced
         return self._fp
@@ -134,10 +140,14 @@ class Model:
                 pred = self.pred_thresh
 
                 y = self.labels
-                bool_matrix = tf.logical_and(tf.equal(pred,0),tf.equal(y,1))
+                if self.with_onsets:
+                    bool_matrix = tf.logical_and(tf.equal(pred,0),tf.greater_equal(y,0))
+                else:
+                    bool_matrix = tf.logical_and(tf.equal(pred,0),tf.equal(y,1))
                 reduced = tf.reduce_sum(tf.cast(bool_matrix,tf.float32),[1,2])
                 self._fn = reduced
         return self._fn
+
 
     @property
     def precision(self):
@@ -290,29 +300,53 @@ class Model:
                 x = self.inputs
                 seq_len = self.seq_lens
 
-                W = tf.Variable(tf.truncated_normal([n_hidden,n_classes]),name="W"+suffix)
-                b = tf.Variable(tf.truncated_normal([n_classes]),name="b"+suffix)
-
-                if self.cell_type=="LSTM":
+                if self.cell_type == "LSTM":
                     cell = tf.contrib.rnn.LSTMCell(n_hidden,state_is_tuple=True,forget_bias = 1.0)
-                elif self.cell_type=="diagLSTM":
+                elif self.cell_type == "diagLSTM":
                     cell = ModLSTMCell(n_hidden,tf.truncated_normal_initializer())
                 else:
                     raise ValueError("model_param['cell_type'] not understood!")
 
-                hidden_state_in = cell.zero_state(batch_size, dtype=tf.float32)
-                self.initial_state = hidden_state_in
 
-                #We don't take into account sequence length because doing so
-                #causes Tensorflow to output weird results
-                outputs, hidden_state_out = tf.nn.dynamic_rnn(cell,x,initial_state=hidden_state_in,
-                    dtype=tf.float32,time_major=False)#,sequence_length=seq_len)
-                self.output_state = hidden_state_out
+                if self.with_onsets:
 
-                outputs = tf.reshape(outputs,[-1,n_hidden])
-                pred = tf.matmul(outputs,W) + b
+                    n_outputs = 3
+                    x_expanded = tf.one_hot(tf.cast(x,tf.int32),depth=n_outputs,dtype=tf.float32)
+                    x_flat = tf.reshape(x,[-1,n_steps,n_classes*n_outputs])
 
-                pred = tf.reshape(pred,[-1,n_steps,n_classes])
+                    W = tf.Variable(tf.truncated_normal([n_hidden,n_classes*n_outputs]),name="W"+suffix)
+                    b = tf.Variable(tf.truncated_normal([n_classes*n_outputs]),name="b"+suffix)
+
+                    hidden_state_in = cell.zero_state(batch_size, dtype=tf.float32)
+                    self.initial_state = hidden_state_in
+
+                    #We don't take into account sequence length because doing so
+                    #causes Tensorflow to output weird results
+                    outputs, hidden_state_out = tf.nn.dynamic_rnn(cell,x,initial_state=hidden_state_in,
+                        dtype=tf.float32,time_major=False)#,sequence_length=seq_len)
+                    self.output_state = hidden_state_out
+
+                    outputs = tf.reshape(outputs,[-1,n_hidden])
+                    pred = tf.matmul(outputs,W) + b
+                    pred = tf.reshape(pred,[-1,n_steps,n_classes,n_outputs])
+
+                else:
+                    W = tf.Variable(tf.truncated_normal([n_hidden,n_classes]),name="W"+suffix)
+                    b = tf.Variable(tf.truncated_normal([n_classes]),name="b"+suffix)
+
+                    hidden_state_in = cell.zero_state(batch_size, dtype=tf.float32)
+                    self.initial_state = hidden_state_in
+
+                    #We don't take into account sequence length because doing so
+                    #causes Tensorflow to output weird results
+                    outputs, hidden_state_out = tf.nn.dynamic_rnn(cell,x,initial_state=hidden_state_in,
+                        dtype=tf.float32,time_major=False)#,sequence_length=seq_len)
+                    self.output_state = hidden_state_out
+
+                    outputs = tf.reshape(outputs,[-1,n_hidden])
+                    pred = tf.matmul(outputs,W) + b
+
+                    pred = tf.reshape(pred,[-1,n_steps,n_classes])
 
                 self._prediction = pred
         return self._prediction
@@ -429,23 +463,13 @@ class Model:
                     pred = self.prediction_sched_samp
                 else:
                     pred = self.prediction
-                pred = tf.sigmoid(pred)
+                if self.with_onsets :
+                    pred = tf.softmax(pred)
+                else:
+                    pred = tf.sigmoid(pred)
                 self._pred_sigm = pred
         return self._pred_sigm
 
-    @property
-    def last_pred_sigm(self):
-        """
-        Last sigmoid prediction: N=len(x); x[N-1] given x[0:N-1]
-        """
-        if self._last_pred_sigm is None:
-            with tf.device(self.device_name):
-                if self.scheduled_sampling:
-                    pred = self.prediction_sched_samp
-                else:
-                    pred = self.prediction
-                self._last_pred_sigm = pred_sigm[:,-1,:]
-        return self._last_pred_sigm
 
     @property
     def thresh(self):
@@ -465,11 +489,14 @@ class Model:
         """
         if self._pred_thresh is None:
             with tf.device(self.device_name):
-                thresh = self.thresh
+                if self.with_onsets:
+                    pred = tf.argmax(self.prediction,axis=3)
+                else:
+                    thresh = self.thresh
 
-                pred = self.pred_sigm
-                pred = tf.greater(pred,thresh)
-                pred = tf.cast(pred,tf.int8)
+                    pred = self.pred_sigm
+                    pred = tf.greater(pred,thresh)
+                    pred = tf.cast(pred,tf.int8)
                 self._pred_thresh = pred
         return self._pred_thresh
 
@@ -508,13 +535,8 @@ class Model:
         """
         if self._cross_entropy is None:
             with tf.device(self.device_name):
-                y = self.labels
-                if hasattr(self, 'scheduled_sampling') and self.scheduled_sampling:
-                    pred = self.prediction_sched_samp
-                else:
-                    pred = self.prediction
-
-                cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=pred, labels=y))
+                cross_entropy = self.cross_entropy2
+                cross_entropy = tf.reduce_mean(cross_entropy)
                 self._cross_entropy = cross_entropy
         return self._cross_entropy
 
@@ -533,7 +555,11 @@ class Model:
                     pred = self.prediction_sched_samp
                 else:
                     pred = self.prediction
-                cross_entropy2 = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=pred, labels=y),axis=[1,2])
+
+                if self.with_onsets:
+                    cross_entropy2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=pred, labels=tf.cast(y,tf.int32)),axis=[1,2])
+                else:
+                    cross_entropy2 = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=pred, labels=y),axis=[1,2])
                 self._cross_entropy2 = cross_entropy2
         return self._cross_entropy2
 
@@ -1516,13 +1542,18 @@ class Model:
             pred = self.prediction
             feed_dict = {x: dataset, seq_len: len_list,batch_size_ph:dataset.shape[0]}
 
-        notes_pred = sess.run(pred, feed_dict = feed_dict)
-        notes_pred = tf.transpose(notes_pred,[0,2,1])
-
         if sigmoid:
-            notes_pred=tf.sigmoid(notes_pred)
+            if self.with_onsets:
+                pred = tf.softmax(pred)
+            else:
+                pred=tf.sigmoid(pred)
 
-        output = notes_pred.eval(session = sess)
+        notes_pred = sess.run(pred, feed_dict = feed_dict)
+        if self.with_onsets:
+            output = np.transpose(notes_pred,[0,2,1,3])
+        else:
+            output = np.transpose(notes_pred,[0,2,1])
+
         return output
 
     def get_initial_state(self,sess,batch_size):
@@ -1811,6 +1842,7 @@ def make_model_param():
     model_param['pitchwise']=False
     model_param['scheduled_sampling'] = False
     model_param['sampl_mix_weight']= None
+    model_param['with_onsets']=False
 
     model_param['chunks']=None
     model_param['device_name']="/gpu:0"

@@ -99,7 +99,7 @@ class Dataset:
                 yield fn
 
 
-    def load_data_one(self,folder,subset,timestep_type,max_len=None,note_range=[0,128],length_of_chunks=None,key_method='main'):
+    def load_data_one(self,folder,subset,timestep_type,max_len=None,note_range=[0,128],length_of_chunks=None,key_method='main',with_onsets=False):
         dataset = []
         subfolder = os.path.join(folder,subset)
 
@@ -117,9 +117,9 @@ class Dataset:
             if length_of_chunks == None:
                 piano_roll = Pianoroll()
                 if max_len == None:
-                    piano_roll.make_from_pm(midi_data,timestep_type,None,note_range,key_method)
+                    piano_roll.make_from_pm(midi_data,timestep_type,None,note_range,key_method,with_onsets)
                 else:
-                    piano_roll.make_from_pm(midi_data,timestep_type,[0,max_len],note_range,key_method)
+                    piano_roll.make_from_pm(midi_data,timestep_type,[0,max_len],note_range,key_method,with_onsets)
                 piano_roll.name = os.path.splitext(os.path.basename(filename))[0]
                 dataset += [piano_roll]
             else :
@@ -134,7 +134,7 @@ class Dataset:
                 while end < end_file:
                     end = min(end_file,end+length_of_chunks)
                     piano_roll = Pianoroll()
-                    piano_roll.make_from_pm(midi_data,timestep_type,[begin,end],note_range,key_method)
+                    piano_roll.make_from_pm(midi_data,timestep_type,[begin,end],note_range,key_method,with_onsets)
                     piano_roll.name = os.path.splitext(os.path.basename(filename))[0]+"_"+str(i)
                     pr_list += [piano_roll]
                     begin = end
@@ -145,22 +145,22 @@ class Dataset:
             setattr(self,subset,dataset)
         return dataset
 
-    def load_data(self,folder,timestep_type,max_len=None,note_range=[0,128],length_of_chunks=None,key_method='main'):
+    def load_data(self,folder,timestep_type,max_len=None,note_range=[0,128],length_of_chunks=None,key_method='main',with_onsets=False):
         self.note_range = note_range
         for subset in ["train","valid","test"]:
-            self.load_data_one(folder,subset,timestep_type,max_len,note_range,length_of_chunks,key_method)
+            self.load_data_one(folder,subset,timestep_type,max_len,note_range,length_of_chunks,key_method,with_onsets)
         # self.zero_pad()
         print("Dataset loaded ! "+str(datetime.now()))
 
-    def load_data_custom(self,folder,train,valid,test,timestep_type,max_len=None,note_range=[0,128],length_of_chunks=None):
+    def load_data_custom(self,folder,train,valid,test,timestep_type,max_len=None,note_range=[0,128],length_of_chunks=None,with_onsets=False):
         self.note_range = note_range
 
         for subset in train:
-            self.train += self.load_data_one(folder,subset,timestep_type,max_len,note_range,length_of_chunks)
+            self.train += self.load_data_one(folder,subset,timestep_type,max_len,note_range,length_of_chunks,with_onsets)
         for subset in valid:
-            self.valid += self.load_data_one(folder,subset,timestep_type,max_len,note_range,length_of_chunks)
+            self.valid += self.load_data_one(folder,subset,timestep_type,max_len,note_range,length_of_chunks,with_onsets)
         for subset in test:
-            self.test += self.load_data_one(folder,subset,timestep_type,max_len,note_range,length_of_chunks)
+            self.test += self.load_data_one(folder,subset,timestep_type,max_len,note_range,length_of_chunks,with_onsets)
 
         print("Dataset loaded ! "+str(datetime.now()))
 
@@ -496,7 +496,7 @@ def ground_truth(data):
 
 class DatasetBeats(Dataset):
 
-    def load_data_one(self,folder,subset,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],max_len=None,note_range=[0,128],length_of_chunks=None,key_method='main'):
+    def load_data_one(self,folder,subset,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],max_len=None,note_range=[0,128],length_of_chunks=None,key_method='main',with_onsets=False):
         dataset = []
         subfolder = os.path.join(folder,subset)
 
@@ -517,9 +517,9 @@ class DatasetBeats(Dataset):
             if length_of_chunks == None:
                 piano_roll = PianorollBeats()
                 if max_len == None:
-                    piano_roll.make_from_pm(midi_data,beats,beat_subdiv,None,note_range,key_method)
+                    piano_roll.make_from_pm(midi_data,beats,beat_subdiv,None,note_range,key_method,with_onsets)
                 else:
-                    piano_roll.make_from_pm(midi_data,beats,beat_subdiv,[0,max_len],note_range,key_method)
+                    piano_roll.make_from_pm(midi_data,beats,beat_subdiv,[0,max_len],note_range,key_method,with_onsets)
                 piano_roll.name = os.path.splitext(os.path.basename(filename))[0]
                 dataset += [piano_roll]
             else :
@@ -534,7 +534,7 @@ class DatasetBeats(Dataset):
                 while end < end_file:
                     end = min(end_file,end+length_of_chunks)
                     piano_roll = PianorollBeats()
-                    piano_roll.make_from_pm(midi_data,beats,beat_subdiv,[begin,end],note_range,key_method)
+                    piano_roll.make_from_pm(midi_data,beats,beat_subdiv,[begin,end],note_range,key_method,with_onsets)
                     piano_roll.name = os.path.splitext(os.path.basename(filename))[0]+"_"+str(i)
                     pr_list += [piano_roll]
                     begin = end
@@ -545,22 +545,22 @@ class DatasetBeats(Dataset):
             setattr(self,subset,dataset)
         return dataset
 
-    def load_data(self,folder,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],max_len=None,note_range=[0,128],length_of_chunks=None,key_method='main'):
+    def load_data(self,folder,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],max_len=None,note_range=[0,128],length_of_chunks=None,key_method='main',with_onsets=False):
         self.note_range = note_range
         for subset in ["train","valid","test"]:
-            self.load_data_one(folder,subset,gt_beats,beat_subdiv,max_len,note_range,length_of_chunks,key_method)
+            self.load_data_one(folder,subset,gt_beats,beat_subdiv,max_len,note_range,length_of_chunks,key_method,with_onsets)
         # self.zero_pad()
         print("Dataset loaded ! "+str(datetime.now()))
 
-    def load_data_custom(self,folder,train,valid,test,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],max_len=None,note_range=[0,128],length_of_chunks=None):
+    def load_data_custom(self,folder,train,valid,test,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],max_len=None,note_range=[0,128],length_of_chunks=None,with_onsets=False):
         self.note_range = note_range
 
         for subset in train:
-            self.train += self.load_data_one(folder,subset,gt_beats,beat_subdiv,max_len,note_range,length_of_chunks)
+            self.train += self.load_data_one(folder,subset,gt_beats,beat_subdiv,max_len,note_range,length_of_chunks,with_onsets)
         for subset in valid:
-            self.valid += self.load_data_one(folder,subset,gt_beats,beat_subdiv,max_len,note_range,length_of_chunks)
+            self.valid += self.load_data_one(folder,subset,gt_beats,beat_subdiv,max_len,note_range,length_of_chunks,with_onsets)
         for subset in test:
-            self.test += self.load_data_one(folder,subset,gt_beats,beat_subdiv,max_len,note_range,length_of_chunks)
+            self.test += self.load_data_one(folder,subset,gt_beats,beat_subdiv,max_len,note_range,length_of_chunks,with_onsets)
 
         print("Dataset loaded ! "+str(datetime.now()))
 
