@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
     weight_search.load_data_info(gt=args.gt_data, beam=args.beam_data, valid=args.valid_data, step=args.step,
                                  model_path=args.model, model_out=args.model_dir, acoustic=args.acoustic,
-                                 early_exit=args.early_exit,diagRNN=args.diagRNN)
+                                 early_exit=args.early_exit,diagRNN=args.diagRNN, beat_gt=args.beat_gt,beat_subdiv=args.beat_subdiv)
 
     dimensions = [[False], # GT
                   (0.1, 0.8), # min_diff
