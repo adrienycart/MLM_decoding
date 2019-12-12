@@ -204,7 +204,7 @@ def weight_search(params, num=0, verbose=False):
 
         if global_params['step'] == 'beat':
             data=DataMapsBeats()
-            data.make_from_file(file,global_params['beat_gt'],global_params['beat_subdiv'],section, acoustic_model=global_params['acoustic'])
+            data.make_from_file(filename,global_params['beat_gt'],global_params['beat_subdiv'],section, acoustic_model=global_params['acoustic'])
         else:
             data = DataMaps()
             data.make_from_file(filename,global_params['step'],section,acoustic_model=global_params['acoustic'])
