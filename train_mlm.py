@@ -98,10 +98,10 @@ elif timestep_type == "beat":
 else:
     data = Dataset(rand_transp=True)
     data.load_data(args.data_path,timestep_type=timestep_type,note_range=note_range,with_onsets=args.with_onsets)
-
-# gen = data.get_dataset_generator('train',1,max_len,check_data=True,with_keys=True)
-# for input, output,length,keys in gen:
-#     print(input.shape, output.shape, length)
+# print(args.with_onsets)
+# gen = data.get_dataset_generator('train',1,max_len)
+# for input, output,length in gen:
+#     print(input.shape, output.shape, np.max(input), np.max(output))
 
 # np.random.seed(0)
 # data.shuffle_one('train')

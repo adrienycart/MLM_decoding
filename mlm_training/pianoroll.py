@@ -66,7 +66,7 @@ class Pianoroll:
             fs=25
             times = np.arange(0,end_time,1.0/fs)
 
-        self.roll = get_roll_from_times(data,times,section)
+        self.roll = get_roll_from_times(data,times,section,with_onsets)
 
         self.length = self.roll.shape[1]-1
 
@@ -446,7 +446,7 @@ def get_roll_from_times(midi_data,times,section=None,with_onsets=False):
             roll[note.pitch,start:end]=1
 
             if with_onsets:
-                roll[note.pitch,onset_idx] = 2
+                roll[note.pitch,start] = 2
 
 
     if not section == None:
