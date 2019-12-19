@@ -38,7 +38,7 @@ class Pianoroll:
         times = None
 
         #Get the roll matrix
-        if timestep_type=="quant" or "quant_short":
+        if timestep_type=="quant" or timestep_type== "quant_short":
             if timestep_type == "quant":
                 fs=4
             elif timestep_type == "quant_short":
