@@ -13,7 +13,7 @@ import numpy as np
 import mir_eval
 from scipy import stats
 import eval_utils
-import beat_utils
+import beats_utils
 
 
 parser = argparse.ArgumentParser()
@@ -109,10 +109,10 @@ for fn in os.listdir(input_folder):
                 proc_onsets = madmom.features.SpectralOnsetProcessor(method='superflux')
                 act_onsets = proc_onsets(sig)
 
-                confidence1,spec_norm1 = beat_utils.get_confidence_entropy(act_onsets)
-                confidence2,spec_norm2 = beat_utils.get_confidence_entropy(act_beat)
-                confidence3 = beat_utils.get_confidence_spectral_flatness(act_beat)
-                confidence4 = beat_utils.get_confidence_spectral_flatness(act_onsets)
+                confidence1,spec_norm1 = beats_utils.get_confidence_entropy(act_onsets)
+                confidence2,spec_norm2 = beats_utils.get_confidence_entropy(act_beat)
+                confidence3 = beats_utils.get_confidence_spectral_flatness(act_beat)
+                confidence4 = beats_utils.get_confidence_spectral_flatness(act_onsets)
                 print(np.mean(confidence1),np.mean(confidence2))
                 print(np.mean(confidence3),np.mean(confidence4))
                 # import matplotlib.pyplot as plt
@@ -139,7 +139,7 @@ for fn in os.listdir(input_folder):
                 if args.load:
                     subbeats = np.loadtxt(filename_input.replace(extension,'_sb_est.csv'))
                 else:
-                    n_subdivisions, subbeats = beat_utils.get_subbeat_divisions(beats,act_beat)
+                    n_subdivisions, subbeats = beats_utils.get_subbeat_divisions(beats,act_beat)
                 sub_F = mir_eval.beat.f_measure(subbeats_GT,subbeats)
                 all_Fs_sub += [sub_F]
                 print(f"Sub-beat F-measure: {sub_F}")
@@ -163,7 +163,7 @@ for fn in os.listdir(input_folder):
 
             if (args.play_GT or args.play_both) and SOUND:
                 sig_mix_ratio = 0.7
-                sig_beats = beat_utils.sonify_beats(beats_GT,None,subbeats_GT)
+                sig_beats = beats_utils.sonify_beats(beats_GT,None,subbeats_GT)
                 if max_len is not None:
                     sig_beats = sig_beats[:int(max_len*44100)]
                 audio = eval_utils.mix_sounds(sig_beats,sig,sig_mix_ratio)
@@ -171,7 +171,7 @@ for fn in os.listdir(input_folder):
 
             if (args.play_estim  or args.play_both)  and SOUND:
                 sig_mix_ratio = 0.7
-                sig_beats = beat_utils.sonify_beats(beats,None,subbeats)
+                sig_beats = beats_utils.sonify_beats(beats,None,subbeats)
                 if max_len is not None:
                     sig_beats = sig_beats[:int(max_len*44100)]
                 audio = eval_utils.mix_sounds(sig_beats,sig,sig_mix_ratio)
