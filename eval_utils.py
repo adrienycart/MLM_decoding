@@ -307,10 +307,11 @@ def write_sound(sound,filename):
     wave_write.close()
 
 
-def play_audio(audio,from_sec=0):
+def play_audio(audio,fs=44100,from_sec=0):
     """
     Play some audio. Requires the :mod:`sounddevice` module.
     Audio must be sampled at 44100 Hz.
+    ctrl-C stops the sound and continues the script.
 
     Parameters
     ----------
@@ -322,4 +323,18 @@ def play_audio(audio,from_sec=0):
 
     start_sample = int(round(from_sec*44100))
     import sounddevice as sd
-    sd.play(audio[start_sample:], 44100)
+    try:
+        sd.play(sig, fs)
+        status = sd.wait()
+    except KeyboardInterrupt:
+        sd.stop()
+        return
+
+def mix_sounds(sig1,sig2,sig_mix_ratio=0.5):
+    len1 = sig1.shape[0]
+    len2 = sig2.shape[0]
+    if len1 > len2:
+        audio = (1-sig_mix_ratio)*sig1 + sig_mix_ratio*np.pad(sig2,(0,len1-len2),'constant')
+    else:
+        audio = (1-sig_mix_ratio)*np.pad(sig1,(0,len2-len1),'constant') + sig_mix_ratio*sig2
+    return audio
