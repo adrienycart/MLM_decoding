@@ -11,7 +11,6 @@ import os
 import warnings
 import numpy as np
 import mir_eval
-from scipy import stats
 import eval_utils
 import beats_utils
 
@@ -153,6 +152,8 @@ for fn in os.listdir(input_folder):
                     save_path = input_folder
                 else:
                     save_path = args.save
+
+                np.savetxt(os.path.join(save_path,fn.replace(extension,'_b_act.csv')),act_beat)
 
                 np.savetxt(os.path.join(save_path,fn.replace(extension,'_b_gt.csv')),beats_GT)
                 np.savetxt(os.path.join(save_path,fn.replace(extension,'_b_est.csv')),beats)

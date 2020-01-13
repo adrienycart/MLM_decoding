@@ -1,5 +1,7 @@
 import numpy as np
 import madmom
+from scipy import stats
+import pretty_midi as pm
 
 def sonify_beats(beats,downbeats=None,subbeats=None):
     midi = pm.PrettyMIDI()
@@ -86,7 +88,7 @@ def get_subbeat_divisions(beats,beat_activ):
 def get_confidence_spectral_flatness(activ):
     fs = 100
     window_dur = 10
-    overlap = 0.5
+    overlap = 0.95
 
     window_len = int(round(window_dur*fs))
     hop = int(round(window_len*(1-overlap)))
@@ -100,7 +102,7 @@ def get_confidence_spectral_flatness(activ):
 
         i+=hop
 
-    return confidence
+    return np.mean(confidence)
 
 def get_confidence_entropy(activ):
     fs = 100
@@ -118,4 +120,4 @@ def get_confidence_entropy(activ):
     spec_norm = spec/np.sum(spec,axis=1)[:,None]
 
     entropies = np.sum(-spec_norm*np.log2(spec_norm),axis=1)/np.log2(spec_norm.shape[1])
-    return entropies, spec_norm.T
+    return np.mean(entropies)
