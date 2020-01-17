@@ -4,6 +4,7 @@ import pretty_midi as pm
 import numpy as np
 import os
 import copy
+import pickle
 
 
 pm.pretty_midi.MAX_TICK = 1e10
@@ -27,14 +28,19 @@ class DataMaps:
         self.end=0 # end of the considered section in seconds
         self.timestep_type = None
         self.acoutic_model = ""
+        self.with_onsets = False
 
     def make_from_file(self,filename,timestep_type,section=None,method='avg',si_target=False,acoustic_model='benetos',with_onsets=False):
         self.acoustic_model = acoustic_model
+        self.with_onsets=with_onsets
         if acoustic_model == 'benetos':
             self.input_fs = 100
             note_range = [21,109]
         elif acoustic_model == 'kelz':
-            self.input_fs = 25
+            if with_onsets:
+                self.input_fs = 50
+            else:
+                self.input_fs = 25
             note_range = [21,109]
         elif acoustic_model == 'bittner':
             self.input_fs = 22050.0/256.0
@@ -48,8 +54,8 @@ class DataMaps:
 
 
         self.set_corresp(pm_data,timestep_type)
-        self.target = self.get_roll_from_times(pm_data,section,with_onsets)
-        self.input = align_matrix(input_matrix,self.corresp,self.input_fs,section,method)
+        self.target = self.get_roll_from_times(pm_data,section)
+        self.input = align_matrix(input_matrix,self.corresp,self.input_fs,section,method,self.with_onsets)
 
         self.set_sigs_and_keys(pm_data)
         self.crop_target(note_range)
@@ -60,12 +66,20 @@ class DataMaps:
 
     def get_input_matrix(self,filename):
         #Method to get a pretty_midi object and an input matrix from a MIDI filename.
+        with_onsets=self.with_onsets
         if self.acoustic_model == 'benetos':
             csv_filename = filename.replace('.mid','_pianoroll.csv')
             input_matrix = np.transpose(np.loadtxt(csv_filename,delimiter=','),[1,0])
         elif self.acoustic_model == 'kelz':
-            csv_filename = filename.replace('.mid','.csv')
-            input_matrix = np.transpose(np.loadtxt(csv_filename),[1,0])
+            if with_onsets:
+                active_filename = filename.replace('.mid','_active.csv')
+                onset_filename = filename.replace('.mid','_onset.csv')
+                active_matrix = np.transpose(np.loadtxt(active_filename),[1,0])
+                onset_matrix = np.transpose(np.loadtxt(onset_filename),[1,0])
+                input_matrix = np.concatenate([active_matrix[:,:,None],onset_matrix[:,:,None]],axis=2)
+            else:
+                csv_filename = filename.replace('.mid','.csv')
+                input_matrix = np.transpose(np.loadtxt(csv_filename),[1,0])
         elif self.acoustic_model == 'bittner':
             #Load matrix
             npz_filename = filename.replace('.mid','_multif0_salience.npz')
@@ -101,8 +115,10 @@ class DataMaps:
         name=os.path.splitext(filename)[0]
         return name+'_corresp.txt'
 
-    def get_roll_from_times(self,pm_data,section=None,with_onsets=False):
+    def get_roll_from_times(self,pm_data,section=None):
         #Makes a quantised piano-roll
+        with_onsets=self.with_onsets
+
         corresp = self.corresp
 
         roll = np.zeros([128,len(corresp)])
@@ -116,7 +132,7 @@ class DataMaps:
                 roll[note.pitch,start:end]=1
 
                 if with_onsets:
-                    roll[note.pitch,onset_idx] = 2
+                    roll[note.pitch,start] = 2
 
         if not section==None:
             #Select the relevant portion of the pianoroll
@@ -295,10 +311,7 @@ class DataMaps:
             self.target = self.target[:,:len_input]
             self.length = len_input
 
-        if self.timestep_type == "time":
-            self.duration = self.length*0.04
-        else:
-            self.duration = self.corresp[-1]
+        self.duration = self.corresp[-1]
         return
 
     def crop_target(self,note_range):
@@ -434,6 +447,8 @@ class DataMaps:
 class DataMapsBeats(DataMaps):
     def make_from_file(self,filename,gt_beats=False,beat_subdiv=[0.0,1.0/4,1.0/3,1.0/2,2.0/3,3.0/4],section=None,method='avg',si_target=False,acoustic_model='benetos',with_onsets=False):
 
+        self.with_onsets=with_onsets
+
         if type(beat_subdiv) is str:
             beat_subdiv_str = beat_subdiv
             beat_subdiv_str=beat_subdiv_str.split(',')
@@ -453,7 +468,10 @@ class DataMapsBeats(DataMaps):
             self.input_fs = 100
             note_range = [21,109]
         elif acoustic_model == 'kelz':
-            self.input_fs = 25
+            if self.with_onsets:
+                self.input_fs = 50
+            else:
+                self.input_fs = 25
             note_range = [21,109]
         elif acoustic_model == 'bittner':
             self.input_fs = 22050.0/256.0
@@ -468,8 +486,8 @@ class DataMapsBeats(DataMaps):
         beats = np.loadtxt(beats_filename)
 
         self.set_corresp(pm_data,beats,beat_subdiv)
-        self.target = self.get_roll_from_times(pm_data,section,with_onsets)
-        self.input = align_matrix(input_matrix,self.corresp,self.input_fs,section,method)
+        self.target = self.get_roll_from_times(pm_data,section)
+        self.input = align_matrix(input_matrix,self.corresp,self.input_fs,section,method,self.with_onsets)
 
 
         self.set_sigs_and_keys(pm_data)
@@ -579,20 +597,24 @@ def get_closest(e,l):
         return [index1, val1],[index2, val2]
 
 
-def align_matrix(input_matrix,corresp,input_fs,section=None,method='avg'):
+def align_matrix(input_matrix,corresp,input_fs,section=None,method='avg',with_onsets=False):
     #Makes a quantised input
     #The original input has to be downsampled: the method argument
     #specifies the downsampling method.
+
 
     n_notes = input_matrix.shape[0]
     end_sec = min(input_matrix.shape[1]/float(input_fs),corresp[-1])
     (n_steps,_),_ = get_closest(end_sec,corresp)
 
-    aligned_input = np.zeros([n_notes,n_steps])
+    if with_onsets:
+        aligned_input = np.zeros([n_notes,n_steps,2])
+    else:
+        aligned_input = np.zeros([n_notes,n_steps])
 
 
 
-    def fill_value(sub_input,i):
+    def get_fill_value(sub_input,method):
         #Computes the value of the note-based input, and puts it in the matrix
         #sub_input is the portion of the input corresponding to the current sixteenth note
         #i is the index of the current sixteenth note
@@ -601,12 +623,12 @@ def align_matrix(input_matrix,corresp,input_fs,section=None,method='avg'):
         if method=='avg':
             #Take the mean of the values for the current sixteenth note
             value = np.mean(sub_input,axis=1)
-        if method=='step':
+        elif method=='step':
             #Take the mean of first quarter of the values for the current sixteenth note
             #Focus on the attacks
             step = max(int(round(0.25*sub_input.shape[1])),1)
             value = np.mean(sub_input[:,:step],axis=1)
-        if method=='exp':
+        elif method=='exp':
             #Take the values multiplied by an exponentially-decaying window.
             #Accounts for the exponentially-decaying nature of piano notes
             def exp_window(length,end_value=0.05):
@@ -616,31 +638,32 @@ def align_matrix(input_matrix,corresp,input_fs,section=None,method='avg'):
             window = exp_window(sub_input.shape[1])
             sub_input_window = sub_input*window[np.newaxis,:]
             value = np.sum(sub_input_window,axis=1)
-        if method=='max':
+        elif method=='max':
             #If a note is active in the considered sixteenth-note time step,
             #(actually: active more than 5% and more than 3 samples, to account for imprecisions of the alignment)
             #then it is active for the whole time step.
             #Used to convert binary inputs from time-based to note-based time steps.
 
-            value_mean = np.mean(sub_input,axis=1)
-            value_sum = np.sum(sub_input,axis=1)
-            value = (np.logical_and(value_mean>0.05,value_sum>=3)).astype(int)
-        if method=='quant':
+            # value_mean = np.mean(sub_input,axis=1)
+            # value_sum = np.sum(sub_input,axis=1)
+            # value = (np.logical_and(value_mean>0.05,value_sum>=3)).astype(int)
+            value = np.max(sub_input,axis=1)
+        elif method=='quant':
             #If a note is active more than half of the sixteenth note time step,
             #it is active for the whole time step.
             #Used to quantise binary inputs (ie align onsets and offsets to the closest sixteenth note)
             value = np.mean(sub_input,axis=1)
             value = (value>0.5).astype(int)
-
-
-
-        aligned_input[:,i]=value
+        return value
 
     for i in range(aligned_input.shape[1]-1):
         begin = corresp[i]
         end = corresp[i+1]
         begin_index = int(round(begin*input_fs)) #input_fs is the sampling frequency of the input
         end_index = max(int(round(end*input_fs)),begin_index+1) #We want to select at least 1 frame of the input
+        # if with_onsets:
+        #     sub_input = input_matrix[:,begin_index:end_index,:]
+        # else:
         sub_input = input_matrix[:,begin_index:end_index]
 
         if sub_input.shape[1]==0:
@@ -652,7 +675,24 @@ def align_matrix(input_matrix,corresp,input_fs,section=None,method='avg'):
             print(sub_input.shape)
             print(input_matrix.shape)
 
-        fill_value(sub_input,i)
+        if with_onsets:
+            aligned_input[:,i,0] = get_fill_value(sub_input[:,:,0],method)
+            # The onsets is taken as the max of a range centered on corresp[i]
+            # This boils down to hard-quantising the onsets to the closest subdivision
+            if i==0:
+                begin_onset = (corresp[i])/2
+                end_onset  = (corresp[i+1]+corresp[i])/2
+            else:
+                begin_onset  = (corresp[i]+corresp[i-1])/2
+                end_onset  = (corresp[i+1]+corresp[i])/2
+            begin_index_onset = int(round(begin_onset *input_fs)) #input_fs is the sampling frequency of the input
+            end_index_onset = max(int(round(end_onset *input_fs)),begin_index_onset+1) #We want to select at least 1 frame of the input
+            sub_input_onset = input_matrix[:,begin_index_onset:end_index_onset,1]
+
+
+            aligned_input[:,i,1] = get_fill_value(sub_input_onset,'max')
+        else:
+            aligned_input[:,i] = get_fill_value(sub_input,method)
 
     last_begin = corresp[-1]
     last_begin_index = int(round(last_begin*input_fs))
@@ -660,7 +700,11 @@ def align_matrix(input_matrix,corresp,input_fs,section=None,method='avg'):
 
     #Prevents some warnings when the corresp file is not perfect
     if not last_sub_input.shape[1]==0:
-        fill_value(sub_input,-1)
+        if with_onsets:
+            aligned_input[:,i,0] = get_fill_value(sub_input[:,:,0],method)
+            aligned_input[:,i,1] = get_fill_value(sub_input[:,:,1],'max')
+        else:
+            aligned_input[:,-1] = get_fill_value(sub_input,method)
 
     if not section==None:
         #Select only the relevant portion of the input
@@ -719,22 +763,52 @@ def get_name_from_maps(filename):
     return name
 
 
-# filename = 'data/outputs_default_config_split/test/MAPS_MUS-scn15_11_ENSTDkAm.mid'
-# np.seterr(all='raise')
+filename = 'data/outputs_adsr_split20p/lr_0.15_bs_25665068/test/MAPS_MUS-alb_se2_ENSTDkCl.mid'
+np.seterr(all='raise')
 # data = DataMaps()
-# data.make_from_file(filename,'quant',[0,30])
+# data.make_from_file(filename,'time',[0,10],with_onsets=True,acoustic_model='kelz')
+# print data.input.shape
+
+data = DataMapsBeats()
+data.make_from_file(filename,section=[0,10],with_onsets=True,acoustic_model='kelz')
+print data.input.shape
+
+onset_filename = filename.replace('.mid','_onset.csv')
+onset_matrix = np.transpose(np.loadtxt(onset_filename),[1,0])
+
+corresp_steps= np.round(data.corresp*50)
+corresp_half_steps = np.round((data.corresp[1:]+data.corresp[:-1])*50/2)
+
+import matplotlib.pyplot as plt
+fig, [ax0,ax1,ax2,ax3] = plt.subplots(4,1)
+ax0.imshow(onset_matrix[:,:10*50],aspect='auto',origin='lower')
+for i in corresp_steps[:60]:
+    ax0.plot([i,i],[0,87],color='black',linewidth=0.5)
+for i in corresp_half_steps[:60]:
+    ax0.plot([i,i],[0,87],color='grey',linewidth=0.5)
+ax1.imshow(data.input[:,:,0],aspect='auto',origin='lower')
+ax2.imshow(data.input[:,:,1],aspect='auto',origin='lower')
+ax3.imshow(data.target,aspect='auto',origin='lower')
+plt.show()
+
+data = DataMapsBeats()
+data.make_from_file(filename,section=[0,10],with_onsets=True,acoustic_model='kelz')
+print data.input.shape
+
+import matplotlib.pyplot as plt
+fig, [ax1,ax2,ax3] = plt.subplots(3,1)
+ax1.imshow(data.input[:,:,0],aspect='auto',origin='lower')
+ax2.imshow(data.input[:,:,1],aspect='auto',origin='lower')
+ax3.imshow(data.target,aspect='auto',origin='lower')
+plt.show()
 
 
 
-
-
-#
-#
-# import matplotlib.pyplot as plt
-# fig, [ax1,ax2] = plt.subplots(2,1)
-# ax1.imshow(data.input,aspect='auto',origin='lower')
-# ax2.imshow(data.target,aspect='auto',origin='lower')
-# plt.show()
+import matplotlib.pyplot as plt
+fig, [ax1,ax2] = plt.subplots(2,1)
+ax1.imshow(data.input,aspect='auto',origin='lower')
+ax2.imshow(data.target,aspect='auto',origin='lower')
+plt.show()
 
 
 # import cPickle as pickle
