@@ -763,52 +763,52 @@ def get_name_from_maps(filename):
     return name
 
 
-filename = 'data/outputs_adsr_split20p/lr_0.15_bs_25665068/test/MAPS_MUS-alb_se2_ENSTDkCl.mid'
-np.seterr(all='raise')
-# data = DataMaps()
-# data.make_from_file(filename,'time',[0,10],with_onsets=True,acoustic_model='kelz')
-# print data.input.shape
+# filename = 'data/outputs_adsr_split20p/lr_0.15_bs_25665068/test/MAPS_MUS-alb_se2_ENSTDkCl.mid'
+# np.seterr(all='raise')
+# # data = DataMaps()
+# # data.make_from_file(filename,'time',[0,10],with_onsets=True,acoustic_model='kelz')
+# # print data.input.shape
 
-data = DataMapsBeats()
-data.make_from_file(filename,section=[0,10],with_onsets=True,acoustic_model='kelz')
-print data.input.shape
+# data = DataMapsBeats()
+# data.make_from_file(filename,section=[0,10],with_onsets=True,acoustic_model='kelz')
+# #print data.input.shape
 
-onset_filename = filename.replace('.mid','_onset.csv')
-onset_matrix = np.transpose(np.loadtxt(onset_filename),[1,0])
+# onset_filename = filename.replace('.mid','_onset.csv')
+# onset_matrix = np.transpose(np.loadtxt(onset_filename),[1,0])
 
-corresp_steps= np.round(data.corresp*50)
-corresp_half_steps = np.round((data.corresp[1:]+data.corresp[:-1])*50/2)
+# corresp_steps= np.round(data.corresp*50)
+# corresp_half_steps = np.round((data.corresp[1:]+data.corresp[:-1])*50/2)
 
-import matplotlib.pyplot as plt
-fig, [ax0,ax1,ax2,ax3] = plt.subplots(4,1)
-ax0.imshow(onset_matrix[:,:10*50],aspect='auto',origin='lower')
-for i in corresp_steps[:60]:
-    ax0.plot([i,i],[0,87],color='black',linewidth=0.5)
-for i in corresp_half_steps[:60]:
-    ax0.plot([i,i],[0,87],color='grey',linewidth=0.5)
-ax1.imshow(data.input[:,:,0],aspect='auto',origin='lower')
-ax2.imshow(data.input[:,:,1],aspect='auto',origin='lower')
-ax3.imshow(data.target,aspect='auto',origin='lower')
-plt.show()
+# import matplotlib.pyplot as plt
+# fig, [ax0,ax1,ax2,ax3] = plt.subplots(4,1)
+# ax0.imshow(onset_matrix[:,:10*50],aspect='auto',origin='lower')
+# for i in corresp_steps[:60]:
+#     ax0.plot([i,i],[0,87],color='black',linewidth=0.5)
+# for i in corresp_half_steps[:60]:
+#     ax0.plot([i,i],[0,87],color='grey',linewidth=0.5)
+# ax1.imshow(data.input[:,:,0],aspect='auto',origin='lower')
+# ax2.imshow(data.input[:,:,1],aspect='auto',origin='lower')
+# ax3.imshow(data.target,aspect='auto',origin='lower')
+# plt.show()
 
-data = DataMapsBeats()
-data.make_from_file(filename,section=[0,10],with_onsets=True,acoustic_model='kelz')
-print data.input.shape
+# data = DataMapsBeats()
+# data.make_from_file(filename,section=[0,10],with_onsets=True,acoustic_model='kelz')
+# #print data.input.shape
 
-import matplotlib.pyplot as plt
-fig, [ax1,ax2,ax3] = plt.subplots(3,1)
-ax1.imshow(data.input[:,:,0],aspect='auto',origin='lower')
-ax2.imshow(data.input[:,:,1],aspect='auto',origin='lower')
-ax3.imshow(data.target,aspect='auto',origin='lower')
-plt.show()
+# import matplotlib.pyplot as plt
+# fig, [ax1,ax2,ax3] = plt.subplots(3,1)
+# ax1.imshow(data.input[:,:,0],aspect='auto',origin='lower')
+# ax2.imshow(data.input[:,:,1],aspect='auto',origin='lower')
+# ax3.imshow(data.target,aspect='auto',origin='lower')
+# plt.show()
 
 
 
-import matplotlib.pyplot as plt
-fig, [ax1,ax2] = plt.subplots(2,1)
-ax1.imshow(data.input,aspect='auto',origin='lower')
-ax2.imshow(data.target,aspect='auto',origin='lower')
-plt.show()
+# import matplotlib.pyplot as plt
+# fig, [ax1,ax2] = plt.subplots(2,1)
+# ax1.imshow(data.input,aspect='auto',origin='lower')
+# ax2.imshow(data.target,aspect='auto',origin='lower')
+# plt.show()
 
 
 # import cPickle as pickle
