@@ -147,10 +147,10 @@ for fn in os.listdir(folder):
 
         if args.step == "beat":
             data = DataMapsBeats()
-            data.make_from_file(filename,args.beat_gt,args.beat_subdiv,section, acoustic_model='kelz')
+            data.make_from_file(filename,args.beat_gt,args.beat_subdiv,section, with_onsets=args.with_onsets, acoustic_model='kelz')
         else:
             data = DataMaps()
-            data.make_from_file(filename,args.step,section, acoustic_model='kelz')
+            data.make_from_file(filename,args.step,section, with_onsets=args.with_onsets, acoustic_model='kelz')
 
         # Decode
         if args.it > 0:
@@ -183,7 +183,7 @@ for fn in os.listdir(folder):
             pr = convert_note_to_time(pr,data.corresp,data.input_fs,max_len=max_len)
 
         data = DataMaps()
-        data.make_from_file(filename, "time", section=section, acoustic_model="kelz")
+        data.make_from_file(filename, "time", section=section, with_onsets=args.with_onsets, acoustic_model="kelz")
         target = data.target
 
         #Evaluate
