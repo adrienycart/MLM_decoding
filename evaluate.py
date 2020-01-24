@@ -42,7 +42,6 @@ parser.add_argument("--hash", help="The hash length to use. Defaults to 12.", ty
 parser.add_argument("-v", "--verbose", help="Use verbose printing.", action="store_true")
 parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
 parser.add_argument("--gt", help="Use the gt to use the best possible weight_model results.", action="store_true")
-                    type=float, default=0)
 parser.add_argument('--n_hidden', help="Number of hidden nodes for the LSTM", type=int, default=256)
 parser.add_argument('--with_offset', help="use offset for framewise metrics", action='store_true')
 parser.add_argument('--with_onsets', help="use presence/onset piano-roll", action='store_true')
