@@ -2,7 +2,7 @@ from dataMaps import DataMaps, DataMapsBeats, convert_note_to_time, align_matrix
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
-from decode import decode, decode_pitchwise_iterative, decode_with_onsets
+from decode import decode, decode_pitchwise_iterative
 
 import os
 import argparse
@@ -162,13 +162,13 @@ for fn in os.listdir(folder):
             pr = prs[-1]
 
         elif args.weight_model is not None or args.weight != 1.0:
+            input_data = data.input
             if args.with_onsets:
-                pr, priors, weights, combined_priors = decode_with_onsets(data.input, model, sess, branch_factor=args.branch,
-                            beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
-                            out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
-                            verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
-            else:
-                pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
+                input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
+                input_data[:data.input.shape[0], :] = data.input[:, :, 0]
+                input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
+                
+            pr, priors, weights, combined_priors = decode(input_data, model, sess, branch_factor=args.branch,
                             beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
                             out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
                             verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model,

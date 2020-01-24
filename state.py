@@ -6,7 +6,7 @@ class State:
     A state in the decoding process, containing a log probability and an LSTM hidden state.
     """
 
-    def __init__(self):
+    def __init__(self, P):
         """
         Create a new empty State.
         """
@@ -14,6 +14,7 @@ class State:
         self.combined_prior = []
         self.sample = []
         self.log_prob = 0.0
+        self.P = P
 
         self.num = 0
         self.prev = None
@@ -32,7 +33,7 @@ class State:
         combined_prior : np.array
             An 88-length probabilistic array containing the combined prior for this frame.
         """
-        self.weights = np.repeat(np.array(weights), 88) if len(weights) == 1 else weights
+        self.weights = np.repeat(np.array(weights), self.P) if len(weights) == 1 else weights
         self.combined_prior = combined_prior
         
         
@@ -74,7 +75,7 @@ class State:
         state : State
             The state resulting from this transition.
         """
-        state = State()
+        state = State(self.P)
         state.log_prob = self.log_prob + log_prob
 
         state.sample = sample
@@ -96,7 +97,7 @@ class State:
         combined_priors : np.matrix
             A num_pitches x T matrix containing the combined priors of this State at each frame.
         """
-        num_pitches = len(self.combined_prior) if self.combined_prior is not None else 88
+        num_pitches = len(self.combined_prior) if self.combined_prior is not None else self.P
         width = self.num if self.combined_prior is not None else self.num-1
         combined_priors = np.zeros((num_pitches, width))
 
@@ -117,7 +118,7 @@ class State:
         weights : np.matrix
             A num_pitches x T matrix containing the weights of this State at each frame.
         """
-        num_pitches = len(self.weights) if self.weights is not None else 88
+        num_pitches = len(self.weights) if self.weights is not None else self.P
         width = self.num if self.weights is not None else self.num-1
         weights = np.zeros((num_pitches, width))
 
