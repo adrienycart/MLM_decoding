@@ -197,65 +197,27 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
         return weights_all, priors_all
 
     # Load the weight_model properties
-    if 'model' in weight_model_dict:
-        sklearn = True
-        history = weight_model_dict['history']
-        features = weight_model_dict['features'] if 'features' in weight_model_dict else False
-        is_weight = weight_model_dict['weight'] if 'weight' in weight_model_dict else True
-        history_context = weight_model_dict['history_context'] if 'history_context' in weight_model_dict else 0
-        prior_context = weight_model_dict['prior_context'] if 'prior_context' in weight_model_dict else 0
-        use_lstm = weight_model_dict['use_lstm'] if 'use_lstm' in weight_model_dict else True
-        no_mlm = weight_model_dict['no_mlm'] if 'no_mlm' in weight_model_dict else False
-    else:
-        sklearn = False
-        history = weight_model_dict['history']
-        ac_pitch_window = weight_model_dict['ac_pitch_window']
-        la_pitch_window = weight_model_dict['la_pitch_window']
-        features = weight_model_dict['features']
-        is_weight = weight_model_dict['is_weight']
-        no_lstm = weight_model_dict['no_lstm'] if 'no_lstm' in weight_model_dict else False
+    history = weight_model_dict['history']
+    features = weight_model_dict['features'] if 'features' in weight_model_dict else False
+    is_weight = weight_model_dict['weight'] if 'weight' in weight_model_dict else True
+    history_context = weight_model_dict['history_context'] if 'history_context' in weight_model_dict else 0
+    prior_context = weight_model_dict['prior_context'] if 'prior_context' in weight_model_dict else 0
+    use_lstm = weight_model_dict['use_lstm'] if 'use_lstm' in weight_model_dict else True
+    no_mlm = weight_model_dict['no_mlm'] if 'no_mlm' in weight_model_dict else False
 
-    if sklearn:
-        X = np.vstack([create_weight_x_sk(state, acoustic, frame_num, history, features=features,
-                                          history_context=history_context,
-                                          prior_context=prior_context,
-                                          no_mlm=no_mlm) for state in beam])
-        # Remove LSTM sample
-        if not use_lstm:
-            X = X[:, :-1]
+    X = np.vstack([create_weight_x_sk(state, acoustic, frame_num, history, features=features,
+                                      history_context=history_context,
+                                      prior_context=prior_context,
+                                      no_mlm=no_mlm) for state in beam])
+    # Remove LSTM sample
+    if not use_lstm:
+        X = X[:, :-1]
 
-        # 2 x len(X) matrix
-        weights_all = np.transpose(weight_model.predict_proba(X)) if is_weight else None
+    # 2 x len(X) matrix
+    weights_all = np.transpose(weight_model.predict_proba(X)) if is_weight else None
 
-        # len(X) array
-        priors_all = np.squeeze(weight_model.predict_proba(X)[:, 1]) if not is_weight else None
-
-    else: # tensorflow
-        X = np.vstack([create_weight_x_tf(state, acoustic, frame_num, history, ac_pitch_window,
-                                          la_pitch_window, features) for state in beam])
-        # Remove LSTM sample
-        if no_lstm:
-            X = X[:, :-1]
-
-        # Split X data into its parts
-        acoustic_in = X[:, :len(ac_pitch_window) * history].reshape(-1, len(ac_pitch_window), history)
-        language_in = X[:, len(ac_pitch_window) * history:
-                        history * (len(ac_pitch_window) + len(la_pitch_window))
-                       ].reshape(-1, len(la_pitch_window), history)
-        features_in = X[:, history * (len(ac_pitch_window) + len(la_pitch_window)):]
-        X_split = [acoustic_in, language_in, features_in]
-
-        result = np.squeeze(weight_model.predict(X_split))
-
-        # 2 x len(X) matrix
-        weights_all = None
-        if is_weight:
-            weights_all = np.zeros((2, len(X)))
-            weights_all[1, :] = result
-            weights_all[0, :] = 1 - result
-
-        # len(X) array
-        priors_all = np.squeeze(result) if not is_weight else None
+    # len(X) array
+    priors_all = np.squeeze(weight_model.predict_proba(X)[:, 1]) if not is_weight else None
 
     return weights_all, priors_all
 
