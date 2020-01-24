@@ -2,7 +2,7 @@ from dataMaps import DataMaps, DataMapsBeats, convert_note_to_time, align_matrix
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
-from decode import decode, decode_pitchwise_iterative
+from decode import decode
 
 import os
 import argparse
@@ -42,13 +42,6 @@ parser.add_argument("--hash", help="The hash length to use. Defaults to 12.", ty
 parser.add_argument("-v", "--verbose", help="Use verbose printing.", action="store_true")
 parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
 parser.add_argument("--gt", help="Use the gt to use the best possible weight_model results.", action="store_true")
-parser.add_argument("--pitchwise", type=int, help="use pitchwise language model. Value is the number of semitones above and below current pitch to take into account.")
-parser.add_argument("--it", help="Use iterative pitchwise processing with this number of iterations. " +
-                    "Defaults to 0, which doesn't use iterative processing.", type=int, default=0)
-parser.add_argument("--uncertainty", help="Add some uncertainty to the LSTM decoding outputs, when " +
-                    "used with --it. The outputs will be scaled to a range of size " +
-                    "(1 - 2*uncertainty), centered around 0.5. Specifically, " +
-                    "(0.0, 1.0) -> (0.0+uncertainty, 1.0-uncertainty). Defaults to 0.0.",
                     type=float, default=0)
 parser.add_argument('--n_hidden', help="Number of hidden nodes for the LSTM", type=int, default=256)
 parser.add_argument('--with_offset', help="use offset for framewise metrics", action='store_true')
@@ -87,7 +80,6 @@ if args.weight_model is None:
 else:
     print(f"Auto-weight: {args.weight_model}")
 print(f"Sampling union: False")
-print(f"Pitchwise window: {args.pitchwise}")
 
 print('####################################')
 
@@ -107,11 +99,7 @@ if args.weight_model is not None or args.weight != 1.0:
     model_param = make_model_param()
     model_param['n_hidden'] = n_hidden
     model_param['n_steps'] = 1 # To generate 1 step at a time
-    if args.pitchwise is None:
-        model_param['pitchwise']=False
-    else:
-        model_param['pitchwise']=True
-        model_param['n_notes'] = 2*args.pitchwise+1
+    model_param['pitchwise']=False
     if args.diagRNN:
         model_param['cell_type'] = "diagLSTM"
     model_param['with_onsets'] = args.with_onsets
@@ -152,16 +140,7 @@ for fn in os.listdir(folder):
             data = DataMaps()
             data.make_from_file(filename,args.step,section, with_onsets=args.with_onsets, acoustic_model='kelz')
 
-        # Decode
-        if args.it > 0:
-            prs = decode_pitchwise_iterative(data.input, model, sess, beam_size=args.beam,
-                                             weight=[[args.weight], [1 - args.weight]],
-                                             hash_length=args.hash, verbose=args.verbose, num_iters=args.it,
-                                             uncertainty=args.uncertainty)
-
-            pr = prs[-1]
-
-        elif args.weight_model is not None or args.weight != 1.0:
+        if args.weight_model is not None or args.weight != 1.0:
             input_data = data.input
             if args.with_onsets:
                 input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))

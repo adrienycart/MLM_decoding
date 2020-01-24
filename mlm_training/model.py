@@ -464,7 +464,7 @@ class Model:
                 else:
                     pred = self.prediction
                 if self.with_onsets :
-                    pred = tf.softmax(pred)
+                    pred = tf.nn.softmax(pred)
                 else:
                     pred = tf.sigmoid(pred)
                 self._pred_sigm = pred
