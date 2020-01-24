@@ -254,6 +254,138 @@ def decode_pitchwise_iterative(acoustic, model, sess, beam_size=200, weight=[[0.
 
 
 
+def decode_with_onsets(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8], [0.2]],
+           hash_length=10, out=None, weight_model_dict=None, weight_model=None, verbose=False,
+           gt=None):
+    """
+    Transduce the given acoustic probabilistic piano roll into a binary piano roll.
+
+    Parameters
+    ==========
+    acoustic : matrix
+        A probabilistic piano roll, 88 x T x 2, containing values between 0.0 and 1.0
+        inclusive. acoustic[p, t, 0] represents the probability of pitch p being present
+        at frame t, and acoustic[p, t, 1] represents the probability of pitch p having an onset
+        at frame t.
+
+    model : Model
+        The language model to use for the transduction process.
+
+    sess : tf.session
+        The session for the given model.
+
+    branch_factor : int
+        The number of samples to use per frame. Defaults to 50.
+
+    beam_size : int
+        The beam size for the search. Defaults to 200.
+
+    weight : matrix
+        A 2 x 1 matrix, whose first row is the weight for the acoustic model and whose 2nd
+        row is the weight for the language model across all pitches
+        (2x1). Each column in the matrix should be normalized to sum to 1. Defaults to [[0.8], [0.2]].
+
+    hash_length : int
+        The history length for the hashed beam. If two states do not differ in the past hash_length
+        frames, only the most probable one is saved in the beam. Defaults to 10.
+
+    out : string
+        The directory in which to save the outputs, or None to not save anything. Defaults to None.
+
+    weight_model_dict : dict
+        A dictionary containing information about the weight model to use, if any. Defaults to None,
+        which uses the static weight of the weight parameter.
+
+    weight_model : sklearn.model or tf.keras.Model
+        The model to be used as a weight_model, or None to use static weighting.
+
+    verbose : bool
+        Print progress in number of frames. Defaults to False (no printing).
+
+    gt : matrix
+        The ground truth piano roll, 88 x T x 2. If given, this will be used to always use the optimum
+        weight for each frame. Defaults to None.
+
+
+    Returns
+    =======
+    piano_roll : np.ndarray
+        An 88 x T x 2 binary piano roll, where a 1 represents the presence of a pitch
+        at a given frame.
+
+    priors : np.ndarray
+        An 88 x T x 2 matrix, giving the prior assigned to each pitch detection by the
+        most probable language model state.
+
+    weights : np.ndarray
+        An 88 x T x 2 matrix, giving the acoustic weights for each pitch at each frame.
+    """
+    if gt is not None:
+        weight_model = True
+        is_weight = True
+
+    if (not weight_model) and weight[0][0] == 1.0:
+        return (acoustic>0.5).astype(int), np.zeros(acoustic.shape), np.ones(acoustic.shape), acoustic
+
+    weights_all = None
+    priors_all = None
+
+    beam = Beam()
+    beam.add_initial_state(model, sess)
+
+    acoustic = np.transpose(acoustic)
+
+    for frame_num, frame in enumerate(acoustic):
+        if verbose and frame_num % 20 == 0:
+            print(str(frame_num) + " / " + str(acoustic.shape[0]))
+
+        # Run the LSTM!
+        if frame_num != 0:
+            run_lstm(sess, model, beam)
+
+        # Here, beam contains a list of states, with sample histories, priors, and LSTM hidden_states,
+        # but needs to be updated with weights and combined_priors when sampling.
+
+        # Here, we are calculating dynamic weights or priors if we are using gt or a weight_model
+        if weight_model:
+            weights_all, priors_all = run_weight_model(gt, weight_model, weight_model_dict, beam,
+                                                       acoustic, frame_num)
+
+        new_beam = Beam()
+
+        # Here we sample from each state in the beam
+        for i, state in enumerate(beam):
+            weight_this = weights_all[:, i * 88 : (i + 1) * 88] if weights_all is not None else weight
+
+            if priors_all is not None:
+                prior = np.squeeze(priors_all[i * 88 : (i + 1) * 88])
+            else:
+                prior = np.squeeze(weight_this[0] * frame + weight_this[1] * state.prior)
+
+            # Update state
+            state.update_from_weight_model(weight_this[0], prior)
+
+            for log_prob, sample in itertools.islice(enumerate_samples(prior), branch_factor):
+
+                # Binarize the sample (return from enumerate_samples is an array of indexes)
+                binary_sample = np.zeros(88)
+                binary_sample[sample] = 1
+
+                # Transition on sample
+                new_beam.add(state.transition(binary_sample, log_prob))
+
+        new_beam.cut_to_size(beam_size, min(hash_length, frame_num + 1))
+        beam = new_beam
+
+        if out:
+            output = [(s.get_piano_roll(), s.get_priors(), s.get_weights(), s.get_combined_priors()) for s in beam]
+            with open(os.path.join(out, 'data_' + str(frame_num) + '.pkl'), 'wb') as file:
+                pickle.dump(output, file)
+
+    top_state = beam.get_top_state()
+    return top_state.get_piano_roll(), top_state.get_priors(), top_state.get_weights(), top_state.get_combined_priors()
+
+
 
 
 

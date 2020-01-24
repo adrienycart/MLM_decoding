@@ -2,7 +2,7 @@ from dataMaps import DataMaps, DataMapsBeats, convert_note_to_time, align_matrix
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
-from decode import decode, decode_pitchwise_iterative
+from decode import decode, decode_pitchwise_iterative, decode_with_onsets
 
 import os
 import argparse
@@ -52,7 +52,7 @@ parser.add_argument("--uncertainty", help="Add some uncertainty to the LSTM deco
                     type=float, default=0)
 parser.add_argument('--n_hidden', help="Number of hidden nodes for the LSTM", type=int, default=256)
 parser.add_argument('--with_offset', help="use offset for framewise metrics", action='store_true')
-parser.add_argument('--with_onsets', help="use offset for framewise metrics", action='store_true')
+parser.add_argument('--with_onsets', help="use presence/onset piano-roll", action='store_true')
 parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="store_true")
 
 args = parser.parse_args()
@@ -162,10 +162,17 @@ for fn in os.listdir(folder):
             pr = prs[-1]
 
         elif args.weight_model is not None or args.weight != 1.0:
-            pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
+            if args.with_onsets:
+                pr, priors, weights, combined_priors = decode_with_onsets(data.input, model, sess, branch_factor=args.branch,
                             beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
                             out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
                             verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
+            else:
+                pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
+                            beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
+                            out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
+                            verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model,
+                            with_onsets=args.with_onsets)
         else:
             pr = (data.input>0.5).astype(int)
 
