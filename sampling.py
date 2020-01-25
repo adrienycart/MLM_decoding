@@ -77,7 +77,6 @@ def trinarize_with_onsets(sample, P):
     P : int
         The desired length of the resulting sample.
         
-        
     Returns
     -------
     trinary_sample : list(int)
@@ -85,13 +84,17 @@ def trinarize_with_onsets(sample, P):
     """
     num_pitches = P // 2
     
-    # Starting index of onsets
-    index = bisect.bisect_left(sample, num_pitches)
+    sample = np.array(sample, dtype=int)
+    
+    # Get presence and onset indices
+    presence_indices = (sample < num_pitches)
+    presence = sample[presence_indices]
+    onset = sample[np.logical_not(presence_indices)] - num_pitches
     
     # Make trinary sample
     trinary_sample = np.zeros(num_pitches)
-    trinary_sample[sample[:index]] = 1
-    trinary_sample[np.array(sample[index:], dtype=int) - num_pitches] = 2
+    trinary_sample[presence] = 1
+    trinary_sample[onset] = 2
     
     return trinary_sample
     

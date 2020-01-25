@@ -101,6 +101,10 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
     beam.add_initial_state(model, sess, P)
 
     acoustic = np.transpose(acoustic)
+    
+    lstm_transform = None
+    if model.with_onsets:
+        lstm_transform = three_hot_output_to_presence_onset
 
     for frame_num, frame in enumerate(acoustic):
         if verbose and frame_num % 20 == 0:
@@ -108,7 +112,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
 
         # Run the LSTM!
         if frame_num != 0:
-            run_lstm(sess, model, beam, P)
+            run_lstm(sess, model, beam, P, transform=lstm_transform)
 
         # Here, beam contains a list of states, with sample histories, priors, and LSTM hidden_states,
         # but needs to be updated with weights and combined_priors when sampling.
@@ -224,7 +228,7 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
 
 
 
-def run_lstm(sess, model, beam, P):
+def run_lstm(sess, model, beam, P, transform=None):
     """
     Run the LSTM one step, and update the states in the beam in place.
 
@@ -238,9 +242,11 @@ def run_lstm(sess, model, beam, P):
 
     beam : beam.Beam
         The beam containing all of the states we want to update.
+    
+    transform : function(list(float) -> list(float))
     """
     hidden_states = []
-    np_samples = np.zeros((len(beam), 1, P))
+    np_samples = np.zeros((len(beam), 1, len(beam.get_top_state().sample)))
 
     # Get states
     for i, s in enumerate(beam):
@@ -249,12 +255,31 @@ def run_lstm(sess, model, beam, P):
 
     # Run LSTM
     hidden_states, priors = model.run_one_step(hidden_states, np_samples, sess)
+    
+    # Transfor the LSTM prior into a different format if necessary
+    if transform is not None:
+        priors = transform(priors)
 
     # Update states
     for i, s in enumerate(beam):
         s.update_from_lstm(hidden_states[i], priors[i])
 
 
+def three_hot_output_to_presence_onset(priors):
+    """
+    Convert from a three-hot LSTM output to the presence-onset format.
+    
+    Parameters
+    ----------
+    priors : np.ndarray
+        A dim (?, 1, 88, 3) array of LSTM priors.
+        
+    Returns
+    -------
+    priors : np.ndarray
+        A dim (?, 88*2) array of presence-onset format.
+    """
+    return priors[:, :, :, 1:].reshape(len(priors), -1)
 
 
 def get_best_weights(language, acoustic, gt, width=0.25):
