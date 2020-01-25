@@ -112,7 +112,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
 
         # Run the LSTM!
         if frame_num != 0:
-            run_lstm(sess, model, beam, P, transform=lstm_transform)
+            run_lstm(sess, model, beam, transform=lstm_transform)
 
         # Here, beam contains a list of states, with sample histories, priors, and LSTM hidden_states,
         # but needs to be updated with weights and combined_priors when sampling.
@@ -228,7 +228,7 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
 
 
 
-def run_lstm(sess, model, beam, P, transform=None):
+def run_lstm(sess, model, beam, transform=None):
     """
     Run the LSTM one step, and update the states in the beam in place.
 
@@ -272,12 +272,12 @@ def three_hot_output_to_presence_onset(priors):
     Parameters
     ----------
     priors : np.ndarray
-        A dim (?, 1, 88, 3) array of LSTM priors.
+        A dim (?, 1, P, 3) array of LSTM priors.
         
     Returns
     -------
     priors : np.ndarray
-        A dim (?, 88*2) array of presence-onset format.
+        A dim (?, 2P) array of presence-onset format.
     """
     return priors[:, :, :, 1:].reshape(len(priors), -1)
 
