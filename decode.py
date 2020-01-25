@@ -11,6 +11,7 @@ from tensorflow import keras
 
 import dataMaps
 import eval_utils
+import sampling
 from beam import Beam
 from state import State
 from mlm_training.model import Model, make_model_param
@@ -21,7 +22,7 @@ from mlm_training.model import Model, make_model_param
 
 def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8], [0.2]],
            hash_length=10, out=None, weight_model_dict=None, weight_model=None, verbose=False,
-           gt=None, with_onsets=False):
+           gt=None):
     """
     Transduce the given acoustic probabilistic piano roll into a binary piano roll.
 
@@ -30,7 +31,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
     acoustic : matrix
         A probabilistic piano roll, P x T, containing values between 0.0 and 1.0
         inclusive. acoustic[p, t] represents the probability of pitch p being present
-        at frame t. Or, if with_onsets is true, the bottom-half of this is onsets.
+        at frame t. Or, if model.with_onsets is true, the bottom-half of this is onsets.
 
     model : Model
         The language model to use for the transduction process.
@@ -69,9 +70,6 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
     gt : matrix
         The ground truth piano roll, P x T. If given, this will be used to always use the optimum
         weight for each frame. Defaults to None.
-        
-    with_onsets : bool
-        True if the bottom half of the input array is onsets. False for a presence posteriogram.
 
 
     Returns
@@ -134,14 +132,16 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
             # Update state
             state.update_from_weight_model(weight_this[0], prior)
 
-            for log_prob, sample in itertools.islice(enumerate_samples(prior), branch_factor):
+            for log_prob, sample in itertools.islice(sampling.enumerate_samples(prior), branch_factor):
 
-                # Binarize the sample (return from enumerate_samples is an array of indexes)
-                binary_sample = np.zeros(P)
-                binary_sample[sample] = 1
+                # Format the sample (return from enumerate_samples is an array of indexes)
+                if model.with_onsets:
+                    sample = sampling.trinarize_with_onsets(sample, P)
+                else:
+                    sample = sampling.binarize(sample, P)
 
                 # Transition on sample
-                new_beam.add(state.transition(binary_sample, log_prob))
+                new_beam.add(state.transition(sample, log_prob))
 
         new_beam.cut_to_size(beam_size, min(hash_length, frame_num + 1))
         beam = new_beam
@@ -565,65 +565,4 @@ def get_log_prob(sample, acoustic, language, weight, p=None):
     not_p = 1 - p
 
     return np.sum(np.log(np.where(sample == 1, p, not_p)), axis=1), p
-
-
-
-
-def enumerate_samples(p):
-    """
-    Enumerate the binarised piano-roll samples of a frame, ordered by probability.
-
-    Based on Algorithm 2 from:
-    Boulanger-Lewandowski, Bengio, Vincent - 2013 - High-dimensional Sequence Transduction
-
-    Parameters
-    ==========
-    p : np.array
-        A weighted probability prior for each pitch.
-
-    Yields
-    ======
-    log_prob : float
-        The log probability of the given sample.
-
-    samples : list(int)
-        A list of the indices where there should be 1's in tthe samples.
-    """
-    not_p = 1 - p
-
-    # Base case: most likely chosen greedily
-    v_0 = np.where(p > not_p)[0]
-    l_0 = np.sum(np.log(np.maximum(p, not_p)))
-    yield l_0, v_0
-
-    v_0 = set(v_0)
-
-    # Sort likelihoods by likelihood penalty for flipping
-    L = np.abs(np.log(p / not_p))
-    R = L.argsort()
-    L_sorted = L[R]
-
-    # Num solves crash for duplicate likelihoods
-    num = 1
-    q = queue.PriorityQueue()
-    q.put((L_sorted[0], 0, [0]))
-
-    while not q.empty():
-        l, _, v = q.get()
-        yield l_0 - l, list(v_0.symmetric_difference(R[v]))
-
-        i = np.max(v)
-        if i + 1 < len(L_sorted):
-            v.append(i + 1)
-            q.put((l + L_sorted[i + 1], num, v))
-            v = v.copy()
-
-            # XOR between v and [i]
-            try:
-                v.remove(i)
-            except:
-                v.append(i)
-
-            q.put((l + L_sorted[i + 1] - L_sorted[i], num+1, v))
-            num += 2
             

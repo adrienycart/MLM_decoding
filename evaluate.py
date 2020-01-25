@@ -149,8 +149,7 @@ for fn in os.listdir(folder):
             pr, priors, weights, combined_priors = decode(input_data, model, sess, branch_factor=args.branch,
                             beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
                             out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
-                            verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model,
-                            with_onsets=args.with_onsets)
+                            verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
         else:
             pr = (data.input>0.5).astype(int)
 
