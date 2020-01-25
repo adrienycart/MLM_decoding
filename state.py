@@ -151,7 +151,7 @@ class State:
         return priors
 
 
-    def get_piano_roll(self, min_length=None, max_length=None):
+    def get_piano_roll(self, min_length=None, max_length=None, formatter=None):
         """
         Get the piano roll of this State.
 
@@ -164,6 +164,9 @@ class State:
         max_length : int
             The maximum length for a returned piano roll. This will return at most the most recent
             max_length frames.
+            
+        formatter : func(list(int) -> list(int))
+            Optionally, a function to convert the samples of this state to another format.
 
         Returns
         =======
@@ -181,4 +184,25 @@ class State:
             piano_roll[:, length - 1 - i] = state.sample
             state = state.prev
 
-        return piano_roll
+        return piano_roll if formatter is None else formatter(piano_roll)
+
+    
+def trinary_pr_to_presence_onset(pr):
+    """
+    Convert from a trinary piano-roll to a presence-onset format one.
+    
+    Parameters
+    ----------
+    pr : np.ndarray
+        A trinary piano-roll, dimensions (P, T).
+        
+    Returns
+    -------
+    binary_pr : np.ndarray
+        A binary presence-onset piano-roll, dimensions (2P, T).
+    """
+    p = len(pr)
+    binary_pr = np.zeros((2 * p, pr.shape[1]))
+    binary_pr[:p, :] = np.where(pr == 1, 1, 0)
+    binary_pr[p:, :] = np.where(pr == 2, 1, binary_pr[:p, :])
+    return binary_pr

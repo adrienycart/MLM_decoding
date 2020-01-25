@@ -150,6 +150,11 @@ for fn in os.listdir(folder):
                             beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
                             out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
                             verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
+            
+            if args.with_onsets:
+                # TODO: Convert from (176, T) to whatever format is needed for eval.
+                pass
+            
         else:
             pr = (data.input>0.5).astype(int)
 

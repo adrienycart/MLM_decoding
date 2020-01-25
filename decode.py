@@ -13,7 +13,7 @@ import dataMaps
 import eval_utils
 import sampling
 from beam import Beam
-from state import State
+from state import State, trinary_pr_to_presence_onset
 from mlm_training.model import Model, make_model_param
 
 
@@ -156,7 +156,8 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
                 pickle.dump(output, file)
 
     top_state = beam.get_top_state()
-    return top_state.get_piano_roll(), top_state.get_priors(), top_state.get_weights(), top_state.get_combined_priors()
+    return (top_state.get_piano_roll(formatter=trinary_pr_to_presence_onset),
+            top_state.get_priors(), top_state.get_weights(), top_state.get_combined_priors())
 
 
 
@@ -265,6 +266,7 @@ def run_lstm(sess, model, beam, transform=None):
         s.update_from_lstm(hidden_states[i], priors[i])
 
 
+
 def three_hot_output_to_presence_onset(priors):
     """
     Convert from a three-hot LSTM output to the presence-onset format.
@@ -280,6 +282,7 @@ def three_hot_output_to_presence_onset(priors):
         A dim (?, 2P) array of presence-onset format.
     """
     return priors[:, :, :, 1:].reshape(len(priors), -1)
+
 
 
 def get_best_weights(language, acoustic, gt, width=0.25):
