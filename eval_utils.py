@@ -34,13 +34,8 @@ def filter_short_gaps_roll(data,thresh=1):
     return data_filt
 
 def filter_short_notes(pitches,intervals,thresh=0.05):
-    pitches_filt = []
-    intervals_filt = []
-    for pitch, [onset,offset] in zip(pitches,intervals):
-        if offset-onset >= thresh:
-            pitches_filt += [pitch]
-            intervals_filt += [[onset,offset]]
-    return pitches_filt, intervals_filt
+    to_keep = (intervals[:,1]-intervals[:,0])>=thresh
+    return pitches[to_keep], intervals[to_keep]
 
 def filter_short_gaps(pitches,intervals,thresh=0.05):
 
@@ -55,7 +50,7 @@ def filter_short_gaps(pitches,intervals,thresh=0.05):
         intervals_array[pitch] += [[onset,offset]]
 
 
-    for i in range(128);
+    for i in range(128):
         # Sort all intervals per onset time (for each pitch)
         sorted_intervals = sorted(intervals_array[i],key = lambda x: x[0])
         # Then, for each pitch, remove short gaps
@@ -102,11 +97,12 @@ def get_notes_intervals_with_onsets(pr,corresp,double_roll=False):
         onsets_matrix = pr[pr.shape[0]/2:,:]
         note_on_matrix = pr[:pr.shape[0]/2,:]
     else:
-        onsets_matrix = pr[pr==2].astype(int)
-        note_on_matrix = pr[pr==1].astype(int)
+        onsets_matrix = (pr==2).astype(int)
+        note_on_matrix = (pr==1).astype(int)
 
     # Only gather notes that have an onset
     onsets= np.where(onsets_matrix==1)
+
     pitches = []
     intervals = []
     for pitch, onset in zip(onsets[0],onsets[1]):
@@ -122,7 +118,7 @@ def get_notes_intervals_with_onsets(pr,corresp,double_roll=False):
                 dur = np.argmin(offset_array) # Argmin returns index of first zero
                 offset = dur+onset
         # Add +1 because pitches cannot be equal to zeros for evaluation
-        pitches += [pitch1+1]
+        pitches += [pitch+1]
         intervals += [[corresp[onset],corresp[offset]]]
 
     return np.array(pitches), np.array(intervals)
@@ -220,26 +216,29 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_off
         onset_tolerance=tolerance,offset_min_tolerance=0.05)
         return P,R,F
 
-def compute_eval_metrics_with_onset(input_pr,corresp,target_data,double_roll=False,min_dur=None,tolerance=None, with_offset=False, min_gap=None):
+def compute_eval_metrics_with_onset(input_pr,corresp,target_data,section=None,double_roll=False,min_dur=None,tolerance=None, with_offset=False, min_gap=None):
     #Compute evaluation metrics note-by-note
     #filter out all notes shorter than min_dur (in seconds, default 50ms)
     #A note is correctly detected if it has the right pitch and the inset is within tolerance parameter (default 50ms)
     #Uses the mir_eval implementation
 
-    #All inputs should be with 40ms timesteps
-    fs = 25
 
     # Get note sequences
     notes_est , intervals_est = get_notes_intervals_with_onsets(input_pr, corresp,double_roll)
 
+    print np.max(intervals_est)
     notes_ref,intervals_ref = [],[]
     for note in sum([instr.notes for instr in target_data.instruments],[]):
-        notes_ref+= [note.pitch]
-        intervals_ref+= [[note.start,note.end]]
+        if section is not None and note.start < section[1] and note.end>section[0]:
+            ### +21-1 because in get_notes_intervals_with_onsets, we add +1 so that pitches are not equal to 0
+            notes_ref+= [note.pitch-20]
+            intervals_ref+= [[max(note.start,section[0]),min(note.end,section[1])]]
+    notes_ref = np.array(notes_ref)
+    intervals_ref = np.array(intervals_ref)
 
 
     if min_dur==None:
-        notes_est , intervals_est = filter_short_notes(notes_est , intervals_est,0.05)
+        notes_est , intervals_est = filter_short_notes(notes_est, intervals_est,0.05)
     elif min_dur == 0:
         pass
     else:
@@ -252,12 +251,16 @@ def compute_eval_metrics_with_onset(input_pr,corresp,target_data,double_roll=Fal
 
     # Get rolls
     fs = 100
-    target = target_data.get_piano_roll(fs=100)
+    target = (target_data.get_piano_roll(fs=100)>0).astype(int)
+    if section is not None:
+        target = target[:,int(section[0]*fs):int(section[1]*fs)]
     output = np.zeros_like(target)
     for pitch, [onset,offset] in zip(notes_est,intervals_est):
         on_idx = int(onset*fs)
         off_idx = int(offset*fs)
-        output[pitch,on_idx:off_idx]=1
+        ### +21-1 because in get_notes_intervals_with_onsets, we add +1 so that pitches are not equal to 0
+        output[pitch+20,on_idx:off_idx]=1
+
 
     if tolerance == None:
         tolerance = 0.05
@@ -279,7 +282,7 @@ def compute_eval_metrics_with_onset(input_pr,corresp,target_data,double_roll=Fal
         P_n,R_n,F_n,_ = mir_eval.transcription.precision_recall_f1_overlap(intervals_ref,
         notes_ref,intervals_est,notes_est,pitch_tolerance=0.25,offset_ratio=offset_ratio,
         onset_tolerance=tolerance,offset_min_tolerance=0.05)
-        
+
     return [P_f,R_f,F_f],[P_n,R_n,F_n]
 
 def out_key_errors_binary_mask(input,target,mask,mask_octave,min_dur=None,tolerance=None, with_offset=False, min_gap=None, mask_thresh=0.05):
