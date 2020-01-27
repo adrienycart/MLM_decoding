@@ -26,17 +26,18 @@ def filter_short_notes(data,thresh=1):
 def filter_short_gaps(data,thresh=1):
     #Removes all gaps shorter than thresh
     #thresh is in number of steps
-    for pitch in data:
-        for i, frame in enumerate(pitch):
-            if 0 < i < len(pitch)-1 and frame == 0 and pitch[i-1] == 1 and pitch[i+1] == 1:
-                pitch[i] = 1
-    return data
+
+    data = 1 - data
+    data_filt = filter_short_notes(data,thresh)
+    data_filt = 1-data_filt
+
+    return data_filt
 
 
-def get_notes_intervals(data,fs):
+def get_notes_intervals(pr,fs):
     #Returns the list of note events from a piano-roll
 
-    data_extended = np.pad(data,((0,0),(1,1)),'constant')
+    data_extended = np.pad(pr,((0,0),(1,1)),'constant')
     diff = data_extended[:,1:] - data_extended[:,:-1]
 
     #Onset: when a new note activates (doesn't count repeated notes)
@@ -63,6 +64,38 @@ def get_notes_intervals(data,fs):
         # print intervals
     return np.array(pitches), np.array(intervals)
 
+
+def get_notes_intervals_with_onsets(pr,corresp,double_roll=False):
+    #Returns the list of note events from a piano-roll
+
+    if double_roll:
+        onsets_matrix = pr[pr.shape[0]/2:,:]
+        note_on_matrix = pr[:pr.shape[0]/2,:]
+    else:
+        onsets_matrix = pr[pr==2].astype(int)
+        note_on_matrix = pr[pr==1].astype(int)
+
+    # Only gather notes that have an onset
+    onsets= np.where(onsets_matrix==1)
+    pitches = []
+    intervals = []
+    for pitch, onset in zip(onsets[0],onsets[1]):
+        if onset == pr.shape[1]:
+            offset=onset+1
+        else:
+            # Offset is when note_on goes off, or when there is an onset, whatever happens first
+            offset_array = np.logical_and(note_on_matrix[pitch,onset+1:],1-onsets_matrix[pitch,onset+1:]).astype(int)
+            if np.all(offset_array):
+                # Only ones in offset_array, offset is the end of the array
+                offset = pr.shape[1]
+            else:
+                dur = np.argmin(offset_array) # Argmin returns index of first zero
+                offset = dur+onset
+        # Add +1 because pitches cannot be equal to zeros for evaluation
+        pitches += [pitch1+1]
+        intervals += [[corresp[onset],corresp[offset]]]
+
+    return np.array(pitches), np.array(intervals)
 
 
 def TP(data,target):
@@ -135,7 +168,6 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_off
     if min_gap is not None:
         data_filt = filter_short_gaps(input,thresh=int(round(fs*min_gap)))
 
-    results = []
 
     if tolerance == None:
         tolerance = 0.05
