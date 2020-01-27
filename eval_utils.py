@@ -2,7 +2,7 @@ import numpy as np
 import mir_eval
 import pretty_midi as pm
 
-def filter_short_notes(data,thresh=1):
+def filter_short_notes_roll(data,thresh=1):
     #Removes all notes shorter than thresh
     #thresh is in number of steps
     data_extended = np.pad(data,((0,0),(1,1)),'constant')
@@ -23,15 +23,45 @@ def filter_short_notes(data,thresh=1):
     return np.cumsum(diff_filtered,axis=1)[:,:-2].astype(int)
 
 
-def filter_short_gaps(data,thresh=1):
+def filter_short_gaps_roll(data,thresh=1):
     #Removes all gaps shorter than thresh
     #thresh is in number of steps
 
     data = 1 - data
-    data_filt = filter_short_notes(data,thresh)
+    data_filt = filter_short_notes_roll(data,thresh)
     data_filt = 1-data_filt
 
     return data_filt
+
+def filter_short_notes(pitches,intervals,thresh=0.05):
+    pitches_filt = []
+    intervals_filt = []
+    for pitch, [onset,offset] in zip(pitches,intervals):
+        if offset-onset >= thresh:
+            pitches_filt += [pitch]
+            intervals_filt += [[onset,offset]]
+    return pitches_filt, intervals_filt
+
+def filter_short_gaps(pitches,intervals,thresh=0.05):
+
+    # TODO: CURRENTLY DOESN'T WORK!!!
+
+    intervals_array = np.array([128],dtype=object)
+    for i in range(128):
+        intervals_array[i] = []
+
+    # First, fill intervals_array
+    for pitch, [onset,offset] in zip(pitches,intervals):
+        intervals_array[pitch] += [[onset,offset]]
+
+
+    for i in range(128);
+        # Sort all intervals per onset time (for each pitch)
+        sorted_intervals = sorted(intervals_array[i],key = lambda x: x[0])
+        # Then, for each pitch, remove short gaps
+        for j in range(len(sorted_intervals)-1):
+            assert sorted_intervals[j][1]<=sorted_intervals[j+1][0]
+
 
 
 def get_notes_intervals(pr,fs):
@@ -158,12 +188,13 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_off
     fs = 25
 
 
+
     if min_dur==None:
-        data_filt = filter_short_notes(input,thresh=int(round(fs*0.05)))
+        data_filt = filter_short_notes_roll(input,thresh=int(round(fs*0.05)))
     elif min_dur == 0:
         data_filt = input
     else:
-        data_filt = filter_short_notes(input,thresh=int(round(fs*min_dur)))
+        data_filt = filter_short_notes_roll(input,thresh=int(round(fs*min_dur)))
 
     if min_gap is not None:
         data_filt = filter_short_gaps(input,thresh=int(round(fs*min_gap)))
@@ -178,7 +209,7 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_off
         offset_ratio = None
 
 
-    notes_est , intervals_est = get_notes_intervals(input, fs)
+
     notes_ref , intervals_ref = get_notes_intervals(target, fs)
 
     if len(notes_est) == 0:
@@ -189,6 +220,67 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_off
         onset_tolerance=tolerance,offset_min_tolerance=0.05)
         return P,R,F
 
+def compute_eval_metrics_with_onset(input_pr,corresp,target_data,double_roll=False,min_dur=None,tolerance=None, with_offset=False, min_gap=None):
+    #Compute evaluation metrics note-by-note
+    #filter out all notes shorter than min_dur (in seconds, default 50ms)
+    #A note is correctly detected if it has the right pitch and the inset is within tolerance parameter (default 50ms)
+    #Uses the mir_eval implementation
+
+    #All inputs should be with 40ms timesteps
+    fs = 25
+
+    # Get note sequences
+    notes_est , intervals_est = get_notes_intervals_with_onsets(input_pr, corresp,double_roll)
+
+    notes_ref,intervals_ref = [],[]
+    for note in sum([instr.notes for instr in target_data.instruments],[]):
+        notes_ref+= [note.pitch]
+        intervals_ref+= [[note.start,note.end]]
+
+
+    if min_dur==None:
+        notes_est , intervals_est = filter_short_notes(notes_est , intervals_est,0.05)
+    elif min_dur == 0:
+        pass
+    else:
+        data_filt = filter_short_notes(notes_est , intervals_est,thresh=min_dur)
+
+    if min_gap is not None:
+        # No min_gap filtering
+        print("No min_gap filtering with onsets!")
+        # data_filt = filter_short_gaps(input,thresh=int(round(fs*min_gap)))
+
+    # Get rolls
+    fs = 100
+    target = target_data.get_piano_roll(fs=100)
+    output = np.zeros_like(target)
+    for pitch, [onset,offset] in zip(notes_est,intervals_est):
+        on_idx = int(onset*fs)
+        off_idx = int(offset*fs)
+        output[pitch,on_idx:off_idx]=1
+
+    if tolerance == None:
+        tolerance = 0.05
+
+    if with_offset:
+        offset_ratio = 0.2
+    else:
+        offset_ratio = None
+
+
+    P_f = precision(output,target)
+    R_f = recall(output,target)
+    F_f = Fmeasure(output,target)
+
+
+    if len(notes_est) == 0:
+        P_n,R_n,F_n = 0,0,0
+    else:
+        P_n,R_n,F_n,_ = mir_eval.transcription.precision_recall_f1_overlap(intervals_ref,
+        notes_ref,intervals_est,notes_est,pitch_tolerance=0.25,offset_ratio=offset_ratio,
+        onset_tolerance=tolerance,offset_min_tolerance=0.05)
+        
+    return [P_f,R_f,F_f],[P_n,R_n,F_n]
 
 def out_key_errors_binary_mask(input,target,mask,mask_octave,min_dur=None,tolerance=None, with_offset=False, min_gap=None, mask_thresh=0.05):
     #Compute evaluation metrics note-by-note
@@ -201,11 +293,11 @@ def out_key_errors_binary_mask(input,target,mask,mask_octave,min_dur=None,tolera
 
 
     if min_dur==None:
-        data_filt = filter_short_notes(input,thresh=int(round(fs*0.05)))
+        data_filt = filter_short_notes_roll(input,thresh=int(round(fs*0.05)))
     elif min_dur == 0:
         data_filt = input
     else:
-        data_filt = filter_short_notes(input,thresh=int(round(fs*min_dur)))
+        data_filt = filter_short_notes_roll(input,thresh=int(round(fs*min_dur)))
 
     if min_gap is not None:
         data_filt = filter_short_gaps(input,thresh=int(round(fs*min_gap)))

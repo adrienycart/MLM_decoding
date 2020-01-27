@@ -1,5 +1,5 @@
 from dataMaps import DataMaps, DataMapsBeats, convert_note_to_time, align_matrix
-from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
+from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note, compute_eval_metrics_with_onset
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
 from decode import decode
@@ -145,16 +145,12 @@ for fn in os.listdir(folder):
                 input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
                 input_data[:data.input.shape[0], :] = data.input[:, :, 0]
                 input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
-                
+
             pr, priors, weights, combined_priors = decode(input_data, model, sess, branch_factor=args.branch,
                             beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
                             out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
                             verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
-            
-            if args.with_onsets:
-                # TODO: Convert from (176, T) to whatever format is needed for eval.
-                pass
-            
+
         else:
             pr = (data.input>0.5).astype(int)
 
@@ -168,16 +164,24 @@ for fn in os.listdir(folder):
                 np.save(os.path.join(args.save,fn.replace('.mid','_combined_priors')), combined_priors)
                 np.savetxt(os.path.join(args.save,fn.replace('.mid','_priors.csv')), priors)
 
-        if args.step in ['quant','event','quant_short','beat']:
-            pr = convert_note_to_time(pr,data.corresp,data.input_fs,max_len=max_len)
 
-        data = DataMaps()
-        data.make_from_file(filename, "time", section=section, with_onsets=args.with_onsets, acoustic_model="kelz")
-        target = data.target
+        if args.with_onsets:
+            target_data = pm.PrettyMIDI(filename)
+            corresp = data.corresp
+            [P_f,R_f,F_f],[P_n,R_n,F_n] = compute_eval_metrics_with_onset(pr,corresp,target_data,double_roll=True,min_dur=0.05,with_offset=args.with_offset)
 
-        #Evaluate
-        P_f,R_f,F_f = compute_eval_metrics_frame(pr,target)
-        P_n,R_n,F_n = compute_eval_metrics_note(pr,target,min_dur=0.05,with_offset=args.with_offset)
+
+        else:
+
+            if args.step in ['quant','event','quant_short','beat']:
+                pr = convert_note_to_time(pr,data.corresp,data.input_fs,max_len=max_len)
+
+            data = DataMaps()
+            data.make_from_file(filename, "time", section=section, with_onsets=args.with_onsets, acoustic_model="kelz")
+            target = data.target
+            #Evaluate
+            P_f,R_f,F_f = compute_eval_metrics_frame(pr,target)
+            P_n,R_n,F_n = compute_eval_metrics_note(pr,target,min_dur=0.05,with_offset=args.with_offset)
 
         frames = np.vstack((frames, [P_f, R_f, F_f]))
         notes = np.vstack((notes, [P_n, R_n, F_n]))
