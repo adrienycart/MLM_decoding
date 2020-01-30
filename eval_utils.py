@@ -104,7 +104,7 @@ def get_notes_intervals_with_onsets(pr,corresp,double_roll=False,autocorrect=Tru
         # Whenever there is a note_on without an onset either at the
         # same timestep (if double_roll is True) or just before (if double_roll
         # is false), we add an extra onset
-        data_extended = np.pad(pr,((0,0),(1,1)),'constant')
+        data_extended = np.pad(note_on_matrix,((0,0),(1,1)),'constant')
         diff = data_extended[:,1:] - data_extended[:,:-1]
 
         #Onset: when a new note activates (doesn't count repeated notes)
