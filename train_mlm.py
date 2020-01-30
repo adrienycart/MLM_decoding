@@ -14,7 +14,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('save_path',type=str,help="folder to save the checkpoints (inside ckpt folder)")
 parser.add_argument('data_path',type=str,help="folder containing the split dataset")
-parser.add_argument('--step',type=str,choices=['time','quant','event','quant_short','beat'],help="timestep to use",required=True)
+parser.add_argument('--step',type=str,choices=['time','20ms','quant','event','quant_short','beat'],help="timestep to use",required=True)
 parser.add_argument('--beat_gt',action='store_true',help="with beat timesteps, use ground-truth beat positions")
 parser.add_argument('--beat_subdiv',type=str,help="with beat timesteps, beat subdivisions to use (comma separated list, without brackets)",default='0,1/4,1/3,1/2,2/3,3/4')
 parser.add_argument('--n_hidden',type=int,default=256,help="number of hidden nodes (default=256)")
@@ -50,6 +50,9 @@ elif    timestep_type == 'event':
 
 elif    timestep_type == 'time':
     max_len = 750
+
+elif    timestep_type == '20ms':
+    max_len = 1000
 
 elif    timestep_type == 'beat':
     max_len = 300

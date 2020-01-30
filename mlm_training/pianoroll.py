@@ -65,6 +65,9 @@ class Pianoroll:
         elif timestep_type=="time":
             fs=25
             times = np.arange(0,end_time,1.0/fs)
+        elif timestep_type=="20ms":
+            fs=50
+            times = np.arange(0,end_time,1.0/fs)
 
         self.roll = get_roll_from_times(data,times,section,with_onsets)
 
