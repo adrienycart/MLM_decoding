@@ -11,8 +11,10 @@ import sys
 parser = argparse.ArgumentParser()
 parser.add_argument('input_folder',type=str)
 parser.add_argument('target_folder',type=str)
-parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event"], help="Change the step type for frame timing. Either time (default), " +
+parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event","beat"], help="Change the step type for frame timing. Either time (default), " +
                     "quant (for 16th notes), or event (for onsets).", default="time")
+parser.add_argument('--beat_gt',action='store_true',help="with beat timesteps, use ground-truth beat positions")
+parser.add_argument('--beat_subdiv',type=str,help="with beat timesteps, beat subdivisions to use (comma separated list, without brackets)",default='0,1/4,1/3,1/2,2/3,3/4')
 parser.add_argument('--with_offset', help="use offset for framewise metrics", action='store_true')
 parser.add_argument('--with_quant',help="post-quantise the outputs",action='store_true')
 parser.add_argument('--gap', help="Fill gaps <50ms.", action="store_true")

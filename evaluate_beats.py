@@ -11,127 +11,8 @@ import os
 import warnings
 import numpy as np
 import mir_eval
-from scipy import stats
-
-
-def play_sound(sig, fs=44100):
-    # ctrl-C stops the signal and continues the script
-    try:
-        sd.play(sig, fs)
-        status = sd.wait()
-    except KeyboardInterrupt:
-        sd.stop()
-        return
-
-def mix_sounds(sig1,sig2,sig_mix_ratio=0.5):
-    len1 = sig1.shape[0]
-    len2 = sig2.shape[0]
-    if len1 > len2:
-        audio = (1-sig_mix_ratio)*sig1 + sig_mix_ratio*np.pad(sig2,(0,len1-len2),'constant')
-    else:
-        audio = (1-sig_mix_ratio)*np.pad(sig1,(0,len2-len1),'constant') + sig_mix_ratio*sig2
-    return audio
-
-def sonify_beats(beats,downbeats=None,subbeats=None):
-    midi = pm.PrettyMIDI()
-
-    #Add beats
-    if not beats is None:
-        bell = pm.Instrument(is_drum=True,program=0)
-        for beat in beats:
-            note_pm = pm.Note(
-                velocity=80, pitch=pm.drum_name_to_note_number('Cowbell'), start=beat, end=beat+0.001)
-            bell.notes.append(note_pm)
-        midi.instruments.append(bell)
-
-    #Add downbeats
-    if not downbeats is None:
-        triangle = pm.Instrument(is_drum=True,program=0)
-        for downbeat in downbeats:
-            note_pm = pm.Note(
-                velocity=100, pitch=pm.drum_name_to_note_number('Open Triangle'), start=downbeat, end=downbeat+0.001)
-            triangle.notes.append(note_pm)
-        midi.instruments.append(triangle)
-
-    #Add subbeats
-    if not subbeats is None:
-        sidestick = pm.Instrument(is_drum=True,program=0)
-        for subbeat in subbeats:
-            note_pm = pm.Note(
-                velocity=60, pitch=pm.drum_name_to_note_number('Side Stick'), start=subbeat, end=subbeat+0.001)
-            sidestick.notes.append(note_pm)
-        midi.instruments.append(sidestick)
-
-    audio = midi.fluidsynth()
-
-    return audio
-
-def get_subbeat_divisions(beats,beat_activ):
-    """
-    Compute the number per beat and locations of sub-beat subdivisions.
-
-    Uses :class:`DBNDownBeatTrackingProcessor` from `madmom` library, as in :func:`get_beats_downbeats_signature`.
-
-
-    Parameters
-    ----------
-    beats : 1D numpy array
-        positions in seconds of the beats
-    beat_activ : 1D numpy array
-        beat activations
-
-    Returns
-    -------
-    int
-        Number of subdivisions in each beats (2 or 3)
-    1D numpy array
-        Positions in seconds of the sub-beat subdivisions (only used for visualisation/debugging)
-    """
-
-    n_beats = len(beats)
-    n_iter=0
-    min_bpm = 110.0
-    bpm_incr = 55.0
-    for i in range(10):
-        proc_beat_track = madmom.features.DBNBeatTrackingProcessor(fps=100,min_bpm=min_bpm,max_bpm=600)
-        new_beats = proc_beat_track(beat_activ)
-        n_new_beats = len(new_beats)
-        if n_new_beats!=n_beats:
-            #Different beats found, they correspond to sub-beat level
-            if abs(round(n_new_beats/2.0) - n_beats) <= 1:
-                #If n_new_beats/2.0 is approx equal to n_beats
-                return 2, new_beats
-            elif abs(round(n_new_beats/3.0) - n_beats) <= 1:
-                #If n_new_beats/3.0 is approx equal to n_beats
-                return 3, new_beats
-            #Default case; it means that the beat found is not an integer subdivision of the original beats
-            #Iterate until we find it
-
-
-        #If function has not returned, iterate with a higher min_bpm
-        min_bpm += bpm_incr
-    # Consider that default is binary
-    return 2, new_beats
-
-
-def get_confidence(activ):
-    fs = 100
-    window_dur = 10
-    overlap = 0.5
-
-    window_len = int(round(window_dur*fs))
-    hop = int(round(window_len*(1-overlap)))
-    confidence = []
-    i = 0
-    while i+window_len < len(activ):
-        chunk = activ[i:i+window_len]
-
-        spectral_flatness = stats.gmean(chunk) / np.mean(chunk)
-        confidence += [spectral_flatness]
-
-        i+=hop
-
-    return confidence
+import eval_utils
+import beats_utils
 
 
 parser = argparse.ArgumentParser()
@@ -224,12 +105,25 @@ for fn in os.listdir(input_folder):
                 proc_beat = madmom.features.RNNBeatProcessor()
                 act_beat = proc_beat(sig)
 
-                confidence = get_confidence(act_beat)
-                print(confidence)
-                print(np.mean(confidence))
-                import matplotlib.pyplot as plt
-                plt.plot(act_beat)
-                plt.show(block=False)
+                proc_onsets = madmom.features.SpectralOnsetProcessor(method='superflux')
+                act_onsets = proc_onsets(sig)
+
+                confidence1,spec_norm1 = beats_utils.get_confidence_entropy(act_onsets)
+                confidence2,spec_norm2 = beats_utils.get_confidence_entropy(act_beat)
+                confidence3 = beats_utils.get_confidence_spectral_flatness(act_beat)
+                confidence4 = beats_utils.get_confidence_spectral_flatness(act_onsets)
+                print(np.mean(confidence1),np.mean(confidence2))
+                print(np.mean(confidence3),np.mean(confidence4))
+                # import matplotlib.pyplot as plt
+                # plt.subplot(221)
+                # plt.plot(act_beat)
+                # plt.subplot(222)
+                # plt.plot(act_onsets)
+                # plt.subplot(223)
+                # plt.imshow(spec_norm1,aspect='auto',origin='lower')
+                # plt.subplot(224)
+                # plt.imshow(spec_norm1,aspect='auto',origin='lower')
+                # plt.show()
 
                 proc_beattrack = madmom.features.BeatTrackingProcessor(fps=100)
                 beats = proc_beattrack(act_beat)
@@ -244,7 +138,7 @@ for fn in os.listdir(input_folder):
                 if args.load:
                     subbeats = np.loadtxt(filename_input.replace(extension,'_sb_est.csv'))
                 else:
-                    n_subdivisions, subbeats = get_subbeat_divisions(beats,act_beat)
+                    n_subdivisions, subbeats = beats_utils.get_subbeat_divisions(beats,act_beat)
                 sub_F = mir_eval.beat.f_measure(subbeats_GT,subbeats)
                 all_Fs_sub += [sub_F]
                 print(f"Sub-beat F-measure: {sub_F}")
@@ -259,6 +153,8 @@ for fn in os.listdir(input_folder):
                 else:
                     save_path = args.save
 
+                np.savetxt(os.path.join(save_path,fn.replace(extension,'_b_act.csv')),act_beat)
+
                 np.savetxt(os.path.join(save_path,fn.replace(extension,'_b_gt.csv')),beats_GT)
                 np.savetxt(os.path.join(save_path,fn.replace(extension,'_b_est.csv')),beats)
 
@@ -268,19 +164,19 @@ for fn in os.listdir(input_folder):
 
             if (args.play_GT or args.play_both) and SOUND:
                 sig_mix_ratio = 0.7
-                sig_beats = sonify_beats(beats_GT,None,subbeats_GT)
+                sig_beats = beats_utils.sonify_beats(beats_GT,None,subbeats_GT)
                 if max_len is not None:
                     sig_beats = sig_beats[:int(max_len*44100)]
-                audio = mix_sounds(sig_beats,sig,sig_mix_ratio)
-                play_sound(audio)
+                audio = eval_utils.mix_sounds(sig_beats,sig,sig_mix_ratio)
+                eval_utils.play_audio(audio)
 
             if (args.play_estim  or args.play_both)  and SOUND:
                 sig_mix_ratio = 0.7
-                sig_beats = sonify_beats(beats,None,subbeats)
+                sig_beats = beats_utils.sonify_beats(beats,None,subbeats)
                 if max_len is not None:
                     sig_beats = sig_beats[:int(max_len*44100)]
-                audio = mix_sounds(sig_beats,sig,sig_mix_ratio)
-                play_sound(audio)
+                audio = eval_utils.mix_sounds(sig_beats,sig,sig_mix_ratio)
+                eval_utils.play_audio(audio)
 
 print(f"Average beat F-measure: {sum(all_Fs)/len(all_Fs)}")
 if args.subbeats:
