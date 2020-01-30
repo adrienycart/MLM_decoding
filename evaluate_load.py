@@ -34,7 +34,7 @@ if args.save is not None:
     safe_mkdir(args.save)
 
 for fn in os.listdir(input_folder):
-    if fn.endswith('_pr.csv') and not fn.startswith('.'):# and not 'chpn-e01' in fn:
+    if fn.endswith('_pr.csv') and not fn.startswith('.') and not 'chpn-e01' in fn:
         filename_input = os.path.join(input_folder,fn)
         filename_target = os.path.join(target_folder,fn).replace('_pr.csv','.mid')
         print(filename_input)
