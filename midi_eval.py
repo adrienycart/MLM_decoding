@@ -72,8 +72,8 @@ for midi_name in os.listdir(input_folder):
             onset_tolerance=0.05,offset_min_tolerance=0.05)
 
         all_frame += [[P_f,R_f,F_f]]
-        all_on = [[P_n_on,R_n_on,F_n_on]]
-        all_onoff = [[P_n_onoff,R_n_onoff,F_n_onoff]]
+        all_on += [[P_n_on,R_n_on,F_n_on]]
+        all_onoff += [[P_n_onoff,R_n_onoff,F_n_onoff]]
         print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n_on:.3f},{R_n_on:.3f},{F_n_on:.3f}, with offsets P,R,F: {P_n_onoff:.3f},{R_n_onoff:.3f},{F_n_onoff:.3f} ")
 
 
