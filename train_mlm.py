@@ -1,5 +1,4 @@
 from mlm_training.dataset import Dataset, DatasetBeats, ground_truth
-from datasetMaps import DatasetMaps
 from mlm_training.utils import safe_mkdir
 from mlm_training.model import Model, make_model_from_dataset, make_save_path, make_model_param, make_train_param
 
