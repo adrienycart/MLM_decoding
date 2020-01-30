@@ -100,6 +100,24 @@ def get_notes_intervals_with_onsets(pr,corresp,double_roll=False,autocorrect=Tru
         onsets_matrix = (pr==2).astype(int)
         note_on_matrix = (pr==1).astype(int)
 
+    if autocorrect:
+        # Whenever there is a note_on without an onset either at the
+        # same timestep (if double_roll is True) or just before (if double_roll
+        # is false), we add an extra onset
+        data_extended = np.pad(pr,((0,0),(1,1)),'constant')
+        diff = data_extended[:,1:] - data_extended[:,:-1]
+
+        #Onset: when a new note activates (doesn't count repeated notes)
+        onsets= np.where(diff==1)
+        for pitch, onset in zip(onsets[0],onsets[1]):
+            if double_roll:
+                if onsets_matrix[pitch,onset]==0:
+                    onsets_matrix[pitch,onset] = 1
+            else:
+                if onsets_matrix[pitch,onset-1]==0:
+                    onsets_matrix[pitch,onset-1] = 1
+
+
     # Only gather notes that have an onset
     onsets= np.where(onsets_matrix==1)
 
