@@ -152,7 +152,15 @@ for fn in os.listdir(folder):
                             verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
 
         else:
-            pr = (data.input>0.5).astype(int)
+            if args.with_onsets:
+                input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
+                input_data[:data.input.shape[0], :] = data.input[:, :, 0]
+                input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
+            else:
+                input_data = data.input
+
+            pr = (input_data>0.5).astype(int)
+            
 
         # Save output
         if not args.save is None:
@@ -168,7 +176,7 @@ for fn in os.listdir(folder):
         if args.with_onsets:
             target_data = pm.PrettyMIDI(filename)
             corresp = data.corresp
-            [P_f,R_f,F_f],[P_n,R_n,F_n] = compute_eval_metrics_with_onset(pr,corresp,target_data,double_roll=True,min_dur=0.05,with_offset=args.with_offset)
+            [P_f,R_f,F_f],[P_n,R_n,F_n] = compute_eval_metrics_with_onset(pr,corresp,target_data,double_roll=True,min_dur=0.05,with_offset=args.with_offset,section=section)
 
 
         else:

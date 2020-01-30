@@ -90,12 +90,12 @@ def get_notes_intervals(pr,fs):
     return np.array(pitches), np.array(intervals)
 
 
-def get_notes_intervals_with_onsets(pr,corresp,double_roll=False):
+def get_notes_intervals_with_onsets(pr,corresp,double_roll=False,autocorrect=True):
     #Returns the list of note events from a piano-roll
 
     if double_roll:
-        onsets_matrix = pr[pr.shape[0]/2:,:]
-        note_on_matrix = pr[:pr.shape[0]/2,:]
+        onsets_matrix = pr[int(pr.shape[0]/2):,:]
+        note_on_matrix = pr[:int(pr.shape[0]/2),:]
     else:
         onsets_matrix = (pr==2).astype(int)
         note_on_matrix = (pr==1).astype(int)
@@ -106,7 +106,7 @@ def get_notes_intervals_with_onsets(pr,corresp,double_roll=False):
     pitches = []
     intervals = []
     for pitch, onset in zip(onsets[0],onsets[1]):
-        if onset == pr.shape[1]:
+        if onset == pr.shape[1]-1:
             offset=onset+1
         else:
             # Offset is when note_on goes off, or when there is an onset, whatever happens first
@@ -116,7 +116,8 @@ def get_notes_intervals_with_onsets(pr,corresp,double_roll=False):
                 offset = pr.shape[1]
             else:
                 dur = np.argmin(offset_array) # Argmin returns index of first zero
-                offset = dur+onset
+                # +1 because offset_array starts at onset+1
+                offset = dur+onset+1
         # Add +1 because pitches cannot be equal to zeros for evaluation
         pitches += [pitch+1]
         intervals += [[corresp[onset],corresp[offset]]]
@@ -226,13 +227,14 @@ def compute_eval_metrics_with_onset(input_pr,corresp,target_data,section=None,do
     # Get note sequences
     notes_est , intervals_est = get_notes_intervals_with_onsets(input_pr, corresp,double_roll)
 
-    print np.max(intervals_est)
     notes_ref,intervals_ref = [],[]
+
     for note in sum([instr.notes for instr in target_data.instruments],[]):
-        if section is not None and note.start < section[1] and note.end>section[0]:
+        if section is None or (note.start < section[1] and note.end>section[0]):
             ### +21-1 because in get_notes_intervals_with_onsets, we add +1 so that pitches are not equal to 0
             notes_ref+= [note.pitch-20]
             intervals_ref+= [[max(note.start,section[0]),min(note.end,section[1])]]
+
     notes_ref = np.array(notes_ref)
     intervals_ref = np.array(intervals_ref)
 
