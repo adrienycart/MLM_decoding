@@ -189,6 +189,9 @@ class DataMaps:
         elif timestep_type == "time":
             fs=25
             corresp = np.arange(0,end_time,1.0/fs)
+        elif timestep_type == "20ms":
+            fs=50
+            corresp = np.arange(0,end_time,1.0/fs)
         else:
             raise  ValueError('Timestep type not understood: '+str(timestep_type))
 

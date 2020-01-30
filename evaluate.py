@@ -23,7 +23,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('model',type=str,help="location of the checkpoint to load (inside ckpt folder)")
 parser.add_argument('data_path',type=str,help="folder containing the split dataset")
-parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event","beat"], help="Change the step type for frame timing. Either time (default), " +
+parser.add_argument("--step", type=str, choices=["time","20ms", "quant","quant_short", "event","beat"], help="Change the step type for frame timing. Either time (default), " +
                     "quant (for 16th notes), or event (for onsets).", default="time")
 parser.add_argument('--beat_gt',action='store_true',help="with beat timesteps, use ground-truth beat positions")
 parser.add_argument('--beat_subdiv',type=str,help="with beat timesteps, beat subdivisions to use (comma separated list, without brackets)",default='0,1/4,1/3,1/2,2/3,3/4')
@@ -160,7 +160,7 @@ for fn in os.listdir(folder):
                 input_data = data.input
 
             pr = (input_data>0.5).astype(int)
-            
+
 
         # Save output
         if not args.save is None:
@@ -185,7 +185,10 @@ for fn in os.listdir(folder):
                 pr = convert_note_to_time(pr,data.corresp,data.input_fs,max_len=max_len)
 
             data = DataMaps()
-            data.make_from_file(filename, "time", section=section, with_onsets=args.with_onsets, acoustic_model="kelz")
+            if args.step == "20ms" or args.with_onsets:
+                data.make_from_file(filename, "20ms", section=section, with_onsets=args.with_onsets, acoustic_model="kelz")
+            else:
+                data.make_from_file(filename, "time", section=section, with_onsets=args.with_onsets, acoustic_model="kelz")
             target = data.target
             #Evaluate
             P_f,R_f,F_f = compute_eval_metrics_frame(pr,target)
