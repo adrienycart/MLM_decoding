@@ -90,7 +90,7 @@ def get_notes_intervals(pr,fs):
     return np.array(pitches), np.array(intervals)
 
 
-def get_notes_intervals_with_onsets(pr,corresp,double_roll=False,autocorrect=True):
+def get_notes_intervals_with_onsets(pr,corresp,double_roll=False,add_missing_onsets=False):
     #Returns the list of note events from a piano-roll
 
     if double_roll:
@@ -100,7 +100,7 @@ def get_notes_intervals_with_onsets(pr,corresp,double_roll=False,autocorrect=Tru
         onsets_matrix = (pr==2).astype(int)
         note_on_matrix = (pr==1).astype(int)
 
-    if autocorrect:
+    if add_missing_onsets:
         # Whenever there is a note_on without an onset either at the
         # same timestep (if double_roll is True) or just before (if double_roll
         # is false), we add an extra onset
