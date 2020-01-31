@@ -153,13 +153,21 @@ for fn in os.listdir(folder):
 
         else:
             if args.with_onsets:
-                input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
-                input_data[:data.input.shape[0], :] = data.input[:, :, 0]
-                input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
+
+                bin_input = (data.input>0.5).astype(int)
+                onsets = pr[:, :, 1]
+                presence = pr[:, :, 0]
+                # Add presence when there is an onset (in case it is not the case already)
+                precence[onsets] = 1
+                pr = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
+                pr[:data.input.shape[0], :] = onsets
+                pr[data.input.shape[0]:, :] = precence
+
             else:
                 input_data = data.input
+                pr = (input_data>0.5).astype(int)
 
-            pr = (input_data>0.5).astype(int)
+
 
 
         # Save output
@@ -174,6 +182,22 @@ for fn in os.listdir(folder):
 
 
         if args.with_onsets:
+
+            # import matplotlib.pyplot as plt
+            # plt.subplot(311)
+            # plt.imshow(pr,aspect='auto',origin='lower')
+            #
+            # plt.subplot(312)
+            # pr_2 = pr[:88,:]
+            # pr_2[pr[88:,:]==1] = 2
+            # plt.imshow(pr_2,aspect='auto',origin='lower')
+            #
+            #
+            # plt.subplot(313)
+            # plt.imshow(data.target,aspect='auto',origin='lower')
+            # plt.show()
+
+
             target_data = pm.PrettyMIDI(filename)
             corresp = data.corresp
             [P_f,R_f,F_f],[P_n,R_n,F_n] = compute_eval_metrics_with_onset(pr,corresp,target_data,double_roll=True,min_dur=0.05,with_offset=args.with_offset,section=section)
