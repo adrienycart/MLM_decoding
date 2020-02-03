@@ -120,7 +120,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
         # Here, we are calculating dynamic weights or priors if we are using gt or a weight_model
         if weight_model:
             weights_all, priors_all = run_weight_model(gt, weight_model, weight_model_dict, beam,
-                                                       acoustic, frame_num)
+                                                       acoustic, frame_num, model.with_onsets)
 
         new_beam = Beam()
 
@@ -162,7 +162,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
 
 
 
-def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_num):
+def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_num, with_onsets):
     """
     Run the weight_model and return its results.
 
@@ -186,6 +186,9 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
 
     frame_num : int
         The frame number we are currently on.
+        
+    with_onsets : boolean
+        Whether the piano-roll will be in presence-onset format (True) or not (False).
 
     Returns
     =======
@@ -213,7 +216,7 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
     X = np.vstack([create_weight_x_sk(state, acoustic, frame_num, history, features=features,
                                       history_context=history_context,
                                       prior_context=prior_context,
-                                      no_mlm=no_mlm) for state in beam])
+                                      no_mlm=no_mlm, with_onsets=with_onsets) for state in beam])
     # Remove LSTM sample
     if not use_lstm:
         X = X[:, :-1]
@@ -324,7 +327,7 @@ def get_best_weights(language, acoustic, gt, width=0.25):
 
 
 def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), features=False,
-                    history_context=0, prior_context=0, no_mlm=False):
+                    history_context=0, prior_context=0, no_mlm=False, with_onsets=False):
     """
     Get the x input for the sk-learn dynamic weighting model.
 
@@ -357,6 +360,9 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
 
     no_mlm : boolean
         Whether to suppress MLM-based inputs. Defaults to False.
+        
+    with_onsets : boolean
+        Whether the piano-roll will be in presence-onset format (True) or not (False).
 
     Returns
     =======
@@ -365,6 +371,8 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
     """
     frame = acoustic[frame_num, :]
     pr = state.get_piano_roll(min_length=history, max_length=history)
+    
+    #TODO: Re-interpret pr if with_onsets
 
     if features:
         x = np.hstack((pr,

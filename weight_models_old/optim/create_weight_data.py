@@ -117,10 +117,10 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
             if len(pitches) > 0:
                 if len(x) > 0:
                     x = np.vstack((x, decode.create_weight_x_sk(state, acoustic, frame_num, history, pitches=pitches,
-                                                                features=features, no_mlm=no_mlm)))
+                                                                features=features, no_mlm=no_mlm, with_onsets=model.with_onsets)))
                 else:
                     x = decode.create_weight_x_sk(state, acoustic, frame_num, history, pitches=pitches, features=features,
-                                                  no_mlm=no_mlm)
+                                                  no_mlm=no_mlm, with_onsets=model.with_onsets)
                 y = np.append(y, gt_frame[pitches])
                 diffs = np.append(diffs, np.abs(np.squeeze(frame)[pitches] - np.squeeze(state.prior)[pitches]))
 
@@ -211,6 +211,9 @@ if __name__ == '__main__':
     parser.add_argument("-v", "--verbose", help="Print frame updates", action="store_true")
 
     parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="store_true")
+    
+    parser.add_argument("--with_onsets", help="The input will be a double pianoroll containing "
+                        "presence and onset halves.", action="store_true")
 
     args = parser.parse_args()
 
@@ -234,6 +237,7 @@ if __name__ == '__main__':
     model_param['n_steps'] = 1 # To generate 1 step at a time
     if args.diagRNN:
         model_param['cell_type'] = "diagLSTM"
+    model_param['with_onsets'] = args.with_onsets
 
     # Build model object
     model = Model(model_param)
@@ -243,13 +247,18 @@ if __name__ == '__main__':
     if args.MIDI.endswith(".mid"):
         if args.step == "beat":
             data = dataMaps.DataMapsBeats()
-            data.make_from_file(args.MIDI,args.beat_gt,args.beat_subdiv,section, acoustic_model=args.acoustic)
+            data.make_from_file(args.MIDI,args.beat_gt,args.beat_subdiv,section, with_onsets=args.with_onsets, acoustic_model=args.acoustic)
         else:
             data = dataMaps.DataMaps()
-            data.make_from_file(args.MIDI, args.step, section=section, acoustic_model=args.acoustic)
+            data.make_from_file(args.MIDI, args.step, section=section, with_onsets=args.with_onsets, acoustic_model=args.acoustic)
 
+        input_data = data.input
+        if args.with_onsets:
+            input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
+            input_data[:data.input.shape[0], :] = data.input[:, :, 0]
+            input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
         # Decode
-        X, Y, D = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
+        X, Y, D = get_weight_data(data.target, input_data, model, sess, branch_factor=args.branch, beam_size=args.beam,
                                weight=[args.weight, 1 - args.weight], hash_length=args.hash,
                                gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
                                verbose=args.verbose, no_mlm=args.no_mlm)
@@ -268,8 +277,13 @@ if __name__ == '__main__':
                 data = dataMaps.DataMaps()
                 data.make_from_file(file, args.step, section=section, acoustic_model=args.acoustic)
 
+            input_data = data.input
+            if args.with_onsets:
+                input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
+                input_data[:data.input.shape[0], :] = data.input[:, :, 0]
+                input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
             # Decode
-            x, y, d = get_weight_data(data.target, data.input, model, sess, branch_factor=args.branch, beam_size=args.beam,
+            x, y, d = get_weight_data(data.target, input_data, model, sess, branch_factor=args.branch, beam_size=args.beam,
                                    weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
                                    gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
                                    verbose=args.verbose, no_mlm=args.no_mlm)
