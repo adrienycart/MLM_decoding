@@ -105,15 +105,15 @@ for fn in os.listdir(input_folder):
                 proc_beat = madmom.features.RNNBeatProcessor()
                 act_beat = proc_beat(sig)
 
-                proc_onsets = madmom.features.SpectralOnsetProcessor(method='superflux')
-                act_onsets = proc_onsets(sig)
+                # proc_onsets = madmom.features.SpectralOnsetProcessor(method='superflux')
+                # act_onsets = proc_onsets(sig)
 
-                confidence1,spec_norm1 = beats_utils.get_confidence_entropy(act_onsets)
-                confidence2,spec_norm2 = beats_utils.get_confidence_entropy(act_beat)
-                confidence3 = beats_utils.get_confidence_spectral_flatness(act_beat)
-                confidence4 = beats_utils.get_confidence_spectral_flatness(act_onsets)
-                print(np.mean(confidence1),np.mean(confidence2))
-                print(np.mean(confidence3),np.mean(confidence4))
+                # confidence1,spec_norm1 = beats_utils.get_confidence_entropy(act_onsets)
+                # confidence2,spec_norm2 = beats_utils.get_confidence_entropy(act_beat)
+                # confidence3 = beats_utils.get_confidence_spectral_flatness(act_beat)
+                # confidence4 = beats_utils.get_confidence_spectral_flatness(act_onsets)
+                # print(np.mean(confidence1),np.mean(confidence2))
+                # print(np.mean(confidence3),np.mean(confidence4))
                 # import matplotlib.pyplot as plt
                 # plt.subplot(221)
                 # plt.plot(act_beat)
