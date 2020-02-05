@@ -379,52 +379,26 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
         state_priors_presence, state_priors_onsets = np.split(state.get_priors(), 2)
         frame_presence, frame_onsets = np.split(frame, 2)
         this_prior_presence, this_prior_onsets = np.split(state.prior, 2)
+        
+        # Create and pad presence half
         x_presence = get_weight_data_sk_unpadded(pr_presence, acoustic_presence, frame_num,
                                                  state_priors_presence, frame_presence, this_prior_presence,
                                                  features, no_mlm)
+        x_presence = pad_x(x_presence, frame, this_prior_presence, pr_presence, history, history_context, prior_context)
+        
+        # Create and pad onset half
         x_onsets = get_weight_data_sk_unpadded(pr_presence, acoustic_presence, frame_num,
                                                  state_priors_presence, frame_presence, this_prior_presence,
                                                  features, no_mlm)
-    else:
-        x = get_weight_data_sk_unpadded(pr, acoustic, frame_num, state.get_priors(), frame, state.prior, features, no_mlm)
-        pr_presence = pr
-        pr_onsets = None
-        prior_presence = state.prior
-        prior_onsets = None
-
-    # First, make x for presence
-    if features:
-        x_presence = np.hstack((pr_presence,
-                                get_features(acoustic, frame_num, state.get_priors(), no_mlm=no_mlm),
-                                np.reshape(frame, (88, -1)),
-                                np.zeros((88, 1)) if no_mlm else np.reshape(prior_presence, (88, -1))))
-
-    else:
-        x_presence = np.hstack((pr_presence,
-                                np.reshape(frame, (88, -1)),
-                                np.zeros((88, 1)) if no_mlm else np.reshape(prior_presence, (88, -1))))
-
-    # Add prior and history contexts
-    x = pad_x(x_presence, frame, prior_presence, pr_presence, history, history_context, prior_context)
-    
-    # Now, make x for onset, if we need to
-    if with_onsets:
-        if features:
-            x_onsets = np.hstack((pr_onsets,
-                                  get_features(acoustic, frame_num, state.get_priors(), no_mlm=no_mlm),
-                                  np.reshape(frame, (88, -1)),
-                                  np.zeros((88, 1)) if no_mlm else np.reshape(prior_presence, (88, -1))))
-
-        else:
-            x_onsets = np.hstack((pr_onsets,
-                                  np.reshape(frame, (88, -1)),
-                                  np.zeros((88, 1)) if no_mlm else np.reshape(prior_onsets, (88, -1))))
-
-        # Add prior and history contexts
-        x_onsets = pad_x(x_onsets, frame, prior_onsets, pr_onsets, history, history_context, prior_context)
+        x_onsets = pad_x(x_onsets, frame, this_prior_onsets, pr_onsets, history, history_context, prior_context)
         
-        # Concatenate to presence
-        x = np.hstack((x, x_onsets))
+        # Combine halves
+        x = np.hstack((x_presence, x_onsets))
+        
+    else:
+        # Create and pad data
+        x = get_weight_data_sk_unpadded(pr, acoustic, frame_num, state.get_priors(), frame, state.prior, features, no_mlm)
+        x = pad_x(x_presence, frame, prior_presence, pr_presence, history, history_context, prior_context)
 
     return x[pitches]
 
@@ -443,14 +417,18 @@ def get_weight_data_sk_unpadded(pr, acoustic, frame_num, state_priors, frame, th
 
     acoustic : np.ndarray
         The acoustic prior for the entire piece, as time X pitch.
+
+    frame_num : int
+        The current frame number.
         
     state_priors : np.ndarray
         The full history of a single state's priors, with dimensions (88, T).
         
-    frame : 
-
-    frame_num : int
-        The current frame number.
+    frame : np.array
+        An array of the acoustic inputs for the current frame.
+        
+    this_prior : np.array
+        An array of the language model prior for the current frame.
 
     features : boolean
         True to calculate features. False otherwise.
