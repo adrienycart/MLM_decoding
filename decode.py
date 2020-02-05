@@ -370,11 +370,11 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
         The x data points for the given input for the dynamic weighting model.
     """
     frame = acoustic[frame_num, :]
-    pr = state.get_piano_roll(min_length=history, max_length=history)
     
     # Re-interpret pr if with_onsets
     if with_onsets:
-        acoustic_presence, acoustic_onsets = np.split(acoustic, 2)
+        acoustic_presence, acoustic_onsets = np.split(acoustic, 2, axis=1)
+        pr = state.get_piano_roll(min_length=history, max_length=history, formatter=trinary_pr_to_presence_onset)
         pr_presence, pr_onsets = np.split(pr, 2)
         state_priors_presence, state_priors_onsets = np.split(state.get_priors(), 2)
         frame_presence, frame_onsets = np.split(frame, 2)
@@ -387,8 +387,8 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
         x_presence = pad_x(x_presence, frame, this_prior_presence, pr_presence, history, history_context, prior_context)
         
         # Create and pad onset half
-        x_onsets = get_weight_data_sk_unpadded(pr_presence, acoustic_presence, frame_num,
-                                                 state_priors_presence, frame_presence, this_prior_presence,
+        x_onsets = get_weight_data_sk_unpadded(pr_onsets, acoustic_onsets, frame_num,
+                                                 state_priors_onsets, frame_onsets, this_prior_onsets,
                                                  features, no_mlm)
         x_onsets = pad_x(x_onsets, frame, this_prior_onsets, pr_onsets, history, history_context, prior_context)
         
@@ -397,6 +397,7 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
         
     else:
         # Create and pad data
+        pr = state.get_piano_roll(min_length=history, max_length=history)
         x = get_weight_data_sk_unpadded(pr, acoustic, frame_num, state.get_priors(), frame, state.prior, features, no_mlm)
         x = pad_x(x_presence, frame, prior_presence, pr_presence, history, history_context, prior_context)
 

@@ -32,7 +32,7 @@ data_dict = {'gt'    : None,
              'valid' : None}
 
 def load_data_info(gt=None, beam=None, valid=None, model_path=None, n_hidden=256, step=None, beat_gt=None, beat_subdiv=None, model_out=".",
-                   acoustic='kelz', early_exit=0.001, diagRNN=False):
+                   acoustic='kelz', early_exit=0.001, diagRNN=False, with_onsets=False):
     global global_params
     global data_dict
     global model_dict
@@ -50,6 +50,7 @@ def load_data_info(gt=None, beam=None, valid=None, model_path=None, n_hidden=256
     model_param = make_model_param()
     model_param['n_hidden'] = n_hidden
     model_param['n_steps'] = 1 # To generate 1 step at a time
+    model_param['with_onsets'] = with_onsets
     if diagRNN:
         model_param['cell_type'] = "diagLSTM"
 

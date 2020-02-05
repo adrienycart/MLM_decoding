@@ -103,7 +103,7 @@ class Beam:
             
         prior = np.ones(P) / 2 if not iterative_pw else np.array([0.5])
 
-        new_state = state.State(P)
+        new_state = state.State(P, model.with_onsets)
         new_state.update_from_lstm(initial_state, prior)
         
         self.beam.append(new_state)

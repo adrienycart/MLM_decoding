@@ -11,7 +11,9 @@ import itertools
 import glob
 import gzip
 
+import sampling
 from beam import Beam
+from state import trinary_pr_to_presence_onset
 from mlm_training.model import Model, make_model_param
 
 
@@ -78,25 +80,30 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
     x : np.ndarray
         The x data from this decoding process. A (data x 7) size matrix.
 
-    y : np.array
-        The y data from this decoding process. A data-length array.
+    y : np.ndarray
+        The y data from this decoding process. A (data x 2) array.
 
     diffs : np.array
         The differences between the language and acoustic model priors for each data point.
     """
     weights_all = None
     priors_all = None
+    P = len(acoustic)
 
     beam = Beam()
-    beam.add_initial_state(model, sess)
+    beam.add_initial_state(model, sess, P)
 
     acoustic = np.transpose(acoustic)
 
     x = np.zeros((0, 0))
-    y = np.zeros(0)
-    diffs = np.zeros(0)
+    y = np.zeros((0, 0)) if model.with_onsets else np.zeros(0)
+    diffs = np.zeros((0, 0)) if model.with_onsets else np.zeros(0)
 
     gt = np.transpose(gt)
+    
+    lstm_transform = None
+    if model.with_onsets:
+        lstm_transform = decode.three_hot_output_to_presence_onset
 
     for frame_num, (gt_frame, frame) in enumerate(zip(gt, acoustic)):
         if verbose and frame_num % 20 == 0:
@@ -104,7 +111,7 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
 
         # Run the LSTM!
         if frame_num != 0:
-            decode.run_lstm(sess, model, beam)
+            decode.run_lstm(sess, model, beam, transform=lstm_transform)
 
         # Here, beam contains a list of states, with sample histories, priors, and LSTM hidden_states,
         # but needs to be updated with weights and combined_priors when sampling.
@@ -112,7 +119,9 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
         # Get data
         for state in beam:
             pitches = np.argwhere(1 - np.isclose(np.squeeze(state.prior), np.squeeze(frame),
-                                                 rtol=0.0, atol=min_diff))[:,0] if min_diff > 0 else np.arange(88)
+                                                 rtol=0.0, atol=min_diff))[:,0] if min_diff > 0 else np.arange(P)
+            if model.with_onsets:
+                pitches = np.unique(np.where(pitches >= (P // 2), pitches - (P // 2), pitches))
 
             if len(pitches) > 0:
                 if len(x) > 0:
@@ -121,8 +130,23 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
                 else:
                     x = decode.create_weight_x_sk(state, acoustic, frame_num, history, pitches=pitches, features=features,
                                                   no_mlm=no_mlm, with_onsets=model.with_onsets)
-                y = np.append(y, gt_frame[pitches])
-                diffs = np.append(diffs, np.abs(np.squeeze(frame)[pitches] - np.squeeze(state.prior)[pitches]))
+                
+                if model.with_onsets:
+                    gt_presence, gt_onset = np.split(gt_frame, 2)
+                    gt_new = np.vstack((gt_presence, gt_onset)).T
+                    frame_presence, frame_onset = np.split(frame, 2)
+                    frame_new = np.vstack((frame_presence, frame_onset)).T
+                    prior_presence, prior_onset = np.split(state.prior, 2)
+                    prior_new = np.vstack((prior_presence, prior_onset)).T
+                    if len(y) > 0:
+                        y = np.vstack((y, gt_new[pitches]))
+                        diffs = np.vstack((diffs, np.abs(frame_new[pitches] - prior_new[pitches])))
+                    else:
+                        y = gt_new[pitches]
+                        diffs = np.abs(frame_new[pitches] - prior_new[pitches])
+                else:
+                    y = np.append(y, gt_frame[pitches])
+                    diffs = np.append(diffs, np.abs(np.squeeze(frame)[pitches] - np.squeeze(state.prior)[pitches]))
 
         new_beam = Beam()
 
@@ -132,24 +156,26 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
 
         else:
             for i, state in enumerate(beam):
-                weight_this = weights_all[:, i * 88 : (i + 1) * 88] if weights_all is not None else weight
+                weight_this = weights_all[:, i * P : (i + 1) * P] if weights_all is not None else weight
 
                 if priors_all is not None:
-                    prior = np.squeeze(priors_all[i * 88 : (i + 1) * 88])
+                    prior = np.squeeze(priors_all[i * P : (i + 1) * P])
                 else:
                     prior = np.squeeze(weight_this[0] * frame + weight_this[1] * state.prior)
 
                 # Update state
                 state.update_from_weight_model(weight_this[0], prior)
 
-                for log_prob, sample in itertools.islice(decode.enumerate_samples(prior), branch_factor):
+                for log_prob, sample in itertools.islice(sampling.enumerate_samples(prior), branch_factor):
 
-                    # Binarize the sample (return from enumerate_samples is an array of indexes)
-                    binary_sample = np.zeros(88)
-                    binary_sample[sample] = 1
+                    # Format the sample (return from enumerate_samples is an array of indexes)
+                    if model.with_onsets:
+                        sample = sampling.trinarize_with_onsets(sample, P)
+                    else:
+                        sample = sampling.binarize(sample, P)
 
                     # Transition on sample
-                    new_beam.add(state.transition(binary_sample, log_prob))
+                    new_beam.add(state.transition(sample, log_prob))
 
         new_beam.cut_to_size(beam_size, min(hash_length, frame_num + 1))
         beam = new_beam
@@ -254,48 +280,55 @@ if __name__ == '__main__':
             data.make_from_file(args.MIDI, args.step, section=section, with_onsets=args.with_onsets, acoustic_model=args.acoustic)
 
         input_data = data.input
+        target_data = data.target
         if args.with_onsets:
             input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
             input_data[:data.input.shape[0], :] = data.input[:, :, 0]
             input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
+            target_data = trinary_pr_to_presence_onset(data.target)
+            
         # Decode
-        X, Y, D = get_weight_data(data.target, input_data, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                               weight=[args.weight, 1 - args.weight], hash_length=args.hash,
+        X, Y, D = get_weight_data(target_data, input_data, model, sess, branch_factor=args.branch, beam_size=args.beam,
+                               weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
                                gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
                                verbose=args.verbose, no_mlm=args.no_mlm)
     else:
         X = np.zeros((0, 0))
-        Y = np.zeros(0)
-        D = np.zeros(0)
+        Y = np.zeros((0, 0)) if args.with_onset else np.zeros(0)
+        D = np.zeros((0, 0)) if args.with_onset else np.zeros(0)
 
         for file in glob.glob(os.path.join(args.MIDI, "*.mid")):
             if args.verbose:
                 print(file)
             if args.step == "beat":
                 data = dataMaps.DataMapsBeats()
-                data.make_from_file(file,args.beat_gt,args.beat_subdiv,section, acoustic_model=args.acoustic)
+                data.make_from_file(file,args.beat_gt,args.beat_subdiv,section, acoustic_model=args.acoustic, with_onsets=args.with_onsets)
             else:
                 data = dataMaps.DataMaps()
-                data.make_from_file(file, args.step, section=section, acoustic_model=args.acoustic)
+                data.make_from_file(file, args.step, section=section, acoustic_model=args.acoustic, with_onsets=args.with_onsets)
 
             input_data = data.input
+            target_data = data.target
             if args.with_onsets:
                 input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
                 input_data[:data.input.shape[0], :] = data.input[:, :, 0]
                 input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
+                target_data = trinary_pr_to_presence_onset(data.target)
+                
             # Decode
-            x, y, d = get_weight_data(data.target, input_data, model, sess, branch_factor=args.branch, beam_size=args.beam,
+            x, y, d = get_weight_data(target_data, input_data, model, sess, branch_factor=args.branch, beam_size=args.beam,
                                    weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
                                    gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
                                    verbose=args.verbose, no_mlm=args.no_mlm)
 
             if len(X) > 0:
                 X = np.vstack((X, x))
+                Y = np.vstack((Y, y))
+                D = np.vstack((D, d))
             else:
                 X = x
-
-            Y = np.append(Y, y)
-            D = np.append(D, d)
+                Y = y
+                D = d
 
     print(X.shape)
     print(Y.shape)

@@ -39,6 +39,8 @@ if __name__ == "__main__":
                         "piece's notewise F-measure is below this amount. Defaults to 0.001.", type=float,
                         default=0.001)
     parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="store_true")
+    parser.add_argument("--with_onsets", help="The input will be a double pianoroll containing "
+                        "presence and onset halves.", action="store_true")
 
     args = parser.parse_args()
 
@@ -64,7 +66,8 @@ if __name__ == "__main__":
 
     weight_search.load_data_info(gt=args.gt_data, beam=args.beam_data, valid=args.valid_data, step=args.step,
                                  model_path=args.model, model_out=args.model_dir, acoustic=args.acoustic,
-                                 early_exit=args.early_exit,diagRNN=args.diagRNN, beat_gt=args.beat_gt,beat_subdiv=args.beat_subdiv)
+                                 early_exit=args.early_exit,diagRNN=args.diagRNN, beat_gt=args.beat_gt,
+                                 beat_subdiv=args.beat_subdiv, with_onsets=args.with_onsets)
 
     dimensions = [[False], # GT
                   (0.1, 0.8), # min_diff

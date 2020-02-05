@@ -6,7 +6,7 @@ class State:
     A state in the decoding process, containing a log probability and an LSTM hidden state.
     """
 
-    def __init__(self, P):
+    def __init__(self, P, with_onsets):
         """
         Create a new empty State.
         """
@@ -15,6 +15,7 @@ class State:
         self.sample = []
         self.log_prob = 0.0
         self.P = P
+        self.with_onsets = with_onsets
 
         self.num = 0
         self.prev = None
@@ -75,7 +76,7 @@ class State:
         state : State
             The state resulting from this transition.
         """
-        state = State(self.P)
+        state = State(self.P, self.with_onsets)
         state.log_prob = self.log_prob + log_prob
 
         state.sample = sample
@@ -174,7 +175,7 @@ class State:
             A num_pitches x max(min_length, min(T, max_length)) binary matrix containing the pitch
             detections of this State.
         """
-        num_pitches = len(self.sample) if self.sample is not None and len(self.sample) > 0 else self.P
+        num_pitches = len(self.sample) if self.sample is not None and len(self.sample) > 0 else (self.P // 2 if self.with_onsets else self.P)
         length = min(self.num, max_length) if max_length is not None else self.num
         length = max(min_length, length) if min_length is not None else length
         piano_roll = np.zeros((num_pitches, length))
