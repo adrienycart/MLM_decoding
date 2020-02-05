@@ -1,8 +1,10 @@
 # MLM_decoding
 
-In this branch, we make available the code to reproduce the experiments from the following publication
+In this branch, we make available the code to reproduce the experiments from the following publication:
 
 > Adrien Ycart, Andrew McLeod, Emmanouil Benetos and Kazuyoshi Yoshii. "Blending Acoustic and Language Model Predictions for Automatic Music Transcription", _20th International Society for Music Information Retrieval Conference (ISMIR)_, November 2019, Delft, Netherlands.
+
+**Important**: The original version of our code contained a bug which averaged certain weight model features across all acoustic model frames rather than calculating them separately for each frame. The code has been fixed in this version, but the provided blending models were not retrained. To reproduce our results exactly, use the old code [here](https://github.com/adrienycart/MLM_decoding/tree/33f815226655ab91820c1f5a3779f9b14fe19b85). To train new blending models with the fix, use the current code and see [here](#step-3-train-the-blending-model).
 
 If you use any of this in your works, please cite:
 
@@ -15,7 +17,7 @@ If you use any of this in your works, please cite:
        Title = {Blending Acoustic and Language Model Predictions for Automatic Music Transcription},    
        Year = {2019}    
     }  
-```  
+``` 
 
 Additional material (figures, sound examples...) can be found on this webpage: [http://c4dm.eecs.qmul.ac.uk/ycart/ismir19.html](http://c4dm.eecs.qmul.ac.uk/ycart/ismir19.html)
 

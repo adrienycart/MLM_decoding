@@ -912,11 +912,11 @@ def get_features(acoustic, frame_num, priors, no_mlm=False):
 
     features = np.zeros((88, num_features))
 
-    features[:, 0] = uncertainty(acoustic)
+    features[:, 0] = uncertainty(frame)
     features[:, 1] = uncertainty(language)
-    features[:, 2] = entropy(acoustic)
+    features[:, 2] = entropy(frame)
     features[:, 3] = entropy(language)
-    features[:, 4] = np.mean(acoustic)
+    features[:, 4] = np.mean(frame)
     features[:, 5] = np.mean(language)
 
     # Flux
