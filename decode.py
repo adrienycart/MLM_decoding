@@ -372,23 +372,109 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
     frame = acoustic[frame_num, :]
     pr = state.get_piano_roll(min_length=history, max_length=history)
     
-    #TODO: Re-interpret pr if with_onsets
+    # Re-interpret pr if with_onsets
+    if with_onsets:
+        acoustic_presence, acoustic_onsets = np.split(acoustic, 2)
+        pr_presence, pr_onsets = np.split(pr, 2)
+        state_priors_presence, state_priors_onsets = np.split(state.get_priors(), 2)
+        frame_presence, frame_onsets = np.split(frame, 2)
+        this_prior_presence, this_prior_onsets = np.split(state.prior, 2)
+        x_presence = get_weight_data_sk_unpadded(pr_presence, acoustic_presence, frame_num,
+                                                 state_priors_presence, frame_presence, this_prior_presence,
+                                                 features, no_mlm)
+        x_onsets = get_weight_data_sk_unpadded(pr_presence, acoustic_presence, frame_num,
+                                                 state_priors_presence, frame_presence, this_prior_presence,
+                                                 features, no_mlm)
+    else:
+        x = get_weight_data_sk_unpadded(pr, acoustic, frame_num, state.get_priors(), frame, state.prior, features, no_mlm)
+        pr_presence = pr
+        pr_onsets = None
+        prior_presence = state.prior
+        prior_onsets = None
 
+    # First, make x for presence
+    if features:
+        x_presence = np.hstack((pr_presence,
+                                get_features(acoustic, frame_num, state.get_priors(), no_mlm=no_mlm),
+                                np.reshape(frame, (88, -1)),
+                                np.zeros((88, 1)) if no_mlm else np.reshape(prior_presence, (88, -1))))
+
+    else:
+        x_presence = np.hstack((pr_presence,
+                                np.reshape(frame, (88, -1)),
+                                np.zeros((88, 1)) if no_mlm else np.reshape(prior_presence, (88, -1))))
+
+    # Add prior and history contexts
+    x = pad_x(x_presence, frame, prior_presence, pr_presence, history, history_context, prior_context)
+    
+    # Now, make x for onset, if we need to
+    if with_onsets:
+        if features:
+            x_onsets = np.hstack((pr_onsets,
+                                  get_features(acoustic, frame_num, state.get_priors(), no_mlm=no_mlm),
+                                  np.reshape(frame, (88, -1)),
+                                  np.zeros((88, 1)) if no_mlm else np.reshape(prior_presence, (88, -1))))
+
+        else:
+            x_onsets = np.hstack((pr_onsets,
+                                  np.reshape(frame, (88, -1)),
+                                  np.zeros((88, 1)) if no_mlm else np.reshape(prior_onsets, (88, -1))))
+
+        # Add prior and history contexts
+        x_onsets = pad_x(x_onsets, frame, prior_onsets, pr_onsets, history, history_context, prior_context)
+        
+        # Concatenate to presence
+        x = np.hstack((x, x_onsets))
+
+    return x[pitches]
+
+
+
+def get_weight_data_sk_unpadded(pr, acoustic, frame_num, state_priors, frame, this_prior, features, no_mlm):
+    """
+    Create a non-padded data array for a single pianoroll. This function is meant to abstract
+    away from the possibility of the pr being the double presence-onset pr. In such a case, this
+    function should be called twice: once with each half of the pr and other data.
+    
+    Parameters
+    ----------
+    pr : np.ndarray
+        A single pianoroll, dimensions (88, T).
+
+    acoustic : np.ndarray
+        The acoustic prior for the entire piece, as time X pitch.
+        
+    state_priors : np.ndarray
+        The full history of a single state's priors, with dimensions (88, T).
+        
+    frame : 
+
+    frame_num : int
+        The current frame number.
+
+    features : boolean
+        True to calculate features. False otherwise.
+
+    no_mlm : boolean
+        Whether to suppress MLM-based inputs.
+
+    Returns
+    =======
+    x : np.ndarray
+        The x data points for the given input for the dynamic weighting model.
+    """
     if features:
         x = np.hstack((pr,
-                       get_features(acoustic, frame_num, state.get_priors(), no_mlm=no_mlm),
+                       get_features(acoustic, frame_num, state_priors, no_mlm=no_mlm),
                        np.reshape(frame, (88, -1)),
-                       np.zeros((88, 1)) if no_mlm else np.reshape(state.prior, (88, -1))))
+                       np.zeros((88, 1)) if no_mlm else np.reshape(this_prior, (88, -1))))
 
     else:
         x = np.hstack((pr,
                        np.reshape(frame, (88, -1)),
-                       np.zeros((88, 1)) if no_mlm else np.reshape(state.prior, (88, -1))))
+                       np.zeros((88, 1)) if no_mlm else np.reshape(prior_presence, (88, -1))))
 
-    # Add prior and history contexts
-    x_new = pad_x(x, frame, state.prior, pr, history, history_context, prior_context)
-
-    return x_new[pitches]
+    return x
 
 
 
@@ -520,25 +606,25 @@ def get_features(acoustic, frame_num, priors, no_mlm=False):
         return np.sum(np.where(array == 0, 0, -array * np.log2(array))) / np.log2(len(array))
 
     num_features = 9
-    frame = acoustic[frame_num, :]
-    language = np.squeeze(priors[:, -1])
+    acoustic_frame = acoustic[frame_num, :]
+    language_frame = np.squeeze(priors[:, -1])
 
     features = np.zeros((88, num_features))
 
-    features[:, 0] = uncertainty(acoustic)
-    features[:, 1] = uncertainty(language)
-    features[:, 2] = entropy(acoustic)
-    features[:, 3] = entropy(language)
-    features[:, 4] = np.mean(acoustic)
-    features[:, 5] = np.mean(language)
+    features[:, 0] = uncertainty(acoustic_frame)
+    features[:, 1] = uncertainty(language_frame)
+    features[:, 2] = entropy(acoustic_frame)
+    features[:, 3] = entropy(language_frame)
+    features[:, 4] = np.mean(acoustic_frame)
+    features[:, 5] = np.mean(language_frame)
 
     # Flux
     if frame_num != 0:
-        features[:, 6] = frame - acoustic[frame_num-1, :]
-        features[:, 7] = language - priors[:, -2]
+        features[:, 6] = acoustic_frame - acoustic[frame_num-1, :]
+        features[:, 7] = language_frame - priors[:, -2]
     else:
-        features[:, 6] = frame
-        features[:, 7] = language
+        features[:, 6] = acoustic_frame
+        features[:, 7] = language_frame
 
     # Absolute pitch (0, 1) range
     features[:, 8] = np.arange(88) / 87
