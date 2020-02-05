@@ -312,7 +312,7 @@ class Model:
 
                     n_outputs = 3
                     x_expanded = tf.one_hot(tf.cast(x,tf.int32),depth=n_outputs,dtype=tf.float32)
-                    x_flat = tf.reshape(x,[-1,n_steps,n_classes*n_outputs])
+                    x_flat = tf.reshape(x_expanded,[-1,n_steps,n_classes*n_outputs])
 
                     W = tf.Variable(tf.truncated_normal([n_hidden,n_classes*n_outputs]),name="W"+suffix)
                     b = tf.Variable(tf.truncated_normal([n_classes*n_outputs]),name="b"+suffix)
@@ -322,7 +322,7 @@ class Model:
 
                     #We don't take into account sequence length because doing so
                     #causes Tensorflow to output weird results
-                    outputs, hidden_state_out = tf.nn.dynamic_rnn(cell,x,initial_state=hidden_state_in,
+                    outputs, hidden_state_out = tf.nn.dynamic_rnn(cell,x_flat,initial_state=hidden_state_in,
                         dtype=tf.float32,time_major=False)#,sequence_length=seq_len)
                     self.output_state = hidden_state_out
 
@@ -367,7 +367,21 @@ class Model:
                 batch_size = self.batch_size
 
                 inputs = tf.concat([self.inputs,tf.zeros_like(self.inputs[:,0:1,:])],axis=1)
+                if self.with_onsets:
+                    n_outputs = 3
+                    x_expanded = tf.one_hot(tf.cast(inputs,tf.int32),depth=n_outputs,dtype=tf.float32)
+                    # n_steps+1 because we added an extra step of zeros above
+                    inputs = tf.reshape(x_expanded,[-1,n_steps+1,n_classes*n_outputs])
+                    activation = tf.nn.softmax
+                    dense_outputs = n_classes*n_outputs
+                else:
+                    activation = tf.nn.sigmoid
+                    dense_outputs = n_classes
+
+                # Shape = [time,batch,pitch]
                 inputs = tf.transpose(inputs,[1,0,2])
+
+
                 # inputs = tf.placeholder(shape=(max_time, batch_size, input_depth),
                 #                     dtype=tf.float32)
                 sequence_length = self.seq_lens
@@ -423,7 +437,7 @@ class Model:
                                     lambda: inputs_ta.read(time),
                                     lambda: tf.contrib.distributions.Bernoulli(
                                     # probs=tf.nn.sigmoid(dense_layer(cell_output,W,b,1)),
-                                    probs=tf.nn.sigmoid(tf.layers.dense(cell_output, n_classes,
+                                    probs=activation(tf.layers.dense(cell_output, dense_outputs,
                                         name='output_layer',
                                         reuse=tf.AUTO_REUSE)),
                                     dtype=tf.float32).sample())
@@ -442,8 +456,11 @@ class Model:
                 self.output_state = final_state
 
                 # pred = dense_layer(outputs)
-                pred = tf.layers.dense(outputs, n_classes,name='rnn/output_layer',reuse=tf.AUTO_REUSE)
+                pred = tf.layers.dense(outputs, dense_outputs,name='rnn/output_layer',reuse=tf.AUTO_REUSE)
                 pred = tf.transpose(pred,[1,0,2])
+
+                if self.with_onsets:
+                    pred = tf.reshape(pred,[-1,n_steps,n_classes,n_outputs])
 
                 self._prediction_sched_samp = pred
         return self._prediction_sched_samp
@@ -490,7 +507,7 @@ class Model:
         if self._pred_thresh is None:
             with tf.device(self.device_name):
                 if self.with_onsets:
-                    pred = tf.argmax(self.prediction,axis=3)
+                    pred = tf.argmax(self.pred_sigm,axis=3)
                 else:
                     thresh = self.thresh
 
@@ -1544,7 +1561,7 @@ class Model:
 
         if sigmoid:
             if self.with_onsets:
-                pred = tf.softmax(pred)
+                pred = tf.nn.softmax(pred)
             else:
                 pred=tf.sigmoid(pred)
 
