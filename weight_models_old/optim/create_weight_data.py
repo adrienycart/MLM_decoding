@@ -181,11 +181,11 @@ if __name__ == '__main__':
                         "used in the files. Either kelz (default), or bittner.",
                         default="kelz")
 
-    parser.add_argument("-b", "--beam", help="The beam size. Defaults to 100.", type=int, default=100)
-    parser.add_argument("-k", "--branch", help="The branching factor. Defaults to 20.", type=int, default=20)
+    parser.add_argument("-b", "--beam", help="The beam size. Defaults to 10.", type=int, default=10)
+    parser.add_argument("-k", "--branch", help="The branching factor. Defaults to 5.", type=int, default=5)
 
     parser.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
-                        "Defaults to 0.5", type=float, default=0.5)
+                        "Defaults to 085", type=float, default=0.8)
 
     parser.add_argument("--max_len",type=str,help="test on the first max_len seconds of each text file. " +
                         "Anything other than a number will evaluate on whole files. Default is 30s.",
@@ -194,8 +194,8 @@ if __name__ == '__main__':
     parser.add_argument("--hash", help="The hash length to use. Defaults to 10.",
                         type=int, default=10)
 
-    parser.add_argument("--history", help="The history length to use. Defaults to 5.",
-                        type=int, default=5)
+    parser.add_argument("--history", help="The history length to use.",
+                        type=int, default=10)
 
     parser.add_argument("--min_diff", help="The minimum difference (between language and acoustic) to " +
                         "save a data point.", type=float, default=0.01)
@@ -235,6 +235,7 @@ if __name__ == '__main__':
     model_param = make_model_param()
     model_param['n_hidden'] = args.hidden
     model_param['n_steps'] = 1 # To generate 1 step at a time
+    model_param['pitchwise']=False
     if args.diagRNN:
         model_param['cell_type'] = "diagLSTM"
     model_param['with_onsets'] = args.with_onsets
@@ -310,4 +311,5 @@ if __name__ == '__main__':
                      'D' : D,
                      'history' : args.history,
                      'features' : args.features,
-                     'no_mlm' : args.no_mlm}, file)
+                     'no_mlm' : args.no_mlm,
+                     'with_onsets' : args.with_onsets}, file)
