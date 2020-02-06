@@ -294,8 +294,8 @@ if __name__ == '__main__':
                                verbose=args.verbose, no_mlm=args.no_mlm)
     else:
         X = np.zeros((0, 0))
-        Y = np.zeros((0, 0)) if args.with_onset else np.zeros(0)
-        D = np.zeros((0, 0)) if args.with_onset else np.zeros(0)
+        Y = np.zeros((0, 0)) if args.with_onsets else np.zeros(0)
+        D = np.zeros((0, 0)) if args.with_onsets else np.zeros(0)
 
         for file in glob.glob(os.path.join(args.MIDI, "*.mid")):
             if args.verbose:
