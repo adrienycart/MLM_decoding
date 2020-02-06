@@ -451,7 +451,7 @@ def get_weight_data_sk_unpadded(pr, acoustic, frame_num, state_priors, frame, th
     else:
         x = np.hstack((pr,
                        np.reshape(frame, (88, -1)),
-                       np.zeros((88, 1)) if no_mlm else np.reshape(prior_presence, (88, -1))))
+                       np.zeros((88, 1)) if no_mlm else np.reshape(this_prior, (88, -1))))
 
     return x
 
