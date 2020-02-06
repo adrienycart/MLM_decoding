@@ -204,6 +204,6 @@ def trinary_pr_to_presence_onset(pr):
     """
     p = len(pr)
     binary_pr = np.zeros((2 * p, pr.shape[1]))
-    binary_pr[:p, :] = np.where(pr == 1, 1, 0)
+    binary_pr[:p, :] = np.where(pr >= 1, 1, 0)
     binary_pr[p:, :] = np.where(pr == 2, 1, 0)
     return binary_pr
