@@ -187,7 +187,7 @@ def weight_search(params, num=0, verbose=False):
             corresp = data.corresp
             [P_f,R_f,F_f],[P_n,R_n,F_n] = compute_eval_metrics_with_onset(pr, corresp, target_data,
                                                                           double_roll=True, min_dur=0.05,
-                                                                          with_offset=True, section=section)
+                                                                          section=section)
 
         else:
             if global_params['step'] in ['quant','event','quant_short','beat']:

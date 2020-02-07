@@ -244,6 +244,8 @@ def compute_eval_metrics_with_onset(input_pr,corresp,target_data,section=None,do
 
     # Get note sequences
     notes_est , intervals_est = get_notes_intervals_with_onsets(input_pr, corresp,double_roll)
+    if len(intervals_est) == 0:
+        intervals_est = np.zeros((0, 2))
 
     notes_ref,intervals_ref = [],[]
 

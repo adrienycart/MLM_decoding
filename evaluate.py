@@ -150,6 +150,7 @@ for fn in os.listdir(folder):
                             beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
                             out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
                             verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
+            print(pr.shape)
 
         else:
             if args.with_onsets:
