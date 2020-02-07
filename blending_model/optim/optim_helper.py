@@ -8,8 +8,7 @@ from dataMaps import DataMaps,convert_note_to_time, align_matrix, DataMapsBeats
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
-from decode import decode, pad_x
-from create_blending_data import get_blending_data
+from decode import decode
 from train_blending_model import (train_model, convert_targets_to_weight,
                                   filter_data_by_min_diff, filter_X_features)
 
@@ -108,7 +107,7 @@ def weight_search(params, num=0, verbose=False):
     with_onsets = pkl['with_onsets']
 
     # Filter data for min_diff
-    X, Y = filter_data_by_min_diff(X, Y, np.maximum(D[:, 0], D[:, 1]) if with_onsets else D, args.min_diff)
+    X, Y = filter_data_by_min_diff(X, Y, np.maximum(D[:, 0], D[:, 1]) if with_onsets else D, min_diff)
     if len(X) == 0:
         print("No training data generated.")
         sys.stdout.flush()
@@ -122,7 +121,7 @@ def weight_search(params, num=0, verbose=False):
     sys.stdout.flush()
     layers = []
     for i in range(num_layers):
-        layers.append(5)
+        layers.append(10 if with_onsets else 5)
 
     weight_model = train_model(X, Y, layers=layers, weight=is_weight, with_onsets=with_onsets)
 
@@ -136,8 +135,7 @@ def weight_search(params, num=0, verbose=False):
                          'with_onsets' : with_onsets}
 
     weight_model_name = "blending_model."
-    weight_model_name += "gt" if gt else "b10"
-    weight_model_name += "_md" + str(min_diff)
+    weight_model_name += "md" + str(min_diff)
     weight_model_name += "_h" + str(history)
     weight_model_name += "_l" + str(num_layers)
     if features:
@@ -165,11 +163,11 @@ def weight_search(params, num=0, verbose=False):
         if global_params['step'] == 'beat':
             data = DataMapsBeats()
             data.make_from_file(filename, global_params['beat_gt'], global_params['beat_subdiv'],
-                                section,  acoustic_model=global_params['acoustic'])
+                                section,  acoustic_model=global_params['acoustic'], with_onsets=with_onsets)
         else:
             data = DataMaps()
             data.make_from_file(filename, global_params['step'], section,
-                                acoustic_model=global_params['acoustic'])
+                                acoustic_model=global_params['acoustic'], with_onsets=with_onsets)
 
         # Decode
         input_data = data.input
@@ -179,9 +177,8 @@ def weight_search(params, num=0, verbose=False):
             input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
 
         pr, priors, weights, combined_priors = decode(input_data, model, sess, branch_factor=5,
-                        beam_size=50, weight=[[0.8], [0.2]],
-                        out=None, hash_length=12, weight_model=weight_model,
-                        verbose=verbose, weight_model_dict=weight_model_dict)
+                        beam_size=50, weight=[[0.8], [0.2]], out=None, hash_length=12,
+                        weight_model=weight_model, verbose=verbose, weight_model_dict=most_recent_model)
         
         # Evaluate
         if with_onsets:
@@ -192,14 +189,14 @@ def weight_search(params, num=0, verbose=False):
                                                                           with_offset=True, section=section)
 
         else:
-            if args.step in ['quant','event','quant_short','beat']:
+            if global_params['step'] in ['quant','event','quant_short','beat']:
                 pr = convert_note_to_time(pr, data.corresp, data.input_fs, max_len=max_len)
                 
             data = DataMaps()
-            if args.step == "20ms" or args.with_onsets:
-                data.make_from_file(filename, "20ms", section=section, with_onsets=args.with_onsets, acoustic_model="kelz")
+            if global_params['step'] == "20ms" or with_onsets:
+                data.make_from_file(filename, "20ms", section=section, with_onsets=False, acoustic_model="kelz")
             else:
-                data.make_from_file(filename, "time", section=section, with_onsets=args.with_onsets, acoustic_model="kelz")
+                data.make_from_file(filename, "time", section=section, with_onsets=False, acoustic_model="kelz")
             target = data.target
 
             #Evaluate

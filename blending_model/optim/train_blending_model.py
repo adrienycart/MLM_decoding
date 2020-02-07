@@ -118,7 +118,7 @@ def filter_data_by_min_diff(X, Y, D, min_diff):
     Y : np.ndarray or np.array
         The given Y data points, minus those points whose difference is less than the given min_diff.
     """
-    data_points = np.where(D > args.min_diff)
+    data_points = np.where(D > min_diff)
     return X[data_points], Y[data_points]
 
 

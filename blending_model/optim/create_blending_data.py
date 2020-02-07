@@ -260,7 +260,7 @@ if __name__ == '__main__':
     parser.add_argument("-k", "--branch", help="The branching factor. Defaults to 5.", type=int, default=5)
 
     parser.add_argument("-w", "--weight", help="The weight for the acoustic model (between 0 and 1). " +
-                        "Defaults to 085", type=float, default=0.8)
+                        "Defaults to 0.8", type=float, default=0.8)
 
     parser.add_argument("--max_len",type=str,help="test on the first max_len seconds of each text file. " +
                         "Anything other than a number will evaluate on whole files. Default is 30s.",
@@ -282,6 +282,7 @@ if __name__ == '__main__':
     parser.add_argument("--no_mlm", help="Set all MLM-based inputs to 0.", action="store_true")
 
     parser.add_argument("--gpu", help="The GPU to use. Defaults to 0.", default="0")
+    parser.add_argument("--cpu", help="Use the CPU.", action="store_true")
 
     parser.add_argument("-v", "--verbose", help="Print frame updates", action="store_true")
 
@@ -303,6 +304,8 @@ if __name__ == '__main__':
         max_len = None
         section = None
 
+    if args.cpu:
+        args.gpu = ""
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 

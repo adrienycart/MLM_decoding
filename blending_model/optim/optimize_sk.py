@@ -33,6 +33,7 @@ if __name__ == "__main__":
     parser.add_argument("--kappa", help="The kappa to use in the optimization. Defaults to 50.", type=float,
                         default=50)
     parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
+    parser.add_argument("--cpu", help="Use CPU.", action="store_true")
     parser.add_argument("--prior", help="Train for prior, rather than weight (default).", action="store_true")
     parser.add_argument("--model_dir", help="The directory to save model files to. Defaults to the current directory.",
                         default=".")
@@ -46,7 +47,10 @@ if __name__ == "__main__":
     print("Running for " + str(args.iters) + " iterations.")
     print("step type: " + args.step)
     print("saving output to " + args.output)
-    print("using GPU " + args.gpu)
+    if args.cpu:
+        print("Using CPU")
+    else:
+        print("using GPU " + args.gpu)
     print("Training for " + ("prior" if args.prior else "weight"))
     print("Loading LSTM " + args.model)
     print("Using blending data " + args.blending_data)
@@ -59,6 +63,8 @@ if __name__ == "__main__":
     if args.output is not None and os.path.dirname(args.output) != '':
         os.makedirs(os.path.dirname(args.output), exist_ok=True)
 
+    if args.cpu:
+        args.gpu = ""
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
