@@ -5,6 +5,9 @@ import argparse
 import os
 import sys
 
+from skopt import callbacks
+from skopt.callbacks import CheckpointSaver
+
 import optim_helper
 
 
@@ -41,6 +44,7 @@ if __name__ == "__main__":
                         "piece's notewise F-measure is below this amount. Defaults to 0.001.", type=float,
                         default=0.001)
     parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="store_true")
+    parser.add_argument("--load", help="Continue optimization from the file in --output.", action="store_true")
 
     args = parser.parse_args()
 
@@ -86,7 +90,21 @@ if __name__ == "__main__":
                   [not args.prior], # is_weight
                   [True]] # features
 
+    checkpoint_callback = CheckpointSaver(args.output)
+
+    x0 = None
+    y0 = None
+    try:
+        if args.load:
+            res = skopt.load(args.output)
+            x0 = res.x_iters
+            y0 = res.func_vals
+    except:
+        print("Could not load from checkpoint " + args.output)
+        print("Starting fresh")
+
     opt = skopt.gp_minimize(optim_helper.weight_search, dimensions, n_calls=10+args.iters,
-                            kappa=args.kappa, noise=0.0004, verbose=True, n_points=10)
+                            kappa=args.kappa, noise=0.0004, verbose=True, n_points=10,
+                            x0=x0, y0=y0, callback=[checkpoint_callback])
 
     skopt.dump(opt, args.output)

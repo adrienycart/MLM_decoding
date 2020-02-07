@@ -270,7 +270,7 @@ if __name__ == '__main__':
                         type=int, default=10)
 
     parser.add_argument("--history", help="The history length to use.",
-                        type=int, default=10)
+                        type=int, default=None)
 
     parser.add_argument("--min_diff", help="The minimum difference (between language and acoustic) to " +
                         "save a data point.", type=float, default=0.01)
@@ -296,6 +296,14 @@ if __name__ == '__main__':
     if not (0 <= args.weight <= 1):
         print("Weight must be between 0 and 1.", file=sys.stderr)
         sys.exit(1)
+        
+    if args.history is None:
+        if args.step in ["time", "20ms"]:
+            args.history = 50
+        elif args.step in ["beat"]:
+            args.history = 12
+        else:
+            args.history = 10
 
     try:
         max_len = float(args.max_len)

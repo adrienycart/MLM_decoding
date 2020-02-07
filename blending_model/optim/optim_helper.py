@@ -116,6 +116,10 @@ def weight_search(params, num=0, verbose=False):
 
     # Filter X for desired input fields
     X = filter_X_features(X, history, max_history, features, features_available, with_onsets)
+    
+    history = min(history, max_history)
+    if features and not features_available:
+        features = False
 
     # Train weight model
     print("Training weight model")
