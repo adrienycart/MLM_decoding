@@ -772,15 +772,17 @@ def get_name_from_maps(filename):
 # # data.make_from_file(filename,'time',[0,10],with_onsets=True,acoustic_model='kelz')
 # # print data.input.shape
 
+#
 # data = DataMapsBeats()
 # data.make_from_file(filename,section=[0,10],with_onsets=True,acoustic_model='kelz')
-# #print data.input.shape
-
+# print data.input.shape
+#
 # onset_filename = filename.replace('.mid','_onset.csv')
 # onset_matrix = np.transpose(np.loadtxt(onset_filename),[1,0])
-
+#
 # corresp_steps= np.round(data.corresp*50)
 # corresp_half_steps = np.round((data.corresp[1:]+data.corresp[:-1])*50/2)
+#
 
 # import matplotlib.pyplot as plt
 # fig, [ax0,ax1,ax2,ax3] = plt.subplots(4,1)
@@ -804,9 +806,6 @@ def get_name_from_maps(filename):
 # ax2.imshow(data.input[:,:,1],aspect='auto',origin='lower')
 # ax3.imshow(data.target,aspect='auto',origin='lower')
 # plt.show()
-
-
-
 # import matplotlib.pyplot as plt
 # fig, [ax1,ax2] = plt.subplots(2,1)
 # ax1.imshow(data.input,aspect='auto',origin='lower')
