@@ -246,7 +246,7 @@ if __name__ == '__main__':
     parser.add_argument("--hidden", help="The number of hidden layers in the language model. Defaults to 256",
                         type=int, default=256)
 
-    parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event", "beat"], help="Change the step type " +
+    parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event", "beat", "20ms"], help="Change the step type " +
                         "for frame timing. Either time (default), quant (for 16th notes), or event (for onsets).",
                         default="time")
     parser.add_argument('--beat_gt',action='store_true',help="with beat timesteps, use ground-truth beat positions")

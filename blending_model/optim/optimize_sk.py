@@ -73,8 +73,15 @@ if __name__ == "__main__":
                                  early_exit=args.early_exit,diagRNN=args.diagRNN, beat_gt=args.beat_gt,
                                  beat_subdiv=args.beat_subdiv)
 
+    if args.step in ["time", "20ms"]:
+        history = (5, 50)
+    elif args.step in ["beat"]:
+        history = (4, 12)
+    else:
+        history = (3, 10)
+    
     dimensions = [(0.1, 0.8), # min_diff
-                  (5, 50) if args.step in ["time", "20ms"] else (3, 10), # history
+                  history, # history
                   (1, 4), # num_layers
                   [not args.prior], # is_weight
                   [True]] # features
