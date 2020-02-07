@@ -75,7 +75,7 @@ class Beam:
 
 
 
-    def add_initial_state(self, model, sess, iterative_pw=False):
+    def add_initial_state(self, model, sess, P, iterative_pw=False):
         """
         Add an empty initial state to the beam.
 
@@ -96,14 +96,14 @@ class Beam:
         if model.pitchwise and not iterative_pw:
             single_state = model.get_initial_state(sess, 1)[0]
             # We have to get 88 initial states, one for each pitch
-            initial_state = [copy.copy(single_state) for i in range(88)]
+            initial_state = [copy.copy(single_state) for i in range(P)]
             
         else:
             initial_state = model.get_initial_state(sess, 1)[0]
             
-        prior = np.ones(88) / 2 if not iterative_pw else np.array([0.5])
+        prior = np.ones(P) / 2 if not iterative_pw else np.array([0.5])
 
-        new_state = state.State()
+        new_state = state.State(P, model.with_onsets)
         new_state.update_from_lstm(initial_state, prior)
         
         self.beam.append(new_state)

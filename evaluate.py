@@ -1,8 +1,8 @@
 from dataMaps import DataMaps, DataMapsBeats, convert_note_to_time, align_matrix
-from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
+from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note, compute_eval_metrics_with_onset
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
-from decode import decode, decode_pitchwise_iterative
+from decode import decode
 
 import os
 import argparse
@@ -23,7 +23,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('model',type=str,help="location of the checkpoint to load (inside ckpt folder)")
 parser.add_argument('data_path',type=str,help="folder containing the split dataset")
-parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event","beat"], help="Change the step type for frame timing. Either time (default), " +
+parser.add_argument("--step", type=str, choices=["time","20ms", "quant","quant_short", "event","beat"], help="Change the step type for frame timing. Either time (default), " +
                     "quant (for 16th notes), or event (for onsets).", default="time")
 parser.add_argument('--beat_gt',action='store_true',help="with beat timesteps, use ground-truth beat positions")
 parser.add_argument('--beat_subdiv',type=str,help="with beat timesteps, beat subdivisions to use (comma separated list, without brackets)",default='0,1/4,1/3,1/2,2/3,3/4')
@@ -42,16 +42,9 @@ parser.add_argument("--hash", help="The hash length to use. Defaults to 12.", ty
 parser.add_argument("-v", "--verbose", help="Use verbose printing.", action="store_true")
 parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
 parser.add_argument("--gt", help="Use the gt to use the best possible weight_model results.", action="store_true")
-parser.add_argument("--pitchwise", type=int, help="use pitchwise language model. Value is the number of semitones above and below current pitch to take into account.")
-parser.add_argument("--it", help="Use iterative pitchwise processing with this number of iterations. " +
-                    "Defaults to 0, which doesn't use iterative processing.", type=int, default=0)
-parser.add_argument("--uncertainty", help="Add some uncertainty to the LSTM decoding outputs, when " +
-                    "used with --it. The outputs will be scaled to a range of size " +
-                    "(1 - 2*uncertainty), centered around 0.5. Specifically, " +
-                    "(0.0, 1.0) -> (0.0+uncertainty, 1.0-uncertainty). Defaults to 0.0.",
-                    type=float, default=0)
 parser.add_argument('--n_hidden', help="Number of hidden nodes for the LSTM", type=int, default=256)
 parser.add_argument('--with_offset', help="use offset for framewise metrics", action='store_true')
+parser.add_argument('--with_onsets', help="use presence/onset piano-roll", action='store_true')
 parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="store_true")
 
 args = parser.parse_args()
@@ -86,7 +79,6 @@ if args.weight_model is None:
 else:
     print(f"Auto-weight: {args.weight_model}")
 print(f"Sampling union: False")
-print(f"Pitchwise window: {args.pitchwise}")
 
 print('####################################')
 
@@ -106,13 +98,10 @@ if args.weight_model is not None or args.weight != 1.0:
     model_param = make_model_param()
     model_param['n_hidden'] = n_hidden
     model_param['n_steps'] = 1 # To generate 1 step at a time
-    if args.pitchwise is None:
-        model_param['pitchwise']=False
-    else:
-        model_param['pitchwise']=True
-        model_param['n_notes'] = 2*args.pitchwise+1
+    model_param['pitchwise']=False
     if args.diagRNN:
         model_param['cell_type'] = "diagLSTM"
+    model_param['with_onsets'] = args.with_onsets
 
     # Build model object
     model = Model(model_param)
@@ -145,27 +134,42 @@ for fn in os.listdir(folder):
 
         if args.step == "beat":
             data = DataMapsBeats()
-            data.make_from_file(filename,args.beat_gt,args.beat_subdiv,section, acoustic_model='kelz')
+            data.make_from_file(filename,args.beat_gt,args.beat_subdiv,section, with_onsets=args.with_onsets, acoustic_model='kelz')
         else:
             data = DataMaps()
-            data.make_from_file(filename,args.step,section, acoustic_model='kelz')
+            data.make_from_file(filename,args.step,section, with_onsets=args.with_onsets, acoustic_model='kelz')
 
-        # Decode
-        if args.it > 0:
-            prs = decode_pitchwise_iterative(data.input, model, sess, beam_size=args.beam,
-                                             weight=[[args.weight], [1 - args.weight]],
-                                             hash_length=args.hash, verbose=args.verbose, num_iters=args.it,
-                                             uncertainty=args.uncertainty)
+        if args.weight_model is not None or args.weight != 1.0:
+            input_data = data.input
+            if args.with_onsets:
+                input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
+                input_data[:data.input.shape[0], :] = data.input[:, :, 0]
+                input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
 
-            pr = prs[-1]
-
-        elif args.weight_model is not None or args.weight != 1.0:
-            pr, priors, weights, combined_priors = decode(data.input, model, sess, branch_factor=args.branch,
+            pr, priors, weights, combined_priors = decode(input_data, model, sess, branch_factor=args.branch,
                             beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
                             out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
                             verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
+            print(pr.shape)
+
         else:
-            pr = (data.input>0.5).astype(int)
+            if args.with_onsets:
+
+                bin_input = (data.input>0.5).astype(int)
+                onsets = pr[:, :, 1]
+                presence = pr[:, :, 0]
+                # Add presence when there is an onset (in case it is not the case already)
+                precence[onsets] = 1
+                pr = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
+                pr[:data.input.shape[0], :] = onsets
+                pr[data.input.shape[0]:, :] = precence
+
+            else:
+                input_data = data.input
+                pr = (input_data>0.5).astype(int)
+
+
+
 
         # Save output
         if not args.save is None:
@@ -177,16 +181,43 @@ for fn in os.listdir(folder):
                 np.save(os.path.join(args.save,fn.replace('.mid','_combined_priors')), combined_priors)
                 np.savetxt(os.path.join(args.save,fn.replace('.mid','_priors.csv')), priors)
 
-        if args.step in ['quant','event','quant_short','beat']:
-            pr = convert_note_to_time(pr,data.corresp,data.input_fs,max_len=max_len)
 
-        data = DataMaps()
-        data.make_from_file(filename, "time", section=section, acoustic_model="kelz")
-        target = data.target
+        if args.with_onsets:
 
-        #Evaluate
-        P_f,R_f,F_f = compute_eval_metrics_frame(pr,target)
-        P_n,R_n,F_n = compute_eval_metrics_note(pr,target,min_dur=0.05,with_offset=args.with_offset)
+            # import matplotlib.pyplot as plt
+            # plt.subplot(311)
+            # plt.imshow(pr,aspect='auto',origin='lower')
+            #
+            # plt.subplot(312)
+            # pr_2 = pr[:88,:]
+            # pr_2[pr[88:,:]==1] = 2
+            # plt.imshow(pr_2,aspect='auto',origin='lower')
+            #
+            #
+            # plt.subplot(313)
+            # plt.imshow(data.target,aspect='auto',origin='lower')
+            # plt.show()
+
+
+            target_data = pm.PrettyMIDI(filename)
+            corresp = data.corresp
+            [P_f,R_f,F_f],[P_n,R_n,F_n] = compute_eval_metrics_with_onset(pr,corresp,target_data,double_roll=True,min_dur=0.05,with_offset=args.with_offset,section=section)
+
+
+        else:
+
+            if args.step in ['quant','event','quant_short','beat']:
+                pr = convert_note_to_time(pr,data.corresp,data.input_fs,max_len=max_len)
+
+            data = DataMaps()
+            if args.step == "20ms" or args.with_onsets:
+                data.make_from_file(filename, "20ms", section=section, with_onsets=args.with_onsets, acoustic_model="kelz")
+            else:
+                data.make_from_file(filename, "time", section=section, with_onsets=args.with_onsets, acoustic_model="kelz")
+            target = data.target
+            #Evaluate
+            P_f,R_f,F_f = compute_eval_metrics_frame(pr,target)
+            P_n,R_n,F_n = compute_eval_metrics_note(pr,target,min_dur=0.05,with_offset=args.with_offset)
 
         frames = np.vstack((frames, [P_f, R_f, F_f]))
         notes = np.vstack((notes, [P_n, R_n, F_n]))

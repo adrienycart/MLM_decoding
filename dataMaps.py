@@ -189,6 +189,9 @@ class DataMaps:
         elif timestep_type == "time":
             fs=25
             corresp = np.arange(0,end_time,1.0/fs)
+        elif timestep_type == "20ms":
+            fs=50
+            corresp = np.arange(0,end_time,1.0/fs)
         else:
             raise  ValueError('Timestep type not understood: '+str(timestep_type))
 
@@ -768,6 +771,7 @@ def get_name_from_maps(filename):
 # # data = DataMaps()
 # # data.make_from_file(filename,'time',[0,10],with_onsets=True,acoustic_model='kelz')
 # # print data.input.shape
+
 #
 # data = DataMapsBeats()
 # data.make_from_file(filename,section=[0,10],with_onsets=True,acoustic_model='kelz')
@@ -779,6 +783,7 @@ def get_name_from_maps(filename):
 # corresp_steps= np.round(data.corresp*50)
 # corresp_half_steps = np.round((data.corresp[1:]+data.corresp[:-1])*50/2)
 #
+
 # import matplotlib.pyplot as plt
 # fig, [ax0,ax1,ax2,ax3] = plt.subplots(4,1)
 # ax0.imshow(onset_matrix[:,:10*50],aspect='auto',origin='lower')
@@ -790,20 +795,17 @@ def get_name_from_maps(filename):
 # ax2.imshow(data.input[:,:,1],aspect='auto',origin='lower')
 # ax3.imshow(data.target,aspect='auto',origin='lower')
 # plt.show()
-#
+
 # data = DataMapsBeats()
 # data.make_from_file(filename,section=[0,10],with_onsets=True,acoustic_model='kelz')
-# print data.input.shape
-#
+# #print data.input.shape
+
 # import matplotlib.pyplot as plt
 # fig, [ax1,ax2,ax3] = plt.subplots(3,1)
 # ax1.imshow(data.input[:,:,0],aspect='auto',origin='lower')
 # ax2.imshow(data.input[:,:,1],aspect='auto',origin='lower')
 # ax3.imshow(data.target,aspect='auto',origin='lower')
 # plt.show()
-#
-#
-#
 # import matplotlib.pyplot as plt
 # fig, [ax1,ax2] = plt.subplots(2,1)
 # ax1.imshow(data.input,aspect='auto',origin='lower')

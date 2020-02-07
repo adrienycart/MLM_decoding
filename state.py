@@ -6,7 +6,7 @@ class State:
     A state in the decoding process, containing a log probability and an LSTM hidden state.
     """
 
-    def __init__(self):
+    def __init__(self, P, with_onsets):
         """
         Create a new empty State.
         """
@@ -14,6 +14,8 @@ class State:
         self.combined_prior = []
         self.sample = []
         self.log_prob = 0.0
+        self.P = P
+        self.with_onsets = with_onsets
 
         self.num = 0
         self.prev = None
@@ -32,7 +34,7 @@ class State:
         combined_prior : np.array
             An 88-length probabilistic array containing the combined prior for this frame.
         """
-        self.weights = np.repeat(np.array(weights), 88) if len(weights) == 1 else weights
+        self.weights = np.repeat(np.array(weights), self.P) if len(weights) == 1 else weights
         self.combined_prior = combined_prior
         
         
@@ -74,7 +76,7 @@ class State:
         state : State
             The state resulting from this transition.
         """
-        state = State()
+        state = State(self.P, self.with_onsets)
         state.log_prob = self.log_prob + log_prob
 
         state.sample = sample
@@ -96,7 +98,7 @@ class State:
         combined_priors : np.matrix
             A num_pitches x T matrix containing the combined priors of this State at each frame.
         """
-        num_pitches = len(self.combined_prior) if self.combined_prior is not None else 88
+        num_pitches = len(self.combined_prior) if self.combined_prior is not None else self.P
         width = self.num if self.combined_prior is not None else self.num-1
         combined_priors = np.zeros((num_pitches, width))
 
@@ -117,7 +119,7 @@ class State:
         weights : np.matrix
             A num_pitches x T matrix containing the weights of this State at each frame.
         """
-        num_pitches = len(self.weights) if self.weights is not None else 88
+        num_pitches = len(self.weights) if self.weights is not None else self.P
         width = self.num if self.weights is not None else self.num-1
         weights = np.zeros((num_pitches, width))
 
@@ -138,7 +140,7 @@ class State:
         priors : np.matrix
             A num_pitches x T matrix containing the priors of this State at each frame.
         """
-        num_pitches = len(self.prior) if self.prior is not None and len(self.prior) > 0 else 88
+        num_pitches = len(self.prior) if self.prior is not None and len(self.prior) > 0 else self.P
         width = self.num if self.prior is not None else self.num-1
         priors = np.zeros((num_pitches, width + 1))
 
@@ -150,7 +152,7 @@ class State:
         return priors
 
 
-    def get_piano_roll(self, min_length=None, max_length=None):
+    def get_piano_roll(self, min_length=None, max_length=None, formatter=None):
         """
         Get the piano roll of this State.
 
@@ -163,6 +165,9 @@ class State:
         max_length : int
             The maximum length for a returned piano roll. This will return at most the most recent
             max_length frames.
+            
+        formatter : func(list(int) -> list(int))
+            Optionally, a function to convert the samples of this state to another format.
 
         Returns
         =======
@@ -170,7 +175,7 @@ class State:
             A num_pitches x max(min_length, min(T, max_length)) binary matrix containing the pitch
             detections of this State.
         """
-        num_pitches = len(self.sample) if self.sample is not None and len(self.sample) > 0 else 88
+        num_pitches = len(self.sample) if self.sample is not None and len(self.sample) > 0 else (self.P // 2 if self.with_onsets else self.P)
         length = min(self.num, max_length) if max_length is not None else self.num
         length = max(min_length, length) if min_length is not None else length
         piano_roll = np.zeros((num_pitches, length))
@@ -180,4 +185,25 @@ class State:
             piano_roll[:, length - 1 - i] = state.sample
             state = state.prev
 
-        return piano_roll
+        return piano_roll if formatter is None else formatter(piano_roll)
+
+    
+def trinary_pr_to_presence_onset(pr):
+    """
+    Convert from a trinary piano-roll to a presence-onset format one.
+    
+    Parameters
+    ----------
+    pr : np.ndarray
+        A trinary piano-roll, dimensions (P, T).
+        
+    Returns
+    -------
+    binary_pr : np.ndarray
+        A binary presence-onset piano-roll, dimensions (2P, T).
+    """
+    p = len(pr)
+    binary_pr = np.zeros((2 * p, pr.shape[1]))
+    binary_pr[:p, :] = np.where(pr >= 1, 1, 0)
+    binary_pr[p:, :] = np.where(pr == 2, 1, 0)
+    return binary_pr
