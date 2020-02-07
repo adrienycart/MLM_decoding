@@ -20,7 +20,7 @@ if __name__ == "__main__":
                         "used in the files. Either kelz (default), or bittner.",
                         default="kelz")
 
-    parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event", "beat"], help="Change the step type " +
+    parser.add_argument("--step", type=str, choices=["time", "quant","quant_short", "event", "beat", "20ms"], help="Change the step type " +
                         "for frame timing. Either time (default), quant (for 16th notes), or event (for onsets).",
                         default="time")
     parser.add_argument('--beat_gt',action='store_true',help="with beat timesteps, use ground-truth beat positions")
@@ -74,7 +74,7 @@ if __name__ == "__main__":
                                  beat_subdiv=args.beat_subdiv)
 
     dimensions = [(0.1, 0.8), # min_diff
-                  (5, 50) if args.step == "time" else (3, 10), # history
+                  (5, 50) if args.step in ["time", "20ms"] else (3, 10), # history
                   (1, 4), # num_layers
                   [not args.prior], # is_weight
                   [True]] # features
