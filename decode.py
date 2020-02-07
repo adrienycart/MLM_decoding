@@ -214,8 +214,6 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
     no_mlm = weight_model_dict['no_mlm'] if 'no_mlm' in weight_model_dict else False
 
     X = np.vstack([create_weight_x_sk(state, acoustic, frame_num, history, features=features,
-                                      history_context=history_context,
-                                      prior_context=prior_context,
                                       no_mlm=no_mlm, with_onsets=with_onsets) for state in beam])
     # Remove LSTM sample
     if not use_lstm:
@@ -327,7 +325,7 @@ def get_best_weights(language, acoustic, gt, width=0.25):
 
 
 def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), features=False,
-                    history_context=0, prior_context=0, no_mlm=False, with_onsets=False):
+                       no_mlm=False, with_onsets=False):
     """
     Get the x input for the sk-learn dynamic weighting model.
 
@@ -350,13 +348,6 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
 
     features : boolean
         True to calculate features. False otherwise.
-
-    history_context : int
-        The pitch window to include around the history of samples, unrolled, and 0 padded.
-        Defaults to 0.
-
-    prior_context : int
-        The window of priors to include around the current priors. Defaults to 0.
 
     no_mlm : boolean
         Whether to suppress MLM-based inputs. Defaults to False.
@@ -384,13 +375,11 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
         x_presence = get_weight_data_sk_unpadded(pr_presence, acoustic_presence, frame_num,
                                                  state_priors_presence, frame_presence, this_prior_presence,
                                                  features, no_mlm)
-        x_presence = pad_x(x_presence, frame, this_prior_presence, pr_presence, history, history_context, prior_context)
         
         # Create and pad onset half
         x_onsets = get_weight_data_sk_unpadded(pr_onsets, acoustic_onsets, frame_num,
                                                  state_priors_onsets, frame_onsets, this_prior_onsets,
                                                  features, no_mlm)
-        x_onsets = pad_x(x_onsets, frame, this_prior_onsets, pr_onsets, history, history_context, prior_context)
         
         # Combine halves
         x = np.hstack((x_presence, x_onsets))
@@ -399,7 +388,6 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
         # Create and pad data
         pr = state.get_piano_roll(min_length=history, max_length=history)
         x = get_weight_data_sk_unpadded(pr, acoustic, frame_num, state.get_priors(), frame, state.prior, features, no_mlm)
-        x = pad_x(x_presence, frame, prior_presence, pr_presence, history, history_context, prior_context)
 
     return x[pitches]
 
@@ -454,77 +442,6 @@ def get_weight_data_sk_unpadded(pr, acoustic, frame_num, state_priors, frame, th
                        np.zeros((88, 1)) if no_mlm else np.reshape(this_prior, (88, -1))))
 
     return x
-
-
-
-def pad_x(x, acoustic, language, pr, history, history_context, prior_context):
-    """
-    Add a pitch and acoustic prior window around its given history to an sk-learn x data point.
-
-    Parameters
-    ==========
-    x : np.ndarray
-        The original data points, num_data_points X num_features.
-
-    acoustic : np.ndarray
-        The acoustic prior for the entire piece, as time X pitch.
-
-    language : np.ndarray
-        The language model priors of the past steps, as an 88 X N array.
-
-    pr : np.ndarray
-        The binary piano roll of the past steps, as an 88 X N array.
-
-    history_context : int
-        The window radius around the samples to save.
-
-    prior_context : int
-        The window radius around the acoustic priors to save.
-
-    Returns
-    =======
-    x_new : np.ndarray
-        The padded data points.
-    """
-    x_new = np.zeros((x.shape[0], x.shape[1] + prior_context * 4 + 2 * history_context * history))
-    x_new[:, :x.shape[1]] = x
-
-    extra_start = x.shape[1]
-
-    if prior_context != 0:
-        acoustic_padded = np.zeros(88 + prior_context * 2)
-        acoustic_padded[prior_context:-prior_context] = acoustic
-
-        language_padded = np.zeros(88 + prior_context * 2)
-        language_padded[prior_context:-prior_context] = language
-
-        for i in range(prior_context):
-            x_new[:, extra_start + i] = acoustic_padded[i:-2 * prior_context + i]
-            x_new[:, extra_start + prior_context + i] = language_padded[i:-2 * prior_context + i]
-            if i == 0:
-                x_new[:, extra_start + 2 * prior_context + i] = acoustic_padded[2 * prior_context - i:]
-                x_new[:, extra_start + 3 * prior_context + i] = language_padded[2 * prior_context - i:]
-            else:
-                x_new[:, extra_start + 2 * prior_context + i] = acoustic_padded[2 * prior_context - i:-i]
-                x_new[:, extra_start + 3 * prior_context + i] = language_padded[2 * prior_context - i:-i]
-
-    extra_start += 4 * prior_context
-
-    if history_context != 0 and history != 0:
-        pr_padded = np.zeros((88 + history_context * 2, history))
-        pr_padded[history_context:-history_context, :] = pr
-
-        for i in range(history_context):
-            x_new[:, extra_start + i * history :
-                  extra_start + (i + 1) * history] = pr_padded[i:-2 * history_context + i, :]
-            if i == 0:
-                x_new[:, extra_start + history_context * history + i * history :
-                      extra_start + history_context * history + (i + 1) * history] = pr_padded[2 * history_context - i:, :]
-            else:
-                x_new[:, extra_start + history_context * history + i * history :
-                      extra_start + history_context * history + (i + 1) * history] = pr_padded[2 * history_context - i:-i, :]
-
-    return x_new
 
 
 

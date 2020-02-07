@@ -1,15 +1,20 @@
+"""This file performes the Bayesian Optimization search for a blending model, using the functions
+in optim_helper.py."""
 import skopt
 import argparse
 import os
 import sys
 
-import weight_search
+import optim_helper
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("model", help="The LSTM model to load, the best filename without extension.")
+    parser.add_argument("-m", "--model", help="The LSTM model to load, the best filename without extension.",
+                        required=True)
     parser.add_argument("valid_data", help="The directory containing validation data files.")
+    parser.add_argument("--blending_data", help="The data file to load blending data from. This should've "
+                        "been created using create_blending_data.py", required=True)
 
     parser.add_argument("--acoustic", type=str, choices=["kelz", "bittner"], help="Change the acoustic model " +
                         "used in the files. Either kelz (default), or bittner.",
@@ -29,18 +34,12 @@ if __name__ == "__main__":
                         default=50)
     parser.add_argument("--gpu", help="The gpu to use. Defaults to 0.", default="0")
     parser.add_argument("--prior", help="Train for prior, rather than weight (default).", action="store_true")
-    parser.add_argument("--beam_data", help="The data file to load beam data from. Defaults to None, which will " +
-                        "not load any.", default=None)
-    parser.add_argument("--gt_data", help="The data file to load ground truth data from. Defaults to None, which " +
-                        "will not load any.", default=None)
     parser.add_argument("--model_dir", help="The directory to save model files to. Defaults to the current directory.",
                         default=".")
     parser.add_argument("--early_exit", help="Tell the model to quit the computation of a point if the value of any " +
                         "piece's notewise F-measure is below this amount. Defaults to 0.001.", type=float,
                         default=0.001)
     parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="store_true")
-    parser.add_argument("--with_onsets", help="The input will be a double pianoroll containing "
-                        "presence and onset halves.", action="store_true")
 
     args = parser.parse_args()
 
@@ -50,8 +49,7 @@ if __name__ == "__main__":
     print("using GPU " + args.gpu)
     print("Training for " + ("prior" if args.prior else "weight"))
     print("Loading LSTM " + args.model)
-    print("Using gt data " + ('None' if args.gt_data is None else args.gt_data))
-    print("Using beam data " + ('None' if args.beam_data is None else args.beam_data))
+    print("Using blending data " + args.blending_data)
     print("Early exit threshold at " + str(args.early_exit))
     print("Saving models to " + args.model_dir)
     sys.stdout.flush()
@@ -64,22 +62,18 @@ if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
-    weight_search.load_data_info(gt=args.gt_data, beam=args.beam_data, valid=args.valid_data, step=args.step,
+    optim_helper.load_data_info(blending_data=args.blending_data, valid=args.valid_data, step=args.step,
                                  model_path=args.model, model_out=args.model_dir, acoustic=args.acoustic,
                                  early_exit=args.early_exit,diagRNN=args.diagRNN, beat_gt=args.beat_gt,
-                                 beat_subdiv=args.beat_subdiv, with_onsets=args.with_onsets)
+                                 beat_subdiv=args.beat_subdiv)
 
-    dimensions = [[False], # GT
-                  (0.1, 0.8), # min_diff
+    dimensions = [(0.1, 0.8), # min_diff
                   (5, 50) if args.step == "time" else (3, 10), # history
                   (1, 4), # num_layers
                   [not args.prior], # is_weight
-                  [True], # features
-                  [0], # history pitch context
-                  [0], # prior context
-                  [True]] # use LSTM
+                  [True]] # features
 
-    opt = skopt.gp_minimize(weight_search.weight_search, dimensions, n_calls=10+args.iters,
+    opt = skopt.gp_minimize(optim_helper.weight_search, dimensions, n_calls=10+args.iters,
                             kappa=args.kappa, noise=0.0004, verbose=True, n_points=10)
 
     skopt.dump(opt, args.output)

@@ -193,7 +193,7 @@ if __name__ == '__main__':
     parser.add_argument("--layers", nargs='+', type=int, help="The hidden layer sizes of the network to train. " +
                         "If not given, logistic regression will be used.")
     
-    parser.add_argument("--features", help="Use features (used if --all is given).", action="store_true")
+    parser.add_argument("--no_features", help="Don't use features.", action="store_true")
     
     parser.add_argument("-w", "--weight", help="Create a model which outputs the prior weights (rather than " +
                         "the default, which will output the prior directly).", action="store_true")
@@ -218,14 +218,14 @@ if __name__ == '__main__':
         sys.exit(0)
 
     # Filter X for desired input fields
-    X = filter_X_features(X, args.history, max_history, args.features, features_available, with_onsets)
+    X = filter_X_features(X, args.history, max_history, not args.no_features, features_available, with_onsets)
     
     model = train_model(X, Y, layers=args.layers, weight=args.weight, with_onsets=with_onsets)
     
     with open(args.out, "wb") as file:
         pickle.dump({'model' : model,
                      'history' : args.history,
-                     'features' : args.features,
+                     'features' : not args.no_features,
                      'weight' : args.weight,
                      'with_onsets' : with_onsets,
                      'no_mlm' : model_dict['no_mlm']}, file)

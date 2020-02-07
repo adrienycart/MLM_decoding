@@ -41,7 +41,7 @@ def get_weight_data_one_piece(filename, section, model, sess, args):
         
     args : Namespace
         A namespace returned by argparse which contains the fields we need here.
-        Run create_weight_data.py -h for details.
+        Run create_blending_data.py -h for details.
     """
     if args.step == "beat":
         data = dataMaps.DataMapsBeats()
@@ -63,8 +63,8 @@ def get_weight_data_one_piece(filename, section, model, sess, args):
     # Decode
     return get_weight_data(target_data, input_data, model, sess, branch_factor=args.branch, beam_size=args.beam,
                            weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
-                           gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
-                           verbose=args.verbose, no_mlm=args.no_mlm)
+                           gt_only=args.gt, history=args.history, features=not args.no_features,
+                           min_diff=args.min_diff, verbose=args.verbose, no_mlm=args.no_mlm)
 
 
 
@@ -277,7 +277,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--gt", help="Transition on ground truth samples only.", action="store_true")
 
-    parser.add_argument("--features", help="Use features in the x data points.", action="store_true")
+    parser.add_argument("--no_features", help="Don't save features in the x data points.", action="store_true")
 
     parser.add_argument("--no_mlm", help="Set all MLM-based inputs to 0.", action="store_true")
 
@@ -355,6 +355,6 @@ if __name__ == '__main__':
                      'Y' : Y,
                      'D' : D,
                      'history' : args.history,
-                     'features' : args.features,
+                     'features' : not args.no_features,
                      'no_mlm' : args.no_mlm,
                      'with_onsets' : args.with_onsets}, file)
