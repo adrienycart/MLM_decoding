@@ -126,10 +126,25 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
 
         # Here we sample from each state in the beam
         for i, state in enumerate(beam):
-            weight_this = weights_all[:, i * P : (i + 1) * P] if weights_all is not None else weight
+            if model.with_onsets:
+                if weights_all is None:
+                    weight_this = weight
+                else:
+                    weight_2d = weights_all[i * P // 2 : (i + 1) * P // 2, :]
+                    weight_this = np.zeros((2, P))
+                    weight_this[0, :P // 2] = weight_2d[:, 0]
+                    weight_this[0, P // 2:] = weight_2d[:, 1]
+                    weight_this[1] = 1 - weight_this[0]
+            else:
+                weight_this = weights_all[:, i * P : (i + 1) * P] if weights_all is not None else weight
 
             if priors_all is not None:
-                prior = np.squeeze(priors_all[i * P : (i + 1) * P])
+                if model.with_onsets:
+                    prior = np.zeros(P)
+                    prior[:P // 2] = priors_all[i * P // 2, 0]
+                    prior[P // 2:] = priors_all[i * P // 2, 1]
+                else:
+                    prior = np.squeeze(priors_all[i * P : (i + 1) * P])
             else:
                 prior = np.squeeze(weight_this[0] * frame + weight_this[1] * state.prior)
 
@@ -193,11 +208,15 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
     Returns
     =======
     weights_all : np.ndarray
-        A 2 x (P*beam) array, containing the acoustic (index 0) and language (index 1) weights
-        for each sample and pitch.
+        Without onsets, a 2 x (P*beam) array, containing the acoustic (index 0) and language (index 1) weights
+        for each sample and pitch. With onsets, a (P/2*beam) x 2 array, the first column of which is the
+        acoustic weight for the presence bit, and the second column of which is the acoustic weight for the
+        onset bit.
 
     priors_all : np.array
-        An (P*beam)-length array, containing the prior for each sample and pitch.
+        Without onsets, a (P*beam)-length array, containing the prior for each sample and pitch. With onsets,
+        a (P/2*beam) x 2 array, the first column of which is the prior for the presence bit, and the second
+        column of which is the prior for the onset bit.
     """
     if gt:
         weights_all = np.transpose(np.vstack([get_best_weights(state.prior, frame, gt[:, frame_num]) for state in beam]))
@@ -210,20 +229,26 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
     is_weight = weight_model_dict['weight'] if 'weight' in weight_model_dict else True
     history_context = weight_model_dict['history_context'] if 'history_context' in weight_model_dict else 0
     prior_context = weight_model_dict['prior_context'] if 'prior_context' in weight_model_dict else 0
-    use_lstm = weight_model_dict['use_lstm'] if 'use_lstm' in weight_model_dict else True
     no_mlm = weight_model_dict['no_mlm'] if 'no_mlm' in weight_model_dict else False
+    with_onsets_wm = weight_model_dict['with_onsets'] if 'with_onsets' in weight_model_dict else False
+    assert with_onsets_wm == with_onsets, "Blending model was not trained with onsets."
 
     X = np.vstack([create_weight_x_sk(state, acoustic, frame_num, history, features=features,
                                       no_mlm=no_mlm, with_onsets=with_onsets) for state in beam])
-    # Remove LSTM sample
-    if not use_lstm:
-        X = X[:, :-1]
 
-    # 2 x len(X) matrix
-    weights_all = np.transpose(weight_model.predict_proba(X)) if is_weight else None
+    prediction = weight_model.predict_proba(X)
+    
+    if with_onsets:
+        # With onsets, the return will always be a (len(X), 2) array, which we will process elsewhere.
+        weights_all = prediction if is_weight else None
+        priors_all = prediction if not is_weight else None
+        
+    else:
+        # 2 x len(X) matrix
+        weights_all = np.transpose(prediction) if is_weight else None
 
-    # len(X) array
-    priors_all = np.squeeze(weight_model.predict_proba(X)[:, 1]) if not is_weight else None
+        # len(X) array
+        priors_all = np.squeeze(prediction[:, 1]) if not is_weight else None
 
     return weights_all, priors_all
 

@@ -5,7 +5,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/../..')
 
 from dataMaps import DataMaps,convert_note_to_time, align_matrix, DataMapsBeats
-from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note
+from eval_utils import (compute_eval_metrics_frame, compute_eval_metrics_note,
+                        compute_eval_metrics_with_onset)
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
 from decode import decode
