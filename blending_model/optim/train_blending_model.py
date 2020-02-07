@@ -1,3 +1,6 @@
+"""This file contains functions that can be used to train a blending model, as well as filter a
+set of X, Y, D data (by both number of data points, and number of features). It can be run from
+the command line."""
 import argparse
 import numpy as np
 import pickle
@@ -72,8 +75,8 @@ def convert_targets_to_weight(X, Y, with_onsets=False):
     """
     if with_onsets:
         # Just treat each half as if it was without onsets
-        convert_targets_to_weight(X[:, :X.shape[1] / 2], Y[:, 0], with_onsets=False)
-        convert_targets_to_weight(X[:, X.shape[1] / 2:], Y[:, 1], with_onsets=False)
+        convert_targets_to_weight(X[:, :X.shape[1] // 2], Y[:, 0], with_onsets=False)
+        convert_targets_to_weight(X[:, X.shape[1] // 2:], Y[:, 1], with_onsets=False)
         return
     
     la = -1
@@ -144,7 +147,7 @@ def filter_X_features(X, history, max_history, features, features_available, wit
     with_onsets : bool
         True if the given data contains onsets. False otherwise.
     """
-    if max_history < args.history:
+    if max_history < history:
         print(f"The amount of history in the data ({max_history}) is less than the desired history ({history})."
               f" Returning data with history ({max_history}).")
         history = max_history
@@ -178,8 +181,8 @@ def filter_X_features(X, history, max_history, features, features_available, wit
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
-    parser.add_argument("data", help="A pickle file containing a dictionary with X, Y, D, history, and features. " +
-                        "This should be created by create_weight_data.py")
+    parser.add_argument("data", help="A pickle file containing a dictionary with X, Y, D and other data. " +
+                        "This should be created by create_blending_data.py")
     
     parser.add_argument("out", help="The file to save the model to.")
     

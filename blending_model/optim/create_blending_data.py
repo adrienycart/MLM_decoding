@@ -1,3 +1,5 @@
+"""This contains functions that can be used to create data for training a blending model. It should
+be run from the command line."""
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/../..')
