@@ -244,15 +244,18 @@ def compute_eval_metrics_with_onset(input_pr,corresp,target_data,section=None,do
 
     # Get note sequences
     notes_est , intervals_est = get_notes_intervals_with_onsets(input_pr, corresp,double_roll)
+     #Note +20 and not 21 because get_notes_intervals adds +1
+    notes_est = notes_est+20
     if len(intervals_est) == 0:
         intervals_est = np.zeros((0, 2))
+
+
 
     notes_ref,intervals_ref = [],[]
 
     for note in sum([instr.notes for instr in target_data.instruments],[]):
         if section is None or (note.start < section[1] and note.end>section[0]):
-            ### +21-1 because in get_notes_intervals_with_onsets, we add +1 so that pitches are not equal to 0
-            notes_ref+= [note.pitch-20]
+            notes_ref+= [note.pitch]
             intervals_ref+= [[max(note.start,section[0]),min(note.end,section[1])]]
 
     notes_ref = np.array(notes_ref)
@@ -280,8 +283,7 @@ def compute_eval_metrics_with_onset(input_pr,corresp,target_data,section=None,do
     for pitch, [onset,offset] in zip(notes_est,intervals_est):
         on_idx = int(onset*fs)
         off_idx = int(offset*fs)
-        ### +21-1 because in get_notes_intervals_with_onsets, we add +1 so that pitches are not equal to 0
-        output[pitch+20,on_idx:off_idx]=1
+        output[pitch,on_idx:off_idx]=1
 
 
     if tolerance == None:
@@ -305,7 +307,7 @@ def compute_eval_metrics_with_onset(input_pr,corresp,target_data,section=None,do
         notes_ref,intervals_est,notes_est,pitch_tolerance=0.25,offset_ratio=offset_ratio,
         onset_tolerance=tolerance,offset_min_tolerance=0.05)
 
-    return [P_f,R_f,F_f],[P_n,R_n,F_n]
+    return [P_f,R_f,F_f],[P_n,R_n,F_n], notes_est, intervals_est
 
 def out_key_errors_binary_mask(input,target,mask,mask_octave,min_dur=None,tolerance=None, with_offset=False, min_gap=None, mask_thresh=0.05):
     #Compute evaluation metrics note-by-note
@@ -425,14 +427,18 @@ def make_midi_from_roll(roll,fs):
     #Outputs the waveform corresponding to the pianoroll
 
     pitches, intervals = get_notes_intervals(roll,fs)
+    pitches = pitches+20 #Note +20 and not 21 because get_notes_intervals adds +1
+    return make_midi_from_notes(pitches,intervals)
 
-    midi_data = pm.PrettyMIDI()
+
+def make_midi_from_notes(notes,intervals):
+    midi_data = pm.PrettyMIDI(resolution=480)
     piano_program = pm.instrument_name_to_program('Acoustic Grand Piano')
     piano = pm.Instrument(program=piano_program)
 
-    for note,(start,end) in zip(pitches,intervals):
+    for note,(start,end) in zip(notes,intervals):
         note = pm.Note(
-            velocity=100, pitch=note+20, start=start, end=end) #Note +20 and not 21 because get_notes_intervals adds +1
+            velocity=100, pitch=note, start=start, end=end)
         piano.notes.append(note)
     midi_data.instruments.append(piano)
     return midi_data

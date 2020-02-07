@@ -1,5 +1,5 @@
 from dataMaps import DataMaps, DataMapsBeats, convert_note_to_time, align_matrix
-from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note, compute_eval_metrics_with_onset
+from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note, compute_eval_metrics_with_onset, make_midi_from_notes
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
 from decode import decode
@@ -50,7 +50,7 @@ parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="store_tr
 args = parser.parse_args()
 
 if not (0 <= args.weight <= 1):
-    if args.weight == -1 and not args.it is None:
+    if args.weight == -1 :
         print('No weight - priors multiplied')
     else:
         print("Weight must be between 0 and 1.", file=sys.stderr)
@@ -150,7 +150,6 @@ for fn in os.listdir(folder):
                             beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
                             out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
                             verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
-            print(pr.shape)
 
         else:
             if args.with_onsets:
@@ -175,7 +174,7 @@ for fn in os.listdir(folder):
         if not args.save is None:
             np.save(os.path.join(args.save,fn.replace('.mid','_pr')), pr)
             np.savetxt(os.path.join(args.save,fn.replace('.mid','_pr.csv')), pr)
-            if (args.weight_model is not None or args.weight != 1.0) and args.it <= 0:
+            if (args.weight_model is not None or args.weight != 1.0):
                 np.save(os.path.join(args.save,fn.replace('.mid','_priors')), priors)
                 np.save(os.path.join(args.save,fn.replace('.mid','_weights')), weights)
                 np.save(os.path.join(args.save,fn.replace('.mid','_combined_priors')), combined_priors)
@@ -201,7 +200,12 @@ for fn in os.listdir(folder):
 
             target_data = pm.PrettyMIDI(filename)
             corresp = data.corresp
-            [P_f,R_f,F_f],[P_n,R_n,F_n] = compute_eval_metrics_with_onset(pr,corresp,target_data,double_roll=True,min_dur=0.05,with_offset=args.with_offset,section=section)
+            [P_f,R_f,F_f],[P_n,R_n,F_n],notes_est,intervals_est = compute_eval_metrics_with_onset(pr,corresp,target_data,double_roll=True,min_dur=0.05,with_offset=args.with_offset,section=section)
+
+            if args.save:
+                midi_data = make_midi_from_notes(notes_est, intervals_est)
+                midi_data.write(os.path.join(args.save,fn))
+
 
 
         else:
