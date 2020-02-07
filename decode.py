@@ -143,7 +143,6 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
                     prior = np.zeros(P)
                     prior[:P // 2] = priors_all[i * P // 2 : (i + 1) * P // 2, 0]
                     prior[P // 2:] = priors_all[i * P // 2 : (i + 1) * P // 2, 1]
-                    print(priors_all[i * P // 2 : (i + 1) * P // 2, :])
                 else:
                     prior = np.squeeze(priors_all[i * P : (i + 1) * P])
             else:
