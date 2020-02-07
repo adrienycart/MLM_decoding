@@ -67,6 +67,22 @@ def load_data_info(blending_data=None, valid=None, model_path=None, n_hidden=256
     global_params['model_out'] = model_out
     global_params['acoustic'] = acoustic
     global_params['early_exit'] = early_exit
+    
+def get_filename(min_diff, history, num_layers, features, no_mlm, with_onsets,
+                 is_weight, step, num=0):
+    weight_model_name = "blending_model."
+    weight_model_name += "md" + str(min_diff)
+    weight_model_name += "_h" + str(history)
+    weight_model_name += "_l" + str(num_layers)
+    if features:
+        weight_model_name += "_f"
+    if no_mlm:
+        weight_model_name += "_noMLM"
+    if with_onsets:
+        weight_model_name += "_withOnsets"
+    weight_model_name += "_weight" if is_weight else "_prior"
+    weight_model_name += "." + step + "." + str(num) + ".pkl"
+    return weight_model_name
 
 
 most_recent_model = None
@@ -139,18 +155,8 @@ def weight_search(params, num=0, verbose=False):
                          'no_mlm' : no_mlm,
                          'with_onsets' : with_onsets}
 
-    weight_model_name = "blending_model."
-    weight_model_name += "md" + str(min_diff)
-    weight_model_name += "_h" + str(history)
-    weight_model_name += "_l" + str(num_layers)
-    if features:
-        weight_model_name += "_f"
-    if no_mlm:
-        weight_model_name += "_noMLM"
-    if with_onsets:
-        weight_model_name += "_withOnsets"
-    weight_model_name += "_weight" if is_weight else "_prior"
-    weight_model_name += "." + global_params['step'] + "." + str(num) + ".pkl"
+    weight_model_name = get_filename(min_diff, history, num_layers, features, no_mlm,
+                                     with_onsets, is_weight, global_params['step'])
 
     # Write out weight model
     with open(os.path.join(global_params['model_out'], weight_model_name), "wb") as file:
