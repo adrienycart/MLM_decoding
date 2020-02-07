@@ -77,6 +77,9 @@ def convert_targets_to_weight(X, Y, with_onsets=False):
         # Just treat each half as if it was without onsets
         convert_targets_to_weight(X[:, :X.shape[1] // 2], Y[:, 0], with_onsets=False)
         convert_targets_to_weight(X[:, X.shape[1] // 2:], Y[:, 1], with_onsets=False)
+        Y[:, :] = 1 - Y # Convert because here, the output will be the acoustic weight for each
+                        # target (presence, then onset), rather than the language weight in bin 0
+                        # and the acoustic weight in bin 1.
         return
     
     la = -1
