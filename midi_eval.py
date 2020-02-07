@@ -8,18 +8,33 @@ import mir_eval
 from eval_utils import compute_eval_metrics_frame
 
 
-section = [0,30]
+parser = argparse.ArgumentParser()
 
+parser.add_argument('estim_path',type=str,help="location of the estimated MIDI")
+parser.add_argument('target_path',type=str,help="location of the ground-truth MIDI")
+parser.add_argument("--max_len",type=str,help="test on the first max_len seconds of each text file. Anything other than a number will evaluate on whole files. Default is 30s.",
+                    default=30)
+
+try:
+    max_len = float(args.max_len)
+    section = [0,max_len]
+    print(f"Evaluate on first {args.max_len} seconds")
+except:
+    max_len = None
+    section=None
+    print(f"Evaluate on whole files")
+
+# Sampling frequency for the piano roll
 fs=100
 
-input_folder = 'data/midi_adsr'
-target_folder = "data/outputs_adsr_split20p/test"
+input_folder = args.estim_path
+target_folder = args.target_path
 
 all_frame = []
 all_on = []
 all_onoff = []
 
-
+results = {}
 
 for midi_name in os.listdir(input_folder):
     if not midi_name.startswith('.') and midi_name.endswith('.mid') and not 'chpn-e01' in midi_name:
@@ -71,10 +86,14 @@ for midi_name in os.listdir(input_folder):
             notes_ref,intervals_est,notes_est,pitch_tolerance=0.25,offset_ratio=0.2,
             onset_tolerance=0.05,offset_min_tolerance=0.05)
 
+        results[fn] = [[P_f,R_f,F_f],[P_n_on,R_n_on,F_n_on],[P_n_onoff,R_n_onoff,F_n_onoff]]
+
         all_frame += [[P_f,R_f,F_f]]
         all_on += [[P_n_on,R_n_on,F_n_on]]
         all_onoff += [[P_n_onoff,R_n_onoff,F_n_onoff]]
         print(f"Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n_on:.3f},{R_n_on:.3f},{F_n_on:.3f}, with offsets P,R,F: {P_n_onoff:.3f},{R_n_onoff:.3f},{F_n_onoff:.3f} ")
+
+pickle.dump(results,open(os.path.join(args.estim_path,'results.p'), "wb"))
 
 all_frame = np.array(all_frame)
 all_on = np.array(all_on)
