@@ -18,6 +18,53 @@ from mlm_training.model import Model, make_model_param
 
 
 
+def get_weight_data_one_piece(filename, section, model, sess, args):
+    """
+    Get the x, y, and d data for a single piece.
+    
+    Parameters
+    ----------
+    filename : string
+        The MIDI file whose data to return.
+        
+    section : list
+        A list containing the start and end points of the section of the piece to decode,
+        in seconds. If None, the entire piece is decoded.
+        
+    model : tf.model
+        The tensorflow model to use.
+        
+    sess : tf.Session
+        The tensorflow session to use.
+        
+    args : Namespace
+        A namespace returned by argparse which contains the fields we need here.
+        Run create_weight_data.py -h for details.
+    """
+    if args.step == "beat":
+        data = dataMaps.DataMapsBeats()
+        data.make_from_file(filename, args.beat_gt, args.beat_subdiv, section,
+                            with_onsets=args.with_onsets, acoustic_model=args.acoustic)
+    else:
+        data = dataMaps.DataMaps()
+        data.make_from_file(filename, args.step, section=section, with_onsets=args.with_onsets,
+                            acoustic_model=args.acoustic)
+
+    input_data = data.input
+    target_data = data.target
+    if args.with_onsets:
+        input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
+        input_data[:data.input.shape[0], :] = data.input[:, :, 0]
+        input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
+        target_data = trinary_pr_to_presence_onset(data.target)
+
+    # Decode
+    return get_weight_data(target_data, input_data, model, sess, branch_factor=args.branch, beam_size=args.beam,
+                           weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
+                           gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
+                           verbose=args.verbose, no_mlm=args.no_mlm)
+
+
 
 def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.5], [0.5]],
            hash_length=10, gt_only=False, history=5, min_diff=0.01, features=False, verbose=False, no_mlm=False):
@@ -272,26 +319,7 @@ if __name__ == '__main__':
 
     # Load data
     if args.MIDI.endswith(".mid"):
-        if args.step == "beat":
-            data = dataMaps.DataMapsBeats()
-            data.make_from_file(args.MIDI,args.beat_gt,args.beat_subdiv,section, with_onsets=args.with_onsets, acoustic_model=args.acoustic)
-        else:
-            data = dataMaps.DataMaps()
-            data.make_from_file(args.MIDI, args.step, section=section, with_onsets=args.with_onsets, acoustic_model=args.acoustic)
-
-        input_data = data.input
-        target_data = data.target
-        if args.with_onsets:
-            input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
-            input_data[:data.input.shape[0], :] = data.input[:, :, 0]
-            input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
-            target_data = trinary_pr_to_presence_onset(data.target)
-            
-        # Decode
-        X, Y, D = get_weight_data(target_data, input_data, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                               weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
-                               gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
-                               verbose=args.verbose, no_mlm=args.no_mlm)
+        X, Y, D = get_weight_data_one_piece(args.MIDI, section, model, sess, args)
     else:
         X = np.zeros((0, 0))
         Y = np.zeros((0, 0)) if args.with_onsets else np.zeros(0)
@@ -300,26 +328,8 @@ if __name__ == '__main__':
         for file in glob.glob(os.path.join(args.MIDI, "*.mid")):
             if args.verbose:
                 print(file)
-            if args.step == "beat":
-                data = dataMaps.DataMapsBeats()
-                data.make_from_file(file,args.beat_gt,args.beat_subdiv,section, acoustic_model=args.acoustic, with_onsets=args.with_onsets)
-            else:
-                data = dataMaps.DataMaps()
-                data.make_from_file(file, args.step, section=section, acoustic_model=args.acoustic, with_onsets=args.with_onsets)
-
-            input_data = data.input
-            target_data = data.target
-            if args.with_onsets:
-                input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
-                input_data[:data.input.shape[0], :] = data.input[:, :, 0]
-                input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
-                target_data = trinary_pr_to_presence_onset(data.target)
                 
-            # Decode
-            x, y, d = get_weight_data(target_data, input_data, model, sess, branch_factor=args.branch, beam_size=args.beam,
-                                   weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
-                                   gt_only=args.gt, history=args.history, features=args.features, min_diff=args.min_diff,
-                                   verbose=args.verbose, no_mlm=args.no_mlm)
+            x, y, d = get_weight_data_one_piece(file, section, model, sess, args)
 
             if len(X) > 0:
                 X = np.vstack((X, x))
