@@ -5,6 +5,7 @@ import os.path
 import shutil
 
 from optim_helper import get_filename
+from early_stopper import EarlyStopperNoImprovement
 
 
 if __name__ == "__main__":
