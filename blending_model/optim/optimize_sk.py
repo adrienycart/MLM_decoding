@@ -4,11 +4,23 @@ import skopt
 import argparse
 import os
 import sys
+import numpy as np
 
-from skopt import callbacks
-from skopt.callbacks import CheckpointSaver
+from skopt.callbacks import CheckpointSaver, EarlyStopper
 
 import optim_helper
+
+
+class EarlyStopperNoImprovement(EarlyStopper):
+    def __init__(self, iters):
+        self.iters = iters
+
+    def _criterion(self, result):
+        best_index = np.argmin(result['func_vals'])
+        if len(result['func_vals']) - best_index > self.iters:
+            print("Early stopping.")
+            return True
+        return False
 
 
 if __name__ == "__main__":
@@ -40,15 +52,18 @@ if __name__ == "__main__":
     parser.add_argument("--prior", help="Train for prior, rather than weight (default).", action="store_true")
     parser.add_argument("--model_dir", help="The directory to save model files to. Defaults to the current directory.",
                         default=".")
-    parser.add_argument("--early_exit", help="Tell the model to quit the computation of a point if the value of any " +
+    parser.add_argument("--give_up", help="Tell the model to quit the computation of a point if the value of any " +
                         "piece's notewise F-measure is below this amount. Defaults to 0.001.", type=float,
                         default=0.001)
+    parser.add_argument("--early_stopping", help="Stop optimization if the best result was not for this number "
+                        "of iterations.", type=int, default=50)
     parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="store_true")
     parser.add_argument("--load", help="Continue optimization from the file in --output.", action="store_true")
 
     args = parser.parse_args()
 
-    print("Running for " + str(args.iters) + " iterations.")
+    print("Running for at most " + str(args.iters) + " iterations.")
+    print(f"Stopping if no improvement for at least {args.early_stopping} iterations.")
     print("step type: " + args.step)
     print("saving output to " + args.output)
     if args.cpu:
@@ -58,7 +73,7 @@ if __name__ == "__main__":
     print("Training for " + ("prior" if args.prior else "weight"))
     print("Loading LSTM " + args.model)
     print("Using blending data " + args.blending_data)
-    print("Early exit threshold at " + str(args.early_exit))
+    print("Early exit threshold at " + str(args.give_up))
     print("Saving models to " + args.model_dir)
     sys.stdout.flush()
 
@@ -74,7 +89,7 @@ if __name__ == "__main__":
 
     optim_helper.load_data_info(blending_data=args.blending_data, valid=args.valid_data, step=args.step,
                                  model_path=args.model, model_out=args.model_dir, acoustic=args.acoustic,
-                                 early_exit=args.early_exit,diagRNN=args.diagRNN, beat_gt=args.beat_gt,
+                                 early_exit=args.give_up,diagRNN=args.diagRNN, beat_gt=args.beat_gt,
                                  beat_subdiv=args.beat_subdiv)
 
     if args.step in ["time", "20ms"]:
@@ -90,7 +105,9 @@ if __name__ == "__main__":
                   [not args.prior], # is_weight
                   [True]] # features
 
-    checkpoint_callback = CheckpointSaver(args.output)
+    callbacks = []
+    callbacks.append(CheckpointSaver(args.output))
+    callbacks.append(EarlyStopperNoImprovement(args.early_stopping))
 
     x0 = []
     y0 = []
@@ -108,7 +125,7 @@ if __name__ == "__main__":
 
     opt = skopt.gp_minimize(optim_helper.weight_search, dimensions, n_calls=n_calls,
                             kappa=args.kappa, noise=0.0004, verbose=True, n_points=10,
-                            x0=x0, y0=y0, callback=[checkpoint_callback],
+                            x0=x0, y0=y0, callback=callbacks,
                             n_random_starts=n_random_starts)
 
     skopt.dump(opt, args.output)
