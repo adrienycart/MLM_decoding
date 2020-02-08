@@ -92,8 +92,8 @@ if __name__ == "__main__":
 
     checkpoint_callback = CheckpointSaver(args.output)
 
-    x0 = None
-    y0 = None
+    x0 = []
+    y0 = []
     try:
         if args.load:
             res = skopt.load(args.output)
@@ -102,9 +102,13 @@ if __name__ == "__main__":
     except:
         print("Could not load from checkpoint " + args.output)
         print("Starting fresh")
+    
+    n_random_starts = max(10 - len(x0), 0)
+    n_calls = max(args.iters - len(x0), 0)
 
-    opt = skopt.gp_minimize(optim_helper.weight_search, dimensions, n_calls=10+args.iters,
+    opt = skopt.gp_minimize(optim_helper.weight_search, dimensions, n_calls=n_calls,
                             kappa=args.kappa, noise=0.0004, verbose=True, n_points=10,
-                            x0=x0, y0=y0, callback=[checkpoint_callback])
+                            x0=x0, y0=y0, callback=[checkpoint_callback],
+                            n_random_starts=n_random_starts)
 
     skopt.dump(opt, args.output)
