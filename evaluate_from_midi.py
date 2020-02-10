@@ -54,8 +54,7 @@ for midi_name in os.listdir(input_folder):
 
         for note in sum([instr.notes for instr in input_midi.instruments],[]):
             if section is None or (note.start < section[1] and note.end>section[0]):
-                ### +21-1 because in get_notes_intervals_with_onsets, we add +1 so that pitches are not equal to 0
-                notes_est+= [note.pitch-20]
+                notes_est+= [note.pitch]
                 intervals_est+= [[max(note.start,section[0]),min(note.end,section[1])]]
         notes_est = np.array(notes_est)
         intervals_est = np.array(intervals_est)
@@ -66,8 +65,7 @@ for midi_name in os.listdir(input_folder):
 
         for note in sum([instr.notes for instr in target_midi.instruments],[]):
             if section is None or (note.start < section[1] and note.end>section[0]):
-                ### +21-1 because in get_notes_intervals_with_onsets, we add +1 so that pitches are not equal to 0
-                notes_ref+= [note.pitch-20]
+                notes_ref+= [note.pitch]
                 intervals_ref+= [[max(note.start,section[0]),min(note.end,section[1])]]
 
         notes_ref = np.array(notes_ref)
