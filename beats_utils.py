@@ -1,5 +1,10 @@
 import numpy as np
-import madmom
+try:
+    import madmom
+    MADMOM = True
+except ModuleNotFoundError:
+    print('madmom not installed. Some options are disabled.')
+    MADMOM = False
 from scipy import stats
 import pretty_midi as pm
 
@@ -58,7 +63,6 @@ def get_subbeat_divisions(beats,beat_activ):
     1D numpy array
         Positions in seconds of the sub-beat subdivisions (only used for visualisation/debugging)
     """
-
     n_beats = len(beats)
     n_iter=0
     min_bpm = 110.0
