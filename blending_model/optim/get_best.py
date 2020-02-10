@@ -13,8 +13,7 @@ if __name__ == "__main__":
     
     parser.add_argument("sko_file", help="The .sko file output by optimize_sk.py.")
     
-    parser.add_argument("--dir", help="The directory where saved models are stored.",
-                        required=True)
+    parser.add_argument("--dir", help="The directory where saved models are stored.")
     
     parser.add_argument("--with_onsets", help="The saved blending model uses onsets.",
                         action="store_true")
@@ -47,15 +46,16 @@ if __name__ == "__main__":
     
     print(f"Best model filename should be '{filename}'")
     
-    print(f"Looking for {filename} in {args.dir}")
-    
-    full_path = os.path.join(args.dir, filename)
-    
-    if os.path.isfile(full_path):
-        print("   Found!")
-        
-        if args.output is not None:
-            print(f"Copying to {args.output}")
-            shutil.copyfile(full_path, args.output)
-    else:
-        print("    Not found. Maybe arguments were incorrect?")
+    if args.dir is not None:
+        print(f"Looking for {filename} in {args.dir}")
+
+        full_path = os.path.join(args.dir, filename)
+
+        if os.path.isfile(full_path):
+            print("   Found!")
+
+            if args.output is not None:
+                print(f"Copying to {args.output}")
+                shutil.copyfile(full_path, args.output)
+        else:
+            print("    Not found. Maybe arguments were incorrect?")
