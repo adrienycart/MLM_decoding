@@ -18,6 +18,7 @@ import numpy as np
 import mir_eval
 import eval_utils
 import beats_utils
+import pickle
 
 
 if __name__ == '__main__':
@@ -33,6 +34,7 @@ if __name__ == '__main__':
     parser.add_argument('--play_GT', action='store_true',help="play audio with ground-truth beat and downbeat positions (and subbeats if --subbeat is used)")
     parser.add_argument('--play_estim',action='store_true',help="play audio with estimated beat and downbeat positions (and subbeats if --subbeat is used)" )
     parser.add_argument('--play_both',action='store_true',help="play audio with both ground-truth and estimated beat and downbeat positions (and subbeats if --subbeat is used)" )
+    parser.add_argument('--save_res', help="Save the F-measures in the given pickle file.")
 
     args = parser.parse_args()
 
@@ -60,6 +62,7 @@ if __name__ == '__main__':
     else:
         extension = '.wav'
 
+    results = {}
 
     for fn in os.listdir(input_folder):
         if fn.endswith(extension) and not fn.startswith('.'):
@@ -88,19 +91,6 @@ if __name__ == '__main__':
                 else:
                     subbeats_GT = None
 
-                # Estimate beat positions
-                if args.midi:
-                    sig = midi_data.fluidsynth()
-                    # print(midi_data.instruments)
-                    if max_len is not None:
-                        sig = sig[:int(max_len*44100)]
-                else:
-                    sig_proc = madmom.audio.signal.SignalProcessor(sample_rate=44100, num_channels=1, start=0, stop=max_len,dtype=np.float32)
-                    sig = sig_proc(filename_input)
-
-                    fs = sig.sample_rate
-                    dur = sig.length
-
 
                 if args.load:
                     beats = np.loadtxt(filename_input.replace(extension,'_b_est.csv'))
@@ -108,6 +98,19 @@ if __name__ == '__main__':
                         beats = beats[beats<max_len]
 
                 else:
+                    # Estimate beat positions
+                    if args.midi:
+                        sig = midi_data.fluidsynth()
+                        # print(midi_data.instruments)
+                        if max_len is not None:
+                            sig = sig[:int(max_len*44100)]
+                    else:
+                        sig_proc = madmom.audio.signal.SignalProcessor(sample_rate=44100, num_channels=1, start=0, stop=max_len,dtype=np.float32)
+                        sig = sig_proc(filename_input)
+
+                        fs = sig.sample_rate
+                        dur = sig.length
+                        
                     proc_beat = madmom.features.RNNBeatProcessor()
                     act_beat = proc_beat(sig)
 
@@ -136,6 +139,7 @@ if __name__ == '__main__':
 
                 F = mir_eval.beat.f_measure(beats_GT,beats)
                 all_Fs += [F]
+                results[fn] = F
                 print(f"Beat F-measure: {F}")
                 # print(f"GT: {beats_GT}")
                 # print(f"Est: {beats}")
@@ -187,3 +191,7 @@ if __name__ == '__main__':
     print(f"Average beat F-measure: {sum(all_Fs)/len(all_Fs)}")
     if args.subbeats:
         print(f"Average sub_beat F-measure: {sum(all_Fs_sub)/len(all_Fs_sub)}")
+        
+    if args.save_res is not None:
+        with open(args.save_res, 'wb') as file:
+            pickle.dump(results, file)
