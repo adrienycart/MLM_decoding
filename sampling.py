@@ -25,6 +25,7 @@ def enumerate_samples(p):
         A list of the indices where there should be 1's in the samples, transformed using
         the given transform function, if not None.
     """
+    p = p * (1 - 2 * 1e-7) + 1e-7
     length = len(p)
     not_p = 1 - p
 
