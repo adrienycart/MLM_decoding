@@ -107,3 +107,8 @@ if __name__ == '__main__':
     P_n_on,R_n_on,F_n_on = np.mean(all_on, axis=0)
     P_n_onoff,R_n_onoff,F_n_onoff = np.mean(all_onoff, axis=0)
     print(f"Averages: Frame P,R,F: {P_f:.3f},{R_f:.3f},{F_f:.3f}, Note P,R,F: {P_n_on:.3f},{R_n_on:.3f},{F_n_on:.3f}, with offsets P,R,F: {P_n_onoff:.3f},{R_n_onoff:.3f},{F_n_onoff:.3f} ")
+
+    import subprocess
+    copy_string = '\t'.join([str(elt) for elt in [P_f, R_f, F_f,P_n_on,R_n_on,F_n_on,P_n_onoff,R_n_onoff,F_n_onoff]])
+    subprocess.run("pbcopy", universal_newlines=True, input=copy_string)
+    
