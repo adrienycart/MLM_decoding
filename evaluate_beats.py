@@ -35,6 +35,10 @@ if __name__ == '__main__':
     parser.add_argument('--play_estim',action='store_true',help="play audio with estimated beat and downbeat positions (and subbeats if --subbeat is used)" )
     parser.add_argument('--play_both',action='store_true',help="play audio with both ground-truth and estimated beat and downbeat positions (and subbeats if --subbeat is used)" )
     parser.add_argument('--save_res', help="Save the F-measures in the given pickle file.")
+    parser.add_argument('--longer', action='store_true', help='Evaluate including checking longer beat lengths '
+                        '(every 2 or 3 estimated beat).')
+    parser.add_argument('--shorter', action='store_true', help='Evaluate including checking shorter beat lengths '
+                        '(every 2 or 3 GT beat).')
 
     args = parser.parse_args()
 
@@ -138,6 +142,18 @@ if __name__ == '__main__':
                     beats = proc_beattrack(act_beat)
 
                 F = mir_eval.beat.f_measure(beats_GT,beats)
+                if args.longer:
+                    F = max(F, mir_eval.beat.f_measure(beats_GT,beats[::2]))
+                    F = max(F, mir_eval.beat.f_measure(beats_GT,beats[1::2]))
+                    F = max(F, mir_eval.beat.f_measure(beats_GT,beats[::3]))
+                    F = max(F, mir_eval.beat.f_measure(beats_GT,beats[1::3]))
+                    F = max(F, mir_eval.beat.f_measure(beats_GT,beats[2::3]))
+                if args.shorter:
+                    F = max(F, mir_eval.beat.f_measure(beats_GT[::2],beats))
+                    F = max(F, mir_eval.beat.f_measure(beats_GT[1::2],beats))
+                    F = max(F, mir_eval.beat.f_measure(beats_GT[::3],beats))
+                    F = max(F, mir_eval.beat.f_measure(beats_GT[1::3],beats))
+                    F = max(F, mir_eval.beat.f_measure(beats_GT[2::3],beats))
                 all_Fs += [F]
                 results[fn] = F
                 print(f"Beat F-measure: {F}")
