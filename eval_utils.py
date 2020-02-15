@@ -224,7 +224,7 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_off
         offset_ratio = None
 
 
-
+    notes_est , intervals_est = get_notes_intervals(input, fs)
     notes_ref , intervals_ref = get_notes_intervals(target, fs)
 
     if len(notes_est) == 0:
