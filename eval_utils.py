@@ -90,7 +90,7 @@ def get_notes_intervals(pr,fs):
     return np.array(pitches), np.array(intervals)
 
 
-def get_notes_intervals_with_onsets(pr,corresp,double_roll=False,add_missing_onsets=False):
+def get_notes_intervals_with_onsets(pr,corresp,double_roll=False,add_missing_onsets=False,merge_consecutive_onsets=False):
     #Returns the list of note events from a piano-roll
 
     if double_roll:
@@ -116,6 +116,13 @@ def get_notes_intervals_with_onsets(pr,corresp,double_roll=False,add_missing_ons
             else:
                 if onsets_matrix[pitch,onset-1]==0:
                     onsets_matrix[pitch,onset-1] = 1
+
+    if merge_consecutive_onsets:
+        data_extended = np.pad(onsets_matrix,((0,0),(1,1)),'constant')
+        diff = data_extended[:,1:] - data_extended[:,:-1]
+        mask = np.logical_and(diff[:,:-1]==0,onsets_matrix==1)
+        onsets_matrix[mask]=0
+
 
 
     # Only gather notes that have an onset
@@ -193,7 +200,7 @@ def compute_eval_metrics_frame(input,target):
     F = Fmeasure(input,target)
     return prec, rec, F
 
-def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_offset=False, min_gap=None):
+def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_offset=False, min_gap=None,merge_consecutive_onsets=False):
     #Compute evaluation metrics note-by-note
     #filter out all notes shorter than min_dur (in seconds, default 50ms)
     #A note is correctly detected if it has the right pitch and the inset is within tolerance parameter (default 50ms)
@@ -235,7 +242,7 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_off
         onset_tolerance=tolerance,offset_min_tolerance=0.05)
         return P,R,F
 
-def compute_eval_metrics_with_onset(input_pr,corresp,target_data,section=None,double_roll=False,min_dur=None,tolerance=None, with_offset=False, min_gap=None):
+def compute_eval_metrics_with_onset(input_pr,corresp,target_data,section=None,double_roll=False,min_dur=None,tolerance=None, with_offset=False, min_gap=None,merge_consecutive_onsets=False):
     #Compute evaluation metrics note-by-note
     #filter out all notes shorter than min_dur (in seconds, default 50ms)
     #A note is correctly detected if it has the right pitch and the inset is within tolerance parameter (default 50ms)
@@ -243,7 +250,7 @@ def compute_eval_metrics_with_onset(input_pr,corresp,target_data,section=None,do
 
 
     # Get note sequences
-    notes_est , intervals_est = get_notes_intervals_with_onsets(input_pr, corresp,double_roll)
+    notes_est , intervals_est = get_notes_intervals_with_onsets(input_pr, corresp,double_roll,merge_consecutive_onsets=merge_consecutive_onsets)
      #Note +20 and not 21 because get_notes_intervals adds +1
     notes_est = notes_est+20
     if len(intervals_est) == 0:
@@ -267,7 +274,7 @@ def compute_eval_metrics_with_onset(input_pr,corresp,target_data,section=None,do
     elif min_dur == 0:
         pass
     else:
-        data_filt = filter_short_notes(notes_est , intervals_est,thresh=min_dur)
+        notes_est , intervals_est = filter_short_notes(notes_est , intervals_est,thresh=min_dur)
 
     if min_gap is not None:
         # No min_gap filtering

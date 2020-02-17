@@ -46,6 +46,7 @@ parser.add_argument('--n_hidden', help="Number of hidden nodes for the LSTM", ty
 parser.add_argument('--with_offset', help="use offset for framewise metrics", action='store_true')
 parser.add_argument('--with_onsets', help="use presence/onset piano-roll", action='store_true')
 parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="store_true")
+parser.add_argument("--merge_onsets", help="When there are onsets in consecutive frames, only take into account the first one", action="store_true")
 
 args = parser.parse_args()
 
@@ -182,7 +183,7 @@ for fn in os.listdir(folder):
 
             target_data = pm.PrettyMIDI(filename)
             corresp = data.corresp
-            [P_f,R_f,F_f],[P_n,R_n,F_n],notes_est,intervals_est = compute_eval_metrics_with_onset(pr,corresp,target_data,double_roll=True,min_dur=0.05,with_offset=args.with_offset,section=section)
+            [P_f,R_f,F_f],[P_n,R_n,F_n],notes_est,intervals_est = compute_eval_metrics_with_onset(pr,corresp,target_data,double_roll=True,min_dur=0.05,with_offset=args.with_offset,section=section,merge_consecutive_onsets=args.merge_onsets)
 
             if args.save:
                 midi_data = make_midi_from_notes(notes_est, intervals_est)
