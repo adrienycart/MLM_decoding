@@ -91,6 +91,8 @@ note_range = [21,109]
 note_min = note_range[0]
 note_max = note_range[1]
 
+model = None
+sess = None
 if args.weight_model is not None or args.weight != 1.0:
     n_hidden = args.n_hidden
 
@@ -139,36 +141,16 @@ for fn in os.listdir(folder):
             data = DataMaps()
             data.make_from_file(filename,args.step,section, with_onsets=args.with_onsets, acoustic_model='kelz')
 
-        if args.weight_model is not None or args.weight != 1.0:
-            input_data = data.input
-            if args.with_onsets:
-                input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
-                input_data[:data.input.shape[0], :] = data.input[:, :, 0]
-                input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
+        input_data = data.input
+        if args.with_onsets:
+            input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
+            input_data[:data.input.shape[0], :] = data.input[:, :, 0]
+            input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
 
-            pr, priors, weights, combined_priors = decode(input_data, model, sess, branch_factor=args.branch,
-                            beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
-                            out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
-                            verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
-
-        else:
-            if args.with_onsets:
-
-                bin_input = (data.input>0.5).astype(int)
-                onsets = pr[:, :, 1]
-                presence = pr[:, :, 0]
-                # Add presence when there is an onset (in case it is not the case already)
-                precence[onsets] = 1
-                pr = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
-                pr[:data.input.shape[0], :] = onsets
-                pr[data.input.shape[0]:, :] = precence
-
-            else:
-                input_data = data.input
-                pr = (input_data>0.5).astype(int)
-
-
-
+        pr, priors, weights, combined_priors = decode(input_data, model, sess, branch_factor=args.branch,
+                        beam_size=args.beam, weight=[[args.weight], [1 - args.weight]],
+                        out=None, hash_length=args.hash, weight_model_dict=weight_model_dict,
+                        verbose=args.verbose, gt=data.target if args.gt else None, weight_model=weight_model)
 
         # Save output
         if not args.save is None:
