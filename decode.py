@@ -86,7 +86,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
         An P X T matrix, giving the acoustic weights for each pitch at each frame.
     """
     P = len(acoustic)
-    
+
     if gt is not None:
         weight_model = True
         is_weight = True
@@ -101,7 +101,7 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
     beam.add_initial_state(model, sess, P)
 
     acoustic = np.transpose(acoustic)
-    
+
     lstm_transform = None
     if model.with_onsets:
         lstm_transform = three_hot_output_to_presence_onset
@@ -171,7 +171,8 @@ def decode(acoustic, model, sess, branch_factor=50, beam_size=200, weight=[[0.8]
                 pickle.dump(output, file)
 
     top_state = beam.get_top_state()
-    return (top_state.get_piano_roll(formatter=trinary_pr_to_presence_onset),
+
+    return (top_state.get_piano_roll(formatter=trinary_pr_to_presence_onset if model.with_onsets else None),
             top_state.get_priors(), top_state.get_weights(), top_state.get_combined_priors())
 
 
@@ -201,7 +202,7 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
 
     frame_num : int
         The frame number we are currently on.
-        
+
     with_onsets : boolean
         Whether the piano-roll will be in presence-onset format (True) or not (False).
 
@@ -237,12 +238,12 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
                                       no_mlm=no_mlm, with_onsets=with_onsets) for state in beam])
 
     prediction = weight_model.predict_proba(X)
-    
+
     if with_onsets:
         # With onsets, the return will always be a (len(X), 2) array, which we will process elsewhere.
         weights_all = prediction if is_weight else None
         priors_all = prediction if not is_weight else None
-        
+
     else:
         # 2 x len(X) matrix
         weights_all = np.transpose(prediction) if is_weight else None
@@ -269,7 +270,7 @@ def run_lstm(sess, model, beam, transform=None):
 
     beam : beam.Beam
         The beam containing all of the states we want to update.
-    
+
     transform : function(list(float) -> list(float))
     """
     hidden_states = []
@@ -282,7 +283,7 @@ def run_lstm(sess, model, beam, transform=None):
 
     # Run LSTM
     hidden_states, priors = model.run_one_step(hidden_states, np_samples, sess)
-    
+
     # Transfor the LSTM prior into a different format if necessary
     if transform is not None:
         priors = transform(priors)
@@ -296,12 +297,12 @@ def run_lstm(sess, model, beam, transform=None):
 def three_hot_output_to_presence_onset(priors):
     """
     Convert from a three-hot LSTM output to the presence-onset format.
-    
+
     Parameters
     ----------
     priors : np.ndarray
         A dim (?, 1, P, 3) array of LSTM priors.
-        
+
     Returns
     -------
     priors : np.ndarray
@@ -376,7 +377,7 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
 
     no_mlm : boolean
         Whether to suppress MLM-based inputs. Defaults to False.
-        
+
     with_onsets : boolean
         Whether the piano-roll will be in presence-onset format (True) or not (False).
 
@@ -386,7 +387,7 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
         The x data points for the given input for the dynamic weighting model.
     """
     frame = acoustic[frame_num, :]
-    
+
     # Re-interpret pr if with_onsets
     if with_onsets:
         acoustic_presence, acoustic_onsets = np.split(acoustic, 2, axis=1)
@@ -395,20 +396,20 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
         state_priors_presence, state_priors_onsets = np.split(state.get_priors(), 2)
         frame_presence, frame_onsets = np.split(frame, 2)
         this_prior_presence, this_prior_onsets = np.split(state.prior, 2)
-        
+
         # Create and pad presence half
         x_presence = get_weight_data_sk_unpadded(pr_presence, acoustic_presence, frame_num,
                                                  state_priors_presence, frame_presence, this_prior_presence,
                                                  features, no_mlm)
-        
+
         # Create and pad onset half
         x_onsets = get_weight_data_sk_unpadded(pr_onsets, acoustic_onsets, frame_num,
                                                  state_priors_onsets, frame_onsets, this_prior_onsets,
                                                  features, no_mlm)
-        
+
         # Combine halves
         x = np.hstack((x_presence, x_onsets))
-        
+
     else:
         # Create and pad data
         pr = state.get_piano_roll(min_length=history, max_length=history)
@@ -423,7 +424,7 @@ def get_weight_data_sk_unpadded(pr, acoustic, frame_num, state_priors, frame, th
     Create a non-padded data array for a single pianoroll. This function is meant to abstract
     away from the possibility of the pr being the double presence-onset pr. In such a case, this
     function should be called twice: once with each half of the pr and other data.
-    
+
     Parameters
     ----------
     pr : np.ndarray
@@ -434,13 +435,13 @@ def get_weight_data_sk_unpadded(pr, acoustic, frame_num, state_priors, frame, th
 
     frame_num : int
         The current frame number.
-        
+
     state_priors : np.ndarray
         The full history of a single state's priors, with dimensions (88, T).
-        
+
     frame : np.array
         An array of the acoustic inputs for the current frame.
-        
+
     this_prior : np.array
         An array of the language model prior for the current frame.
 
@@ -608,4 +609,3 @@ def get_log_prob(sample, acoustic, language, weight, p=None):
     not_p = 1 - p
 
     return np.sum(np.log(np.where(sample == 1, p, not_p)), axis=1), p
-            
