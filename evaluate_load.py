@@ -2,7 +2,7 @@ import numpy as np
 import os
 from eval_utils import compute_eval_metrics_frame, compute_eval_metrics_note, out_key_errors_binary_mask
 from mlm_training.utils import safe_mkdir
-from dataMaps import DataMaps, convert_note_to_time, align_matrix
+from dataMaps import DataMaps, DataMapsBeats, convert_note_to_time, align_matrix
 import pickle
 import argparse
 import sys
