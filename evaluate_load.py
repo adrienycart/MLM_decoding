@@ -60,7 +60,7 @@ for fn in os.listdir(input_folder):
             input_roll = convert_note_to_time(input_roll,data_quant.corresp,data_quant.input_fs,max_len=30)
         if args.step == 'beat':
             data_quant = DataMapsBeats()
-            data_quant.make_from_file(filename,args.beat_gt,args.beat_subdiv,section, acoustic_model='kelz')
+            data_quant.make_from_file(filename_target,args.beat_gt,args.beat_subdiv,[0,30], acoustic_model='kelz')
             input_roll = convert_note_to_time(input_roll,data_quant.corresp,data_quant.input_fs,max_len=30)
         if args.step == 'time' and args.with_quant:
             data_quant = DataMaps()
