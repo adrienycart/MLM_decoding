@@ -66,16 +66,16 @@ if __name__ == "__main__":
 
     parser.add_argument('data_path',type=str, help="folder containing the split dataset")
     parser.add_argument('output', type=str, help="Location to save the computed results.")
-
-    parser.add_argument("--step", type=str, choices=["time", "quant", "event"],
+    parser.add_argument("--step", type=str, choices=["time", "quant", "event",'beat'],
                         help="Change the step type for frame timing. Either time (default), " +
                         "quant (for 16th notes), or event (for onsets).", default="time")
-
+    parser.add_argument('--beat_gt',action='store_true',help="with beat timesteps, use ground-truth beat positions")
+    parser.add_argument('--beat_subdiv',type=str,help="with beat timesteps, beat subdivisions to use (comma separated list, without brackets)",default='0,1/4,1/3,1/2,2/3,3/4')
     parser.add_argument("--max_len", type=str, help="test on the first max_len seconds of each " +
                         "text file. Anything other than a number will evaluate on whole files. Default is 30s.",
                         default=30)
 
-    parser.add_argument('--acoustic_model', type=str, help='acoustic model to use')
+    parser.add_argument('--acoustic_model', type=str, help='acoustic model to use',default='kelz')
 
     args = parser.parse_args()
 
@@ -91,8 +91,13 @@ if __name__ == "__main__":
     prs = []
 
     for file in glob.glob(os.path.join(args.data_path, "*.mid")):
-        data = DataMaps()
-        data.make_from_file(file, args.step, section,acoustic_model=args.acoustic_model)
+
+        if args.step == "beat":
+            data = DataMapsBeats()
+            data.make_from_file(filename,args.beat_gt,args.beat_subdiv,section, acoustic_model=args.acoustic_model)
+        else:
+            data = DataMaps()
+            data.make_from_file(file, args.step, section,acoustic_model=args.acoustic_model)
 
         prs.append(data.target)
 
