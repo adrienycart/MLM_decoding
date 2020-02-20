@@ -46,7 +46,7 @@ def test(params):
 
         if step == "beat":
             data = DataMapsBeats()
-            data.make_from_file(file,beat_gt,beat_subdiv,section, acoustic_model='kelz')
+            data.make_from_file(file,beat_gt,beat_subdiv,[0,30], acoustic_model='kelz')
         else:
             data = DataMaps()
             data.make_from_file(file, step, [0,30],acoustic_model='kelz')
