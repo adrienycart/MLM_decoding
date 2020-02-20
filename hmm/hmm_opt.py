@@ -126,7 +126,7 @@ if __name__ == "__main__":
     print("saving output to " + args.output)
     sys.stdout.flush()
 
-    os.makedirs(os.path.dirname(model_dir), exist_ok=True)
+    os.makedirs(model_dir, exist_ok=True)
 
     if args.output is not None:
         os.makedirs(os.path.dirname(args.output), exist_ok=True)
