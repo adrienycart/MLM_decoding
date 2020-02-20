@@ -94,7 +94,7 @@ if __name__ == "__main__":
 
         if args.step == "beat":
             data = DataMapsBeats()
-            data.make_from_file(filename,args.beat_gt,args.beat_subdiv,section, acoustic_model=args.acoustic_model)
+            data.make_from_file(file,args.beat_gt,args.beat_subdiv,section, acoustic_model=args.acoustic_model)
         else:
             data = DataMaps()
             data.make_from_file(file, args.step, section,acoustic_model=args.acoustic_model)
