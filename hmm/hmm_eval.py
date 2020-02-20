@@ -167,7 +167,7 @@ if __name__ == "__main__":
         pkl = pickle.load(file)
 
     if args.save is not None:
-        os.makedirs(model_dir, exist_ok=True)
+        os.makedirs(args.save, exist_ok=True)
 
     priors = pkl["priors"]
     transitions = pkl["transitions"]
