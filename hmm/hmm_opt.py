@@ -20,6 +20,7 @@ with_offset = None
 beat_gt = None
 beat_subdiv = None
 data_path = None
+model_dir = None
 
 def test(params):
     global priors
@@ -29,6 +30,7 @@ def test(params):
     global order
     global with_offset
     global data_path
+    global model_dir
     print(params)
 
     transitions = np.zeros((88, 2 ** order, 2))
@@ -77,7 +79,7 @@ def test(params):
     print(str(F_n) + ": " + str(params))
     sys.stdout.flush()
 
-    out = "hmm/models/" + step + "." + str(order) + "." + str(F_n) + ".pkl"
+    out = os.path.join(model_dir, step + "." + str(order) + "." + str(F_n) + ".pkl")
     with open(out, "wb") as file:
         pickle.dump({"priors" : priors,
                      "transitions" : transitions}, file)
@@ -98,6 +100,8 @@ if __name__ == "__main__":
     parser.add_argument('--beat_subdiv',type=str,help="with beat timesteps, beat subdivisions to use (comma separated list, without brackets)",default='0,1/4,1/3,1/2,2/3,3/4')
     parser.add_argument("-o", "--output", help="The file to save the resulting optimization to. Defaults to optim.sko.",
                         default="optim.sko")
+    parser.add_argument("--model_dir", help="The directory to save model files to. Defaults to the current directory.",
+                        default=".")
     parser.add_argument("--iters", help="The number of iterations to run optimization for (after the initial 10 " +
                         "random points). Defaults to 200.", type=int, default=200)
     parser.add_argument("--order", help="The order of the HMM to train (unigram, bigram, etc)", type=int, default=1)
@@ -113,6 +117,7 @@ if __name__ == "__main__":
     order = args.order
     with_offset = args.with_offset
     data_path = args.data_path
+    model_dir = args.model_dir
 
     print("Running for " + str(args.iters) + " iterations.")
     print("step type: " + args.step)
@@ -120,6 +125,8 @@ if __name__ == "__main__":
     print("With offsets" if args.with_offset else "Without offsets")
     print("saving output to " + args.output)
     sys.stdout.flush()
+
+    os.makedirs(os.path.dirname(model_dir), exist_ok=True)
 
     if args.output is not None:
         os.makedirs(os.path.dirname(args.output), exist_ok=True)
