@@ -39,6 +39,7 @@ def test(params):
     frames = np.zeros((0, 3))
     notes = np.zeros((0, 3))
 
+    folder = data_path
     for file in glob.glob(os.path.join(folder, "*.mid")):
         print(file)
         sys.stdout.flush()
