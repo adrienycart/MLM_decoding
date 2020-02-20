@@ -7,7 +7,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/..')
 
-from dataMaps import DataMaps
+from dataMaps import DataMaps, DataMapsBeats
 
 
 def get_pitch_priors(prs):
