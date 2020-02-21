@@ -15,6 +15,7 @@ import sampling
 from beam import Beam
 from state import State, trinary_pr_to_presence_onset
 from mlm_training.model import Model, make_model_param
+from blending_model.optim.train_blending_model import ablate
 
 
 
@@ -239,8 +240,7 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
                                       no_mlm=no_mlm, with_onsets=with_onsets) for state in beam])
     
     # Remove ablated features
-    if len(ablation) > 0:
-        X[:, ablation] = 0
+    ablate(X, ablation)
 
     prediction = weight_model.predict_proba(X)
 
@@ -403,12 +403,12 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
         this_prior_presence, this_prior_onsets = np.split(state.prior, 2)
 
         # Create and pad presence half
-        x_presence = get_weight_data_sk_unpadded(pr_presence, acoustic_presence, frame_num,
+        x_presence = get_weight_data_sk(pr_presence, acoustic_presence, frame_num,
                                                  state_priors_presence, frame_presence, this_prior_presence,
                                                  features, no_mlm)
 
         # Create and pad onset half
-        x_onsets = get_weight_data_sk_unpadded(pr_onsets, acoustic_onsets, frame_num,
+        x_onsets = get_weight_data_sk(pr_onsets, acoustic_onsets, frame_num,
                                                  state_priors_onsets, frame_onsets, this_prior_onsets,
                                                  features, no_mlm)
 
@@ -418,13 +418,13 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
     else:
         # Create and pad data
         pr = state.get_piano_roll(min_length=history, max_length=history)
-        x = get_weight_data_sk_unpadded(pr, acoustic, frame_num, state.get_priors(), frame, state.prior, features, no_mlm)
+        x = get_weight_data_sk(pr, acoustic, frame_num, state.get_priors(), frame, state.prior, features, no_mlm)
 
     return x[pitches]
 
 
 
-def get_weight_data_sk_unpadded(pr, acoustic, frame_num, state_priors, frame, this_prior, features, no_mlm):
+def get_weight_data_sk(pr, acoustic, frame_num, state_priors, frame, this_prior, features, no_mlm):
     """
     Create a non-padded data array for a single pianoroll. This function is meant to abstract
     away from the possibility of the pr being the double presence-onset pr. In such a case, this

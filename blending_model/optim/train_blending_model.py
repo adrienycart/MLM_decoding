@@ -177,7 +177,23 @@ def filter_X_features(X, history, max_history, features, features_available, wit
         X = X[:, data_features]
         
     return X
+
+
+
+def ablate(X, ablation):
+    """
+    Filter the features indicated by the ablation list from the X data points by setting them all to 0.
+    
+    Parameters
+    ----------
+    X : np.ndarray
+        An (N,(num_features)) array of N input data points. This will be changed in place and returned.
         
+    ablation : list
+        A list of the indexes of the columns of X to set to 0.
+    """
+    if len(ablation) > 0:
+        X[:, ablation] = 0
 
 
 
