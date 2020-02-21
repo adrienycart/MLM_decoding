@@ -180,20 +180,35 @@ def filter_X_features(X, history, max_history, features, features_available, wit
 
 
 
-def ablate(X, ablation):
+def ablate(X, ablation, with_onsets=False):
     """
     Filter the features indicated by the ablation list from the X data points by setting them all to 0.
     
     Parameters
     ----------
     X : np.ndarray
-        An (N,(num_features)) array of N input data points. This will be changed in place and returned.
+        An (N,(num_features)) array of N input data points.
         
     ablation : list
         A list of the indexes of the columns of X to set to 0.
+        
+    with_onsets : boolean
+        If true, split the X array in half and zero out each half according to the ablate list.
+    
+    Returns
+    -------
+    X : np.ndarray
+        The input array, but with the corresponding features set to 0.
     """
     if len(ablation) > 0:
-        X[:, ablation] = 0
+        if with_onsets:
+            X_presence, X_onsets = np.split(X, 2, axis=1)
+            X_presence[:, ablation] = 0
+            X_onsets[:, ablation] = 0
+            X = np.hstack((X_presence, X_onsets))
+        else:
+            X[:, ablation] = 0
+    return X
 
 
 
@@ -214,10 +229,26 @@ if __name__ == '__main__':
     
     parser.add_argument("--no_features", help="Don't use features.", action="store_true")
     
+    parser.add_argument("--ablate", help="Indexes to ablate (set to 0) from the input. Important indices are:\n"
+                        "\t\t-11, -10 = acoustic, language uncertainty\n"
+                        "\t\t-9, -8   = acoustic, language entropy\n"
+                        "\t\t-7, -6   = acoustic, language mean\n"
+                        "\t\t-5, -4   = acoustic, language flux\n"
+                        "\t\t-3       = pitch"
+                        "\t\t-2, -1   = acoustic, language prior",
+                        nargs='+', type=int, default=[])
+    parser.add_argument("--no_mlm", help="Suppress all MLM inputs. Shortcut for --ablate -10 -8 -6 -4 -1",
+                        action="store_true")
+    
     parser.add_argument("-w", "--weight", help="Create a model which outputs the prior weights (rather than " +
                         "the default, which will output the prior directly).", action="store_true")
     
     args = parser.parse_args()
+    
+    if args.no_mlm:
+        for index in [-10, -8, -6, -4, -1]:
+            if index not in args.ablate:
+                args.ablate.append(index)
     
     with gzip.open(args.data, "rb") as file:
         model_dict = pickle.load(file)
@@ -239,6 +270,8 @@ if __name__ == '__main__':
     # Filter X for desired input fields
     X = filter_X_features(X, args.history, max_history, not args.no_features, features_available, with_onsets)
     
+    X = ablate(X, args.ablate, with_onsets=with_onsets)
+    
     model = train_model(X, Y, layers=args.layers, weight=args.weight, with_onsets=with_onsets)
     
     with open(args.out, "wb") as file:
@@ -247,5 +280,5 @@ if __name__ == '__main__':
                      'features' : not args.no_features,
                      'weight' : args.weight,
                      'with_onsets' : with_onsets,
-                     'no_mlm' : model_dict['no_mlm']}, file)
+                     'ablate' : args.ablate}, file)
         

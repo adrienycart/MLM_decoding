@@ -48,12 +48,28 @@ if __name__ == "__main__":
                         "of iterations.", type=int, default=50)
     parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="store_true")
     parser.add_argument("--load", help="Continue optimization from the file in --output.", action="store_true")
+    parser.add_argument("--ablate", help="Indexes to ablate (set to 0) from the input. Important indices are:\n"
+                        "\t\t-11, -10 = acoustic, language uncertainty\n"
+                        "\t\t-9, -8   = acoustic, language entropy\n"
+                        "\t\t-7, -6   = acoustic, language mean\n"
+                        "\t\t-5, -4   = acoustic, language flux\n"
+                        "\t\t-3       = pitch"
+                        "\t\t-2, -1   = acoustic, language prior",
+                        nargs='+', type=int, default=[])
+    parser.add_argument("--no_mlm", help="Suppress all MLM inputs. Shortcut for --ablate -10 -8 -6 -4 -1",
+                        action="store_true")
 
     args = parser.parse_args()
+    
+    if args.no_mlm:
+        for index in [-10, -8, -6, -4, -1]:
+            if index not in args.ablate:
+                args.ablate.append(index)
 
     print("Running for at most " + str(args.iters) + " iterations.")
     print(f"Stopping if no improvement for at least {args.early_stopping} iterations.")
     print("step type: " + args.step)
+    print("Ablating: " + ",".join(args.ablate))
     print("saving output to " + args.output)
     if args.cpu:
         print("Using CPU")
@@ -79,7 +95,7 @@ if __name__ == "__main__":
     optim_helper.load_data_info(blending_data=args.blending_data, valid=args.valid_data, step=args.step,
                                  model_path=args.model, model_out=args.model_dir, acoustic=args.acoustic,
                                  early_exit=args.give_up,diagRNN=args.diagRNN, beat_gt=args.beat_gt,
-                                 beat_subdiv=args.beat_subdiv)
+                                 beat_subdiv=args.beat_subdiv, ablate_list=args.ablate)
 
     if args.step in ["time", "20ms"]:
         history = (5, 50)

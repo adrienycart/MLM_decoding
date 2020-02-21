@@ -231,16 +231,15 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
     is_weight = weight_model_dict['weight'] if 'weight' in weight_model_dict else True
     history_context = weight_model_dict['history_context'] if 'history_context' in weight_model_dict else 0
     prior_context = weight_model_dict['prior_context'] if 'prior_context' in weight_model_dict else 0
-    no_mlm = weight_model_dict['no_mlm'] if 'no_mlm' in weight_model_dict else False
     with_onsets_wm = weight_model_dict['with_onsets'] if 'with_onsets' in weight_model_dict else False
     assert with_onsets_wm == with_onsets, "Blending model was not trained with onsets."
     ablation = weight_model_dict['ablation'] if 'ablation' in weight_model_dict else []
 
     X = np.vstack([create_weight_x_sk(state, acoustic, frame_num, history, features=features,
-                                      no_mlm=no_mlm, with_onsets=with_onsets) for state in beam])
+                                      with_onsets=with_onsets) for state in beam])
     
     # Remove ablated features
-    ablate(X, ablation)
+    X = ablate(X, ablation, with_onsets=with_onsets)
 
     prediction = weight_model.predict_proba(X)
 
@@ -356,7 +355,7 @@ def get_best_weights(language, acoustic, gt, width=0.25):
 
 
 def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), features=False,
-                       no_mlm=False, with_onsets=False):
+                       with_onsets=False):
     """
     Get the x input for the sk-learn dynamic weighting model.
 
@@ -380,9 +379,6 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
     features : boolean
         True to calculate features. False otherwise.
 
-    no_mlm : boolean
-        Whether to suppress MLM-based inputs. Defaults to False.
-
     with_onsets : boolean
         Whether the piano-roll will be in presence-onset format (True) or not (False).
 
@@ -405,12 +401,12 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
         # Create and pad presence half
         x_presence = get_weight_data_sk(pr_presence, acoustic_presence, frame_num,
                                                  state_priors_presence, frame_presence, this_prior_presence,
-                                                 features, no_mlm)
+                                                 features)
 
         # Create and pad onset half
         x_onsets = get_weight_data_sk(pr_onsets, acoustic_onsets, frame_num,
                                                  state_priors_onsets, frame_onsets, this_prior_onsets,
-                                                 features, no_mlm)
+                                                 features)
 
         # Combine halves
         x = np.hstack((x_presence, x_onsets))
@@ -418,13 +414,13 @@ def create_weight_x_sk(state, acoustic, frame_num, history, pitches=range(88), f
     else:
         # Create and pad data
         pr = state.get_piano_roll(min_length=history, max_length=history)
-        x = get_weight_data_sk(pr, acoustic, frame_num, state.get_priors(), frame, state.prior, features, no_mlm)
+        x = get_weight_data_sk(pr, acoustic, frame_num, state.get_priors(), frame, state.prior, features)
 
     return x[pitches]
 
 
 
-def get_weight_data_sk(pr, acoustic, frame_num, state_priors, frame, this_prior, features, no_mlm):
+def get_weight_data_sk(pr, acoustic, frame_num, state_priors, frame, this_prior, features):
     """
     Create a non-padded data array for a single pianoroll. This function is meant to abstract
     away from the possibility of the pr being the double presence-onset pr. In such a case, this
@@ -453,9 +449,6 @@ def get_weight_data_sk(pr, acoustic, frame_num, state_priors, frame, this_prior,
     features : boolean
         True to calculate features. False otherwise.
 
-    no_mlm : boolean
-        Whether to suppress MLM-based inputs.
-
     Returns
     =======
     x : np.ndarray
@@ -463,20 +456,20 @@ def get_weight_data_sk(pr, acoustic, frame_num, state_priors, frame, this_prior,
     """
     if features:
         x = np.hstack((pr,
-                       get_features(acoustic, frame_num, state_priors, no_mlm=no_mlm),
+                       get_features(acoustic, frame_num, state_priors),
                        np.reshape(frame, (88, -1)),
-                       np.zeros((88, 1)) if no_mlm else np.reshape(this_prior, (88, -1))))
+                       np.reshape(this_prior, (88, -1))))
 
     else:
         x = np.hstack((pr,
                        np.reshape(frame, (88, -1)),
-                       np.zeros((88, 1)) if no_mlm else np.reshape(this_prior, (88, -1))))
+                       np.reshape(this_prior, (88, -1))))
 
     return x
 
 
 
-def get_features(acoustic, frame_num, priors, no_mlm=False):
+def get_features(acoustic, frame_num, priors):
     """
     Get a features array from the given acoustic and language model priors.
 
@@ -490,9 +483,6 @@ def get_features(acoustic, frame_num, priors, no_mlm=False):
 
     language : np.ndarray
         The language priors from the entire piece.
-
-    no_mlm : boolean
-        Whether to suppress MLM-based inputs. Defaults to False.
 
     Returns
     =======
@@ -555,9 +545,6 @@ def get_features(acoustic, frame_num, priors, no_mlm=False):
 
     # Absolute pitch (0, 1) range
     features[:, 8] = np.arange(88) / 87
-
-    if no_mlm:
-        features[:, [1,3,5,7]] = 0
 
     return features
 
