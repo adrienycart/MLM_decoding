@@ -520,7 +520,8 @@ def get_features(acoustic, frame_num, priors):
         entropy : float
             The entropy of the given array. A measure of its flatness.
         """
-        return np.sum(np.where(array == 0, 0, -array * np.log2(array))) / np.log2(len(array))
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return np.sum(np.where(array == 0, 0, -array * np.log2(array))) / np.log2(len(array))
 
     num_features = 9
     acoustic_frame = acoustic[frame_num, :]
