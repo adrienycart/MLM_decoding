@@ -58,6 +58,7 @@ if __name__ == "__main__":
                         nargs='+', type=int, default=[])
     parser.add_argument("--no_mlm", help="Suppress all MLM inputs. Shortcut for --ablate -10 -8 -6 -4 -1",
                         action="store_true")
+    parser.add_argument("--no_history", help="Set history to 0 for all models.", action="store_true")
 
     args = parser.parse_args()
     
@@ -103,6 +104,9 @@ if __name__ == "__main__":
         history = (4, 12)
     else:
         history = (3, 10)
+        
+    if args.no_history:
+        history = [0]
     
     dimensions = [(0.1, 0.8), # min_diff
                   history, # history
