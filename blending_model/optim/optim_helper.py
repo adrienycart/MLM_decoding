@@ -10,7 +10,7 @@ from eval_utils import (compute_eval_metrics_frame, compute_eval_metrics_note,
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
 from decode import decode
-from train_blending_model import (train_model, convert_targets_to_weight, ablate
+from train_blending_model import (train_model, convert_targets_to_weight, ablate,
                                   filter_data_by_min_diff, filter_X_features)
 
 import glob
@@ -134,9 +134,7 @@ def weight_search(params, num=0, verbose=False):
     X = filter_X_features(X, history, max_history, features, features_available, with_onsets)
     
     # Ablate X
-    X = ablate(X, ablate_list, with_onsets=with_onsets)
-    
-    print(X)
+    X = ablate(X, global_params['ablate'], with_onsets=with_onsets)
     
     history = min(history, max_history)
     if features and not features_available:

@@ -233,7 +233,7 @@ def run_weight_model(gt, weight_model, weight_model_dict, beam, acoustic, frame_
     prior_context = weight_model_dict['prior_context'] if 'prior_context' in weight_model_dict else 0
     with_onsets_wm = weight_model_dict['with_onsets'] if 'with_onsets' in weight_model_dict else False
     assert with_onsets_wm == with_onsets, "Blending model was not trained with onsets."
-    ablation = weight_model_dict['ablation'] if 'ablation' in weight_model_dict else []
+    ablation = weight_model_dict['ablate'] if 'ablate' in weight_model_dict else []
 
     X = np.vstack([create_weight_x_sk(state, acoustic, frame_num, history, features=features,
                                       with_onsets=with_onsets) for state in beam])

@@ -69,7 +69,7 @@ if __name__ == "__main__":
     print("Running for at most " + str(args.iters) + " iterations.")
     print(f"Stopping if no improvement for at least {args.early_stopping} iterations.")
     print("step type: " + args.step)
-    print("Ablating: " + ",".join(args.ablate))
+    print("Ablating: " + str(args.ablate))
     print("saving output to " + args.output)
     if args.cpu:
         print("Using CPU")
