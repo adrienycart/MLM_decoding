@@ -23,22 +23,22 @@ from mlm_training.model import Model, make_model_param
 def get_weight_data_one_piece(filename, section, model, sess, args):
     """
     Get the x, y, and d data for a single piece.
-    
+
     Parameters
     ----------
     filename : string
         The MIDI file whose data to return.
-        
+
     section : list
         A list containing the start and end points of the section of the piece to decode,
         in seconds. If None, the entire piece is decoded.
-        
+
     model : tf.model
         The tensorflow model to use.
-        
+
     sess : tf.Session
         The tensorflow session to use.
-        
+
     args : Namespace
         A namespace returned by argparse which contains the fields we need here.
         Run create_blending_data.py -h for details.
@@ -149,7 +149,7 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
     diffs = np.zeros((0, 0)) if model.with_onsets else np.zeros(0)
 
     gt = np.transpose(gt)
-    
+
     lstm_transform = None
     if model.with_onsets:
         lstm_transform = decode.three_hot_output_to_presence_onset
@@ -179,7 +179,7 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
                 else:
                     x = decode.create_weight_x_sk(state, acoustic, frame_num, history, pitches=pitches, features=features,
                                                   no_mlm=no_mlm, with_onsets=model.with_onsets)
-                
+
                 if model.with_onsets:
                     gt_presence, gt_onset = np.split(gt_frame, 2)
                     gt_new = np.vstack((gt_presence, gt_onset)).T
@@ -287,7 +287,7 @@ if __name__ == '__main__':
     parser.add_argument("-v", "--verbose", help="Print frame updates", action="store_true")
 
     parser.add_argument("--diagRNN", help="Use diagonal RNN units", action="store_true")
-    
+
     parser.add_argument("--with_onsets", help="The input will be a double pianoroll containing "
                         "presence and onset halves.", action="store_true")
 
@@ -296,7 +296,7 @@ if __name__ == '__main__':
     if not (0 <= args.weight <= 1):
         print("Weight must be between 0 and 1.", file=sys.stderr)
         sys.exit(1)
-        
+
     if args.history is None:
         if args.step in ["time", "20ms"]:
             args.history = 50
@@ -341,13 +341,17 @@ if __name__ == '__main__':
         for file in glob.glob(os.path.join(args.MIDI, "*.mid")):
             if args.verbose:
                 print(file)
-                
+
             x, y, d = get_weight_data_one_piece(file, section, model, sess, args)
 
             if len(X) > 0:
                 X = np.vstack((X, x))
-                Y = np.vstack((Y, y))
-                D = np.vstack((D, d))
+                if args.with_onsets:
+                    Y = np.vstack((Y, y))
+                    D = np.vstack((D, d))
+                else:
+                    Y = np.append(Y, y)
+                    D = np.append(D, d)
             else:
                 X = x
                 Y = y
