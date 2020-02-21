@@ -68,7 +68,7 @@ if __name__ == '__main__':
 
     results = {}
 
-    for fn in os.listdir(input_folder):
+    for fn in sorted(os.listdir(input_folder)):
         if fn.endswith(extension) and not fn.startswith('.'):
             if args.file is None or args.file in fn:
                 filename_input = os.path.join(input_folder,fn)
@@ -114,7 +114,7 @@ if __name__ == '__main__':
 
                         fs = sig.sample_rate
                         dur = sig.length
-                        
+
                     proc_beat = madmom.features.RNNBeatProcessor()
                     act_beat = proc_beat(sig)
 
@@ -207,7 +207,7 @@ if __name__ == '__main__':
     print(f"Average beat F-measure: {sum(all_Fs)/len(all_Fs)}")
     if args.subbeats:
         print(f"Average sub_beat F-measure: {sum(all_Fs_sub)/len(all_Fs_sub)}")
-        
+
     if args.save_res is not None:
         with open(args.save_res, 'wb') as file:
             pickle.dump(results, file)
