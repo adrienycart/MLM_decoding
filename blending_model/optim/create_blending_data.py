@@ -64,12 +64,12 @@ def get_weight_data_one_piece(filename, section, model, sess, args):
     return get_weight_data(target_data, input_data, model, sess, branch_factor=args.branch, beam_size=args.beam,
                            weight=[[args.weight], [1 - args.weight]], hash_length=args.hash,
                            gt_only=args.gt, history=args.history, features=not args.no_features,
-                           min_diff=args.min_diff, verbose=args.verbose, no_mlm=args.no_mlm)
+                           min_diff=args.min_diff, verbose=args.verbose)
 
 
 
 def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, union=False, weight=[[0.5], [0.5]],
-           hash_length=10, gt_only=False, history=5, min_diff=0.01, features=False, verbose=False, no_mlm=False):
+           hash_length=10, gt_only=False, history=5, min_diff=0.01, features=False, verbose=False):
     """
     Get the average ranks of the ground truth frame from decode.enumerate_samples().
 
@@ -119,9 +119,6 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
 
     features : boolean
         Whether to use features in the weight_model's data points. Defaults to False.
-
-    no_mlm : boolean
-        Whether to suppress mlm-based inputs. Defaults to False.
 
 
     Returns
@@ -175,10 +172,10 @@ def get_weight_data(gt, acoustic, model, sess, branch_factor=50, beam_size=200, 
             if len(pitches) > 0:
                 if len(x) > 0:
                     x = np.vstack((x, decode.create_weight_x_sk(state, acoustic, frame_num, history, pitches=pitches,
-                                                                features=features, no_mlm=no_mlm, with_onsets=model.with_onsets)))
+                                                                features=features, with_onsets=model.with_onsets)))
                 else:
                     x = decode.create_weight_x_sk(state, acoustic, frame_num, history, pitches=pitches, features=features,
-                                                  no_mlm=no_mlm, with_onsets=model.with_onsets)
+                                                  with_onsets=model.with_onsets)
 
                 if model.with_onsets:
                     gt_presence, gt_onset = np.split(gt_frame, 2)
@@ -279,8 +276,6 @@ if __name__ == '__main__':
 
     parser.add_argument("--no_features", help="Don't save features in the x data points.", action="store_true")
 
-    parser.add_argument("--no_mlm", help="Set all MLM-based inputs to 0.", action="store_true")
-
     parser.add_argument("--gpu", help="The GPU to use. Defaults to 0.", default="0")
     parser.add_argument("--cpu", help="Use the CPU.", action="store_true")
 
@@ -338,7 +333,7 @@ if __name__ == '__main__':
         Y = np.zeros((0, 0)) if args.with_onsets else np.zeros(0)
         D = np.zeros((0, 0)) if args.with_onsets else np.zeros(0)
 
-        for file in glob.glob(os.path.join(args.MIDI, "*.mid")):
+        for file in sorted(glob.glob(os.path.join(args.MIDI, "*.mid"))):
             if args.verbose:
                 print(file)
 
@@ -371,5 +366,4 @@ if __name__ == '__main__':
                      'D' : D,
                      'history' : args.history,
                      'features' : not args.no_features,
-                     'no_mlm' : args.no_mlm,
                      'with_onsets' : args.with_onsets}, file)

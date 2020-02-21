@@ -17,8 +17,6 @@ if __name__ == "__main__":
     
     parser.add_argument("--with_onsets", help="The saved blending model uses onsets.",
                         action="store_true")
-    parser.add_argument("--no_mlm", help="The saved blending model uses no MLM data.",
-                        action="store_true")
     parser.add_argument("--step", type=str, default='time',
                         choices=["time", "quant","quant_short", "event", "beat", "20ms"],
                         help="The step type used by the trained blending model.")
@@ -41,7 +39,7 @@ if __name__ == "__main__":
     is_weight = params[3]
     features = params[4]
     
-    filename = get_filename(min_diff, history, num_layers, features, args.no_mlm, args.with_onsets,
+    filename = get_filename(min_diff, history, num_layers, features, args.with_onsets,
                             is_weight, args.step, num=0)
     
     print(f"Best model filename should be '{filename}'")

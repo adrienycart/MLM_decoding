@@ -10,7 +10,7 @@ from eval_utils import (compute_eval_metrics_frame, compute_eval_metrics_note,
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
 from decode import decode
-from train_blending_model import (train_model, convert_targets_to_weight,
+from train_blending_model import (train_model, convert_targets_to_weight, ablate,
                                   filter_data_by_min_diff, filter_X_features)
 
 import glob
@@ -29,14 +29,15 @@ model_dict = {'model' : None,
 global_params = {'model_out'  : None,
                  'step'       : None,
                  'acoustic'   : None,
-                 'early_exit' : None}
+                 'early_exit' : None,
+                 'ablate'     : None}
 
 data_dict = {'blending_data' : None,
              'valid'         : None}
 
 def load_data_info(blending_data=None, valid=None, model_path=None, n_hidden=256, step=None,
                    beat_gt=None, beat_subdiv=None, model_out=".", acoustic='kelz',
-                   early_exit=0.001, diagRNN=False):
+                   early_exit=0.001, diagRNN=False, ablate_list=[]):
     """
     Set up the global parameter dictionaries to run Bayesian Optimization with the given
     settings. This is called by optimize_sk.py.
@@ -67,8 +68,9 @@ def load_data_info(blending_data=None, valid=None, model_path=None, n_hidden=256
     global_params['model_out'] = model_out
     global_params['acoustic'] = acoustic
     global_params['early_exit'] = early_exit
+    global_params['ablate'] = ablate_list
     
-def get_filename(min_diff, history, num_layers, features, no_mlm, with_onsets,
+def get_filename(min_diff, history, num_layers, features, with_onsets,
                  is_weight, step, num=0):
     weight_model_name = "blending_model."
     weight_model_name += "md" + str(min_diff)
@@ -76,8 +78,6 @@ def get_filename(min_diff, history, num_layers, features, no_mlm, with_onsets,
     weight_model_name += "_l" + str(num_layers)
     if features:
         weight_model_name += "_f"
-    if no_mlm:
-        weight_model_name += "_noMLM"
     if with_onsets:
         weight_model_name += "_withOnsets"
     weight_model_name += "_weight" if is_weight else "_prior"
@@ -93,6 +93,7 @@ def get_most_recent_model():
 
 
 def weight_search(params, num=0, verbose=False):
+    global global_params
     print(params)
     sys.stdout.flush()
 
@@ -119,7 +120,6 @@ def weight_search(params, num=0, verbose=False):
     Y = pkl['Y']
     D = pkl['D']
     max_history = pkl['history']
-    no_mlm = pkl['no_mlm']
     features_available = pkl['features']
     with_onsets = pkl['with_onsets']
 
@@ -132,6 +132,9 @@ def weight_search(params, num=0, verbose=False):
 
     # Filter X for desired input fields
     X = filter_X_features(X, history, max_history, features, features_available, with_onsets)
+    
+    # Ablate X
+    X = ablate(X, global_params['ablate'], with_onsets=with_onsets)
     
     history = min(history, max_history)
     if features and not features_available:
@@ -152,10 +155,10 @@ def weight_search(params, num=0, verbose=False):
                          'history' : history,
                          'features' : features,
                          'weight' : is_weight,
-                         'no_mlm' : no_mlm,
-                         'with_onsets' : with_onsets}
+                         'with_onsets' : with_onsets,
+                         'ablate' : global_params['ablate']}
 
-    weight_model_name = get_filename(min_diff, history, num_layers, features, no_mlm,
+    weight_model_name = get_filename(min_diff, history, num_layers, features,
                                      with_onsets, is_weight, global_params['step'])
 
     # Write out weight model
@@ -167,7 +170,7 @@ def weight_search(params, num=0, verbose=False):
     frames = np.zeros((0, 3))
     notes = np.zeros((0, 3))
 
-    for filename in glob.glob(os.path.join(data_dict['valid'], "*.mid")):
+    for filename in sorted(glob.glob(os.path.join(data_dict['valid'], "*.mid"))):
         print(filename)
         sys.stdout.flush()
 
