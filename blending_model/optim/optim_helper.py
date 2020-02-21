@@ -170,7 +170,7 @@ def weight_search(params, num=0, verbose=False):
     frames = np.zeros((0, 3))
     notes = np.zeros((0, 3))
 
-    for filename in glob.glob(os.path.join(data_dict['valid'], "*.mid")):
+    for filename in sorted(glob.glob(os.path.join(data_dict['valid'], "*.mid"))):
         print(filename)
         sys.stdout.flush()
 

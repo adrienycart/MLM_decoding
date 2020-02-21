@@ -333,7 +333,7 @@ if __name__ == '__main__':
         Y = np.zeros((0, 0)) if args.with_onsets else np.zeros(0)
         D = np.zeros((0, 0)) if args.with_onsets else np.zeros(0)
 
-        for file in glob.glob(os.path.join(args.MIDI, "*.mid")):
+        for file in sorted(glob.glob(os.path.join(args.MIDI, "*.mid"))):
             if args.verbose:
                 print(file)
                 

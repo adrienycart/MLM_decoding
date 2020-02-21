@@ -58,12 +58,19 @@ if __name__ == "__main__":
                         nargs='+', type=int, default=[])
     parser.add_argument("--no_mlm", help="Suppress all MLM inputs. Shortcut for --ablate -10 -8 -6 -4 -1",
                         action="store_true")
+    parser.add_argument("--no_features", help="Suppress all features. Shortcut for --ablate -11 -10 -9 -8 "
+                        "-7 -6 -5 -4 -3", action="store_true")
     parser.add_argument("--no_history", help="Set history to 0 for all models.", action="store_true")
 
     args = parser.parse_args()
     
     if args.no_mlm:
         for index in [-10, -8, -6, -4, -1]:
+            if index not in args.ablate:
+                args.ablate.append(index)
+                
+    if args.no_features:
+        for index in [-11, -10, -9, -8, -7, -6, -5, -4, -3]:
             if index not in args.ablate:
                 args.ablate.append(index)
 
