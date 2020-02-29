@@ -200,7 +200,7 @@ def compute_eval_metrics_frame(input,target):
     F = Fmeasure(input,target)
     return prec, rec, F
 
-def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_offset=False, min_gap=None,merge_consecutive_onsets=False):
+def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_offset=False, min_gap=None,min_gap_target=None,merge_consecutive_onsets=False):
     #Compute evaluation metrics note-by-note
     #filter out all notes shorter than min_dur (in seconds, default 50ms)
     #A note is correctly detected if it has the right pitch and the inset is within tolerance parameter (default 50ms)
@@ -219,8 +219,10 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_off
         data_filt = filter_short_notes_roll(input,thresh=int(round(fs*min_dur)))
 
     if min_gap is not None:
-        data_filt = filter_short_gaps(input,thresh=int(round(fs*min_gap)))
+        data_filt = filter_short_gaps_roll(data_filt,thresh=int(round(fs*min_gap)))
 
+    if min_gap_target is not None:
+        target = filter_short_gaps_roll(target,thresh=int(round(fs*min_gap_target)))
 
     if tolerance == None:
         tolerance = 0.05
@@ -231,7 +233,7 @@ def compute_eval_metrics_note(input,target,min_dur=None,tolerance=None, with_off
         offset_ratio = None
 
 
-    notes_est , intervals_est = get_notes_intervals(input, fs)
+    notes_est , intervals_est = get_notes_intervals(data_filt, fs)
     notes_ref , intervals_ref = get_notes_intervals(target, fs)
 
     if len(notes_est) == 0:
@@ -486,7 +488,7 @@ def play_audio(audio,fs=44100,from_sec=0):
     start_sample = int(round(from_sec*44100))
     import sounddevice as sd
     try:
-        sd.play(sig, fs)
+        sd.play(audio, fs)
         status = sd.wait()
     except KeyboardInterrupt:
         sd.stop()
