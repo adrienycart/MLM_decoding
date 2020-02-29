@@ -6,7 +6,7 @@ import pretty_midi as pm
 import pickle
 import mir_eval
 import argparse
-from eval_utils import compute_eval_metrics_frame
+from eval_utils import compute_eval_metrics_frame, filter_short_notes
 
 
 if __name__ == '__main__':
@@ -77,6 +77,10 @@ if __name__ == '__main__':
             notes_ref = np.array(notes_ref)
             intervals_ref = np.array(intervals_ref)
 
+            # print(len(notes_est))
+            notes_est, intervals_est = filter_short_notes(notes_est, intervals_est, 0.05)
+            # print(len(notes_est))
+
 
             if len(notes_est) == 0:
                 P_n_on,R_n_on,F_n_on= 0,0,0
@@ -111,4 +115,3 @@ if __name__ == '__main__':
     import subprocess
     copy_string = '\t'.join([str(elt) for elt in [P_f, R_f, F_f,P_n_on,R_n_on,F_n_on,P_n_onoff,R_n_onoff,F_n_onoff]])
     subprocess.run("pbcopy", universal_newlines=True, input=copy_string)
-    
