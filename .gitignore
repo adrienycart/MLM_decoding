@@ -16,7 +16,7 @@ results/
 *.zip
 hmm_2
 listen_example copy.py
-script_train_mlm_3.bash
+*.bash
 plots_thesis/*
 
 

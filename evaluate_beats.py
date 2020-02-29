@@ -100,6 +100,15 @@ if __name__ == '__main__':
                     beats = np.loadtxt(filename_input.replace(extension,'_b_est.csv'))
                     if max_len is not None:
                         beats = beats[beats<max_len]
+                    if args.play_estim or args.play_midi or args.play_both:
+                        if args.midi:
+                            sig = midi_data.fluidsynth()
+                            # print(midi_data.instruments)
+                            if max_len is not None:
+                                sig = sig[:int(max_len*44100)]
+                        else:
+                            sig_proc = madmom.audio.signal.SignalProcessor(sample_rate=44100, num_channels=1, start=0, stop=max_len,dtype=np.float32)
+                            sig = sig_proc(filename_input)
 
                 else:
                     # Estimate beat positions
