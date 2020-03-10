@@ -203,11 +203,48 @@ def ablate(X, ablation, with_onsets=False):
     if len(ablation) > 0:
         if with_onsets:
             X_presence, X_onsets = np.split(X, 2, axis=1)
-            X_presence[:, ablation] = 0
-            X_onsets[:, ablation] = 0
+            X_presence = ablate(X_presence, ablation, with_onsets=False)
+            X_onsets = ablate(X_onsets, ablation, with_onsets=False)
             X = np.hstack((X_presence, X_onsets))
         else:
             X[:, ablation] = 0
+    return X
+
+
+def add_acoustic_noise(X, noise, noise_gauss=False, with_onsets=False):
+    """
+    Add some noise to the acoustic samples in the given X data points.
+    
+    Parameters
+    ----------
+    X : np.ndarray
+        An (N,(num_features)) array of N input data points.
+        
+    noise : float
+        The amount of noise to add. None for no noise.
+        
+    noise_gauss : boolean
+        The type of noise to add. If False, uniform noise on the range (-noise, noise).
+        If True, Gaussian noise with standard deviation noise.
+        
+    with_onsets : boolean
+        If true, split the X array in half and add noise to each half.
+        
+    Returns
+    -------
+    X : np.ndarray
+        The input array, but with the given noise added.
+    """
+    if noise is not None and abs(noise) > 0:
+        if with_onsets:
+            X_presence, X_onsets = np.split(X, 2, axis=1)
+            X_presence = add_acoustic_noise(X_presence, noise, noise_gauss=noise_gauss, with_onsets=False)
+            X_onsets = add_acoustic_noise(X_onsets, noise, noise_gauss=noise_gauss, with_onsets=False)
+            X = np.hstack((X_presence, X_onsets))
+        else:
+            noise = abs(noise)
+            noise_func = np.random.randn if noise_gauss else np.random.rand
+            X[:, -2] = np.clip(X[:, -2] + noise * noise_func(len(X)), 0, 1)
     return X
 
 
@@ -240,6 +277,12 @@ if __name__ == '__main__':
     parser.add_argument("--no_mlm", help="Suppress all MLM inputs. Shortcut for --ablate -10 -8 -6 -4 -1",
                         action="store_true")
     
+    parser.add_argument("--noise", help="Add uniform random noise to the acoustic model's activations, "
+                        "on the range (-noise, noise), or Gaussian noise with standard deviation noise, "
+                        "if --noise_gauss is also given.", type=float, default=None)
+    parser.add_argument("--noise_gauss", help="Make the added noise Gaussian with the given arg being the "
+                        "standard deviation of the desired noise.", action="store_true")
+    
     parser.add_argument("-w", "--weight", help="Create a model which outputs the prior weights (rather than " +
                         "the default, which will output the prior directly).", action="store_true")
     
@@ -271,6 +314,8 @@ if __name__ == '__main__':
     X = filter_X_features(X, args.history, max_history, not args.no_features, features_available, with_onsets)
     
     X = ablate(X, args.ablate, with_onsets=with_onsets)
+    
+    X = add_acoustic_noise(X, args.noise, noise_gauss=args.noise_gauss, with_onsets=with_onsets)
     
     model = train_model(X, Y, layers=args.layers, weight=args.weight, with_onsets=with_onsets)
     

@@ -11,7 +11,8 @@ from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
 from decode import decode
 from train_blending_model import (train_model, convert_targets_to_weight, ablate,
-                                  filter_data_by_min_diff, filter_X_features)
+                                  filter_data_by_min_diff, filter_X_features,
+                                  add_acoustic_noise)
 
 import glob
 import pickle
@@ -33,11 +34,13 @@ global_params = {'model_out'  : None,
                  'ablate'     : None}
 
 data_dict = {'blending_data' : None,
-             'valid'         : None}
+             'valid'         : None,
+             'noise'         : None,
+             'noise_gauss'   : None}
 
 def load_data_info(blending_data=None, valid=None, model_path=None, n_hidden=256, step=None,
                    beat_gt=None, beat_subdiv=None, model_out=".", acoustic='kelz',
-                   early_exit=0.001, diagRNN=False, ablate_list=[]):
+                   early_exit=0.001, diagRNN=False, ablate_list=[], noise=None, noise_gauss=False):
     """
     Set up the global parameter dictionaries to run Bayesian Optimization with the given
     settings. This is called by optimize_sk.py.
@@ -47,6 +50,8 @@ def load_data_info(blending_data=None, valid=None, model_path=None, n_hidden=256
     global model_dict
     
     data_dict['valid'] = valid
+    data_dict['noise'] = noise
+    data_dict['noise_gauss'] = noise_gauss
     
     with gzip.open(blending_data, 'rb') as file:
         data_dict['blending_data'] = pickle.load(file)
@@ -136,6 +141,9 @@ def weight_search(params, num=0, verbose=False):
     # Ablate X
     X = ablate(X, global_params['ablate'], with_onsets=with_onsets)
     
+    # Add noise to X
+    X = add_acoustic_noise(X, data_dict['noise'], data_dict['noise_gauss'], with_onsets=with_onsets)
+    
     history = min(history, max_history)
     if features and not features_available:
         features = False
@@ -156,10 +164,12 @@ def weight_search(params, num=0, verbose=False):
                          'features' : features,
                          'weight' : is_weight,
                          'with_onsets' : with_onsets,
+                         'noise' : data_dict['noise'],
+                         'noise_gauss' : data_dict['noise_gauss'],
                          'ablate' : global_params['ablate']}
 
-    weight_model_name = get_filename(min_diff, history, num_layers, features,
-                                     with_onsets, is_weight, global_params['step'])
+    weight_model_name = get_filename(min_diff, history, num_layers, features, with_onsets, is_weight,
+                                     global_params['step'])
 
     # Write out weight model
     with open(os.path.join(global_params['model_out'], weight_model_name), "wb") as file:
