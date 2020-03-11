@@ -70,7 +70,7 @@ if __name__ == "__main__":
     parser.add_argument("--noise_gauss", help="The given noise will be Gaussian, centered around 0 with "
                         "standard deviation given by --noise. The value will be added or subtracted to "
                         "bring the value of each activation closer to 0.5. If --noise is not given, "
-                        "this value will be taken from the input --blending_data"., action="store_true")
+                        "this value will be taken from the input --blending_data.", action="store_true")
 
     args = parser.parse_args()
     
