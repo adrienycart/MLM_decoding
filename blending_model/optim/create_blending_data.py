@@ -59,6 +59,13 @@ def get_weight_data_one_piece(filename, section, model, sess, args):
         input_data[:data.input.shape[0], :] = data.input[:, :, 0]
         input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
         target_data = trinary_pr_to_presence_onset(data.target)
+        
+    # Add noise
+    if args.noise is not None:
+        noise_func = np.random.randn if args.noise_gauss else np.random.rand
+        noise = np.abs(args.noise * noise_func(*input_data.shape))
+        input_data = np.where(input_data > 0.5, input_data - noise, input_data + noise)
+        input_data = np.clip(input_data, 0.001, 0.999)
 
     # Decode
     return get_weight_data(target_data, input_data, model, sess, branch_factor=args.branch, beam_size=args.beam,
@@ -285,6 +292,14 @@ if __name__ == '__main__':
 
     parser.add_argument("--with_onsets", help="The input will be a double pianoroll containing "
                         "presence and onset halves.", action="store_true")
+
+    parser.add_argument("--noise", help="The amount of noise to add to the acoustic pianoroll "
+                        "activations. Unless --noise_gauss is given, the noise will be uniform on "
+                        "the range (0, noise), and added towards the value of 0.5.", type=float,
+                        default=None)
+    parser.add_argument("--noise_gauss", help="The given noise will be Gaussian, centered around 0 with "
+                        "standard deviation given by --noise. The value will be added or subtracted to "
+                        "bring the value of each activation closer to 0.5.", action="store_true")
 
     args = parser.parse_args()
 
