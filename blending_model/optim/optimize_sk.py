@@ -61,6 +61,16 @@ if __name__ == "__main__":
     parser.add_argument("--no_features", help="Suppress all features. Shortcut for --ablate -11 -10 -9 -8 "
                         "-7 -6 -5 -4 -3", action="store_true")
     parser.add_argument("--no_history", help="Set history to 0 for all models.", action="store_true")
+    
+    parser.add_argument("--noise", help="The amount of noise to add to the acoustic pianoroll "
+                        "activations. Unless --noise_gauss is given, the noise will be uniform on "
+                        "the range (0, noise), and added towards the value of 0.5. By default, "
+                        "this value will be taken from the input --blending_data.", type=float,
+                        default=None)
+    parser.add_argument("--noise_gauss", help="The given noise will be Gaussian, centered around 0 with "
+                        "standard deviation given by --noise. The value will be added or subtracted to "
+                        "bring the value of each activation closer to 0.5. If --noise is not given, "
+                        "this value will be taken from the input --blending_data"., action="store_true")
 
     args = parser.parse_args()
     
@@ -83,6 +93,10 @@ if __name__ == "__main__":
         print("Using CPU")
     else:
         print("using GPU " + args.gpu)
+    if args.noise is None:
+        print("Taking noise and noise_gauss from the blending data.")
+    else:
+        print("Adding " + ("Gaussian" if args.noise_gauss else "") + "noise with magnitude " + str(args.noise))
     print("Training for " + ("prior" if args.prior else "weight"))
     print("Loading LSTM " + args.model)
     print("Using blending data " + args.blending_data)
@@ -103,7 +117,8 @@ if __name__ == "__main__":
     optim_helper.load_data_info(blending_data=args.blending_data, valid=args.valid_data, step=args.step,
                                 model_path=args.model, model_out=args.model_dir, acoustic=args.acoustic,
                                 early_exit=args.give_up,diagRNN=args.diagRNN, beat_gt=args.beat_gt,
-                                beat_subdiv=args.beat_subdiv, ablate_list=args.ablate)
+                                beat_subdiv=args.beat_subdiv, ablate_list=args.ablate, noise=args.noise,
+                                noise_gauss=args.noise_gauss)
 
     if args.step in ["time", "20ms"]:
         history = (5, 50)

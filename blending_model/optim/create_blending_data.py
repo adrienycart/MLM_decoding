@@ -18,6 +18,44 @@ from beam import Beam
 from state import trinary_pr_to_presence_onset
 from mlm_training.model import Model, make_model_param
 
+from train_blending_model import filter_data_by_min_diff
+
+
+
+def add_noise_to_input_data(input_data, noise, noise_gauss):
+    """
+    Add controlled noise to the given input_data.
+    
+    Parameters
+    ----------
+    input_data : np.ndarray
+        (P, T) array of float values, acoustic model activations.
+        
+    noise : float
+        The amount of noise to add to the acoustic pianoroll activations. Unless
+        noise_gauss is True, the noise will be uniform on the range (0, noise),
+        and added towards the value of 0.5. If None, no noise will be added.
+        
+    noise_gauss : boolean
+        If True, the given noise will be Gaussian, centered around 0 with standard
+        deviation given by noise. The value will be added or subtracted to bring the
+        value of each activation closer to 0.5. If False, the noise will be uniform
+        as described in noise.
+        
+    Returns
+    -------
+    input_data : np.ndarray
+        (P, T) array of float values, the input acoustic model activations with the
+        described noise added.
+    """
+    if noise is None:
+        return input_data
+    
+    noise_func = np.random.randn if noise_gauss else np.random.rand
+    noise = np.abs(noise * noise_func(*input_data.shape))
+    input_data = np.where(input_data > 0.5, input_data - noise, input_data + noise)
+    return np.clip(input_data, 0.001, 0.999)
+
 
 
 def get_weight_data_one_piece(filename, section, model, sess, args):
@@ -61,11 +99,7 @@ def get_weight_data_one_piece(filename, section, model, sess, args):
         target_data = trinary_pr_to_presence_onset(data.target)
         
     # Add noise
-    if args.noise is not None:
-        noise_func = np.random.randn if args.noise_gauss else np.random.rand
-        noise = np.abs(args.noise * noise_func(*input_data.shape))
-        input_data = np.where(input_data > 0.5, input_data - noise, input_data + noise)
-        input_data = np.clip(input_data, 0.001, 0.999)
+    input_data = add_noise_to_input_data(input_data, args.noise, args.noise_gauss)
 
     # Decode
     return get_weight_data(target_data, input_data, model, sess, branch_factor=args.branch, beam_size=args.beam,
@@ -375,10 +409,20 @@ if __name__ == '__main__':
         os.makedirs(os.path.dirname(args.out), exist_ok=True)
 
     # Save data
-    with gzip.open(args.out, "wb") as file:
-        pickle.dump({'X' : X,
-                     'Y' : Y,
-                     'D' : D,
-                     'history' : args.history,
-                     'features' : not args.no_features,
-                     'with_onsets' : args.with_onsets}, file)
+    success = False
+    while not success:
+        try:
+            with gzip.open(args.out, "wb") as file:
+                pickle.dump({'X' : X,
+                             'Y' : Y,
+                             'D' : D,
+                             'history' : args.history,
+                             'features' : not args.no_features,
+                             'with_onsets' : args.with_onsets,
+                             'noise' : args.noise,
+                             'noise_gauss' : args.noise_gauss}, file)
+            success = True
+        except OverflowError:
+            args.min_diff += 0.1
+            print(f"Too much data created. Trying again with min_diff {args.min_diff}", file=sys.stderr)
+            X, Y, D = filter_data_by_min_diff(X, Y, D, args.min_diff, return_D=True)

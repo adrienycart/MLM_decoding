@@ -94,7 +94,7 @@ def convert_targets_to_weight(X, Y, with_onsets=False):
                 Y[i] = 0
                 
                 
-def filter_data_by_min_diff(X, Y, D, min_diff):
+def filter_data_by_min_diff(X, Y, D, min_diff, return_D=False):
     """
     Return the X and Y data containing only those points whose distance is greater than
     or equal to the given min distance.
@@ -113,6 +113,9 @@ def filter_data_by_min_diff(X, Y, D, min_diff):
     min_diff : float
         The minimum difference to return a data point.
         
+    return_D : boolean
+        Also return the reduced D as a third variable.
+        
     Returns
     -------
     X : np.ndarray
@@ -120,6 +123,10 @@ def filter_data_by_min_diff(X, Y, D, min_diff):
         
     Y : np.ndarray or np.array
         The given Y data points, minus those points whose difference is less than the given min_diff.
+        
+    D : np.ndarray or np.array
+        Only returned if return_D is True. The given D data points, minus those whose difference
+        is less than the given min_diff.
     """
     data_points = np.where(D > min_diff)
     return X[data_points], Y[data_points]

@@ -10,6 +10,7 @@ from eval_utils import (compute_eval_metrics_frame, compute_eval_metrics_note,
 from mlm_training.model import Model, make_model_param
 from mlm_training.utils import safe_mkdir
 from decode import decode
+from create_blending_data import add_noise_to_input_data
 from train_blending_model import (train_model, convert_targets_to_weight, ablate,
                                   filter_data_by_min_diff, filter_X_features)
 
@@ -33,11 +34,14 @@ global_params = {'model_out'  : None,
                  'ablate'     : None}
 
 data_dict = {'blending_data' : None,
-             'valid'         : None}
+             'valid'         : None,
+             'noise'         : None,
+             'noise_gauss'   : None}
 
 def load_data_info(blending_data=None, valid=None, model_path=None, n_hidden=256, step=None,
                    beat_gt=None, beat_subdiv=None, model_out=".", acoustic='kelz',
-                   early_exit=0.001, diagRNN=False, ablate_list=[]):
+                   early_exit=0.001, diagRNN=False, ablate_list=[], noise=None,
+                   noise_gauss=False):
     """
     Set up the global parameter dictionaries to run Bayesian Optimization with the given
     settings. This is called by optimize_sk.py.
@@ -50,6 +54,17 @@ def load_data_info(blending_data=None, valid=None, model_path=None, n_hidden=256
     
     with gzip.open(blending_data, 'rb') as file:
         data_dict['blending_data'] = pickle.load(file)
+        
+    if noise is None:
+        data_dict['noise'] = (data_dict['blending_data']['noise']
+                              if 'noise' in data_dict['blending_data']
+                              else None)
+        data_dict['noise_gauss'] = (data_dict['blending_data']['noise_gauss']
+                                    if 'noise_gauss' in data_dict['blending_data']
+                                    else False)
+    else:
+        data_dict['noise'] = noise
+        data_dict['noise_gauss'] = noise_gauss
 
     model_param = make_model_param()
     model_param['n_hidden'] = n_hidden
@@ -189,6 +204,9 @@ def weight_search(params, num=0, verbose=False):
             input_data = np.zeros((data.input.shape[0] * 2, data.input.shape[1]))
             input_data[:data.input.shape[0], :] = data.input[:, :, 0]
             input_data[data.input.shape[0]:, :] = data.input[:, :, 1]
+            
+        # Add noise
+        input_data = add_noise_to_input_data(input_data, data_dict['noise'], data_dict['noise_gauss'])
 
         pr, priors, weights, combined_priors = decode(input_data, model, sess, branch_factor=5,
                         beam_size=50, weight=[[0.8], [0.2]], out=None, hash_length=12,
